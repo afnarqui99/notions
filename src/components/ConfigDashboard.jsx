@@ -5,16 +5,50 @@ import DirectorySelectorModal from './DirectorySelectorModal';
 import Modal from './Modal';
 
 export default function ConfigDashboard({ onConfigSaved }) {
+  console.log('📋 ConfigDashboard: Componente renderizado', { onConfigSaved: !!onConfigSaved });
+  console.log('📋 ConfigDashboard: Renderizando componente completo');
+  
   const [useLocalStorage, setUseLocalStorage] = useState(false);
   const [selectedPath, setSelectedPath] = useState('');
   const [showDirectoryModal, setShowDirectoryModal] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [showMessageModal, setShowMessageModal] = useState(false);
+  
+  useEffect(() => {
+    console.log('📋 ConfigDashboard: useEffect ejecutado');
+    console.log('📋 ConfigDashboard: Root element:', document.getElementById('root'));
+    const root = document.getElementById('root');
+    if (root) {
+      console.log('📋 ConfigDashboard: Root tiene hijos:', root.children.length);
+      console.log('📋 ConfigDashboard: Root innerHTML length:', root.innerHTML.length);
+    }
+  }, []);
 
   useEffect(() => {
+    console.log('📋 ConfigDashboard: useEffect ejecutado');
     const config = LocalStorageService.config;
     setUseLocalStorage(config.useLocalStorage || false);
     setSelectedPath(config.basePath || config.lastSelectedPath || '');
+    
+    // Verificar que el componente se renderizó en el DOM
+    setTimeout(() => {
+      const element = document.querySelector('[data-testid="config-dashboard"]');
+      console.log('📋 ConfigDashboard: Elemento en DOM:', element ? '✅ Existe' : '❌ No existe');
+      if (element) {
+        const styles = window.getComputedStyle(element);
+        console.log('📋 ConfigDashboard: Estilos del elemento:', {
+          display: styles.display,
+          visibility: styles.visibility,
+          opacity: styles.opacity,
+          width: styles.width,
+          height: styles.height,
+          backgroundColor: styles.backgroundColor
+        });
+        console.log('📋 ConfigDashboard: Contenido del elemento (primeros 300 chars):', element.innerHTML.substring(0, 300));
+      } else {
+        console.error('❌ ConfigDashboard: El elemento NO existe en el DOM');
+      }
+    }, 200);
   }, []);
 
   const handleDirectorySelected = (path) => {
@@ -48,13 +82,72 @@ export default function ConfigDashboard({ onConfigSaved }) {
     }, 1000);
   };
 
+  console.log('📋 ConfigDashboard: Renderizando JSX', { 
+    useLocalStorage, 
+    selectedPath, 
+    showDirectoryModal,
+    showMessageModal 
+  });
+  
+  console.log('📋 ConfigDashboard: Retornando JSX');
+  
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-4xl mx-auto">
-        <div className="bg-white rounded-lg shadow-lg p-8">
-          <div className="flex items-center gap-3 mb-6">
-            <Settings className="w-8 h-8 text-blue-600" />
-            <h1 className="text-3xl font-bold text-gray-900">Configuración</h1>
+    <div 
+      className="min-h-screen bg-gray-50 p-6" 
+      style={{ 
+        backgroundColor: '#f9fafb', 
+        padding: '1.5rem',
+        minHeight: '100vh',
+        width: '100%',
+        display: 'block',
+        position: 'relative',
+        zIndex: 1,
+        boxSizing: 'border-box'
+      }}
+      data-testid="config-dashboard"
+    >
+      {/* Estilos críticos inline para asegurar visibilidad */}
+      <style dangerouslySetInnerHTML={{__html: `
+        [data-testid="config-dashboard"] {
+          background-color: #f9fafb !important;
+          padding: 1.5rem !important;
+          min-height: 100vh !important;
+          width: 100% !important;
+          display: block !important;
+          position: relative !important;
+          box-sizing: border-box !important;
+        }
+        [data-testid="config-dashboard"] h1 {
+          font-size: 1.875rem !important;
+          font-weight: bold !important;
+          color: #111827 !important;
+          margin: 0 0 1.5rem 0 !important;
+        }
+        [data-testid="config-dashboard"] button {
+          padding: 0.5rem 1rem !important;
+          background-color: #2563eb !important;
+          color: white !important;
+          border-radius: 0.5rem !important;
+          border: none !important;
+          cursor: pointer !important;
+          font-size: 1rem !important;
+        }
+        [data-testid="config-dashboard"] button:hover {
+          background-color: #1d4ed8 !important;
+        }
+      `}} />
+      <div className="max-w-4xl mx-auto" style={{ maxWidth: '56rem', margin: '0 auto', display: 'block' }}>
+        <div className="bg-white rounded-lg shadow-lg p-8" style={{ 
+          backgroundColor: 'white', 
+          borderRadius: '0.5rem', 
+          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', 
+          padding: '2rem',
+          display: 'block',
+          marginTop: '2rem'
+        }}>
+          <div className="flex items-center gap-3 mb-6" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
+            <Settings className="w-8 h-8 text-blue-600" style={{ width: '2rem', height: '2rem', color: '#2563eb' }} />
+            <h1 className="text-3xl font-bold text-gray-900" style={{ fontSize: '1.875rem', fontWeight: 'bold', color: '#111827', margin: 0 }}>Configuración</h1>
           </div>
 
           <div className="space-y-6">
