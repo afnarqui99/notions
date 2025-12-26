@@ -1,0 +1,1079 @@
+import { useEffect, useState, useRef, useCallback } from "react";
+import { useEditor, EditorContent } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import Heading from "@tiptap/extension-heading";
+import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
+import Underline from "@tiptap/extension-underline";
+import TextStyle from "@tiptap/extension-text-style";
+import Table from "@tiptap/extension-table";
+import TableRow from "@tiptap/extension-table-row";
+import { TableCellExtended } from "../extensions/TableCellExtended";
+import { TablaNotionNode } from "../extensions/TablaNotionNode";
+import TableHeader from "@tiptap/extension-table-header";
+import { ImageExtended } from "../extensions/ImageExtended";
+import Placeholder from "@tiptap/extension-placeholder";
+import lowlight from "../extensions/lowlightInstance";
+import { SlashCommand } from "../extensions/SlashCommand";
+import Link from "@tiptap/extension-link";
+import { Toggle } from "../extensions/Toggle";
+import { Settings, Plus, Image as ImageIcon, Paperclip, Download } from "lucide-react";
+import LocalStorageService from "../services/LocalStorageService";
+import Modal from "./Modal";
+import ConfigModal from "./ConfigModal";
+import NewPageModal from "./NewPageModal";
+import StorageWarning from "./StorageWarning";
+import Toast from "./Toast";
+
+export default function LocalEditor({ onShowConfig }) {
+  const [titulo, setTitulo] = useState("");
+  const editorRef = useRef(null);
+  const intervaloRef = useRef(null);
+  const [paginas, setPaginas] = useState([]);
+  const [paginaSeleccionada, setPaginaSeleccionada] = useState(null);
+  const [tituloPaginaActual, setTituloPaginaActual] = useState("");
+  const [filtroPagina, setFiltroPagina] = useState("");
+  const [selectorAbierto, setSelectorAbierto] = useState(false);
+  const [modalError, setModalError] = useState({ isOpen: false, message: '', title: '' });
+  const [showConfigModal, setShowConfigModal] = useState(false);
+  const [showNewPageModal, setShowNewPageModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [paginaAEliminar, setPaginaAEliminar] = useState(null);
+  const [eliminando, setEliminando] = useState(false);
+  const [handleVersion, setHandleVersion] = useState(0);
+  const [toast, setToast] = useState(null);
+  const [hayCambiosSinGuardar, setHayCambiosSinGuardar] = useState(false);
+  const [guardando, setGuardando] = useState(false);
+  const ultimoContenidoRef = useRef(null);
+
+  // Convertir URLs blob a referencias de archivo antes de guardar
+  const convertirBlobsAReferencias = (contenido) => {
+    if (!contenido || !contenido.content) return contenido;
+    
+    const procesarNodo = (node) => {
+      if (!node) return node;
+      
+      // Si es una imagen, convertir URL blob a referencia de archivo
+      if (node.type === 'image' && node.attrs?.src) {
+        const src = node.attrs.src;
+        // Intentar obtener el filename de diferentes formas
+        let filename = node.attrs['data-filename'] || node.attrs['dataFilename'] || node.attrs.dataFilename;
+        
+        console.log('🖼️ Procesando imagen al guardar:', { src, filename, attrs: node.attrs });
+        
+        // Si tenemos el nombre del archivo guardado, usar referencia de archivo
+        if (filename) {
+          console.log('✅ Convirtiendo blob a referencia de archivo:', filename);
+          return {
+            ...node,
+            attrs: {
+              ...node.attrs,
+              src: `./files/${filename}`,  // Guardar como referencia de archivo
+              'data-filename': filename,   // Mantener el nombre del archivo
+              dataFilename: filename        // También guardar sin guión por si acaso
+            }
+          };
+        }
+        
+        // Si es una URL blob sin nombre de archivo, intentar extraer de la URL
+        if (src.startsWith('blob:')) {
+          // No podemos extraer el nombre del archivo de una URL blob
+          // Intentar buscar en el DOM si es posible
+          console.warn('⚠️ Imagen con URL blob sin nombre de archivo guardado. Se perderá al recargar.');
+          console.warn('⚠️ Atributos disponibles:', node.attrs);
+          return node;
+        } else if (src.includes('./files/')) {
+          // Ya es una referencia de archivo, extraer el filename si no está
+          const fileFromSrc = src.replace('./files/', '');
+          return {
+            ...node,
+            attrs: {
+              ...node.attrs,
+              src: `./files/${fileFromSrc}`,
+              'data-filename': fileFromSrc,
+              dataFilename: fileFromSrc
+            }
+          };
+        } else if (src.startsWith('indexeddb://')) {
+          const fileFromSrc = src.replace('indexeddb://', '');
+          return {
+            ...node,
+            attrs: {
+              ...node.attrs,
+              src: `./files/${fileFromSrc}`,
+              'data-filename': fileFromSrc,
+              dataFilename: fileFromSrc
+            }
+          };
+        } else if (src.includes('files/')) {
+          // Es una URL completa con files/, extraer el nombre del archivo
+          const match = src.match(/files\/([^\/\?]+)/);
+          if (match) {
+            const fileFromSrc = match[1];
+            return {
+              ...node,
+              attrs: {
+                ...node.attrs,
+                src: `./files/${fileFromSrc}`,
+                'data-filename': fileFromSrc,
+                dataFilename: fileFromSrc
+              }
+            };
+          }
+        }
+      }
+      
+      // Procesar contenido recursivamente
+      if (node.content && Array.isArray(node.content)) {
+        return {
+          ...node,
+          content: node.content.map(procesarNodo)
+        };
+      }
+      
+      return node;
+    };
+    
+    return {
+      ...contenido,
+      content: contenido.content.map(procesarNodo)
+    };
+  };
+
+  // Convertir referencias de archivo a URLs blob al cargar
+  const convertirReferenciasABlobs = async (contenido) => {
+    if (!contenido || !contenido.content) return contenido;
+    
+    const procesarNodo = async (node) => {
+      if (!node) return node;
+      
+      // Si es una imagen, convertir la referencia a URL blob
+      if (node.type === 'image' && node.attrs?.src) {
+        const src = node.attrs.src;
+        const filename = node.attrs['data-filename'];
+        let nuevaSrc = src;
+        
+        // Prioridad: usar data-filename si está disponible
+        if (filename) {
+          try {
+            const url = await LocalStorageService.getFileURL(filename, 'files');
+            if (url) {
+              nuevaSrc = url;
+            }
+          } catch (error) {
+            console.warn(`No se pudo cargar la imagen ${filename}:`, error);
+          }
+        } else if (src.startsWith('blob:')) {
+          // Si es una URL blob sin filename, intentar extraer de la URL o mantenerla
+          // Las URLs blob antiguas sin filename no se pueden regenerar
+          console.warn('⚠️ Imagen con URL blob sin nombre de archivo. No se puede regenerar.');
+          return node; // Mantener la URL blob si no podemos convertirla
+        } else if (src.includes('./files/')) {
+          // Es una referencia relativa, convertir a URL blob
+          const fileFromSrc = src.replace('./files/', '');
+          try {
+            const url = await LocalStorageService.getFileURL(fileFromSrc, 'files');
+            if (url) {
+              nuevaSrc = url;
+              // Actualizar el data-filename si no existe
+              if (!filename) {
+                return {
+                  ...node,
+                  attrs: {
+                    ...node.attrs,
+                    src: nuevaSrc,
+                    'data-filename': fileFromSrc
+                  }
+                };
+              }
+            }
+          } catch (error) {
+            console.warn(`No se pudo cargar la imagen ${fileFromSrc}:`, error);
+          }
+        } else if (src.startsWith('indexeddb://')) {
+          // Es una referencia de IndexedDB, convertir a URL blob
+          const fileFromSrc = src.replace('indexeddb://', '');
+          try {
+            const url = await LocalStorageService.getFileURL(fileFromSrc, 'files');
+            if (url) {
+              nuevaSrc = url;
+              // Actualizar el data-filename si no existe
+              if (!filename) {
+                return {
+                  ...node,
+                  attrs: {
+                    ...node.attrs,
+                    src: nuevaSrc,
+                    'data-filename': fileFromSrc
+                  }
+                };
+              }
+            }
+          } catch (error) {
+            console.warn(`No se pudo cargar la imagen desde IndexedDB ${fileFromSrc}:`, error);
+          }
+        } else if (src.includes('files/')) {
+          // Es una URL completa con files/, extraer el nombre del archivo
+          const match = src.match(/files\/([^\/\?]+)/);
+          if (match) {
+            const fileFromSrc = match[1];
+            try {
+              const url = await LocalStorageService.getFileURL(fileFromSrc, 'files');
+              if (url) {
+                nuevaSrc = url;
+                // Actualizar el data-filename si no existe
+                if (!filename) {
+                  return {
+                    ...node,
+                    attrs: {
+                      ...node.attrs,
+                      src: nuevaSrc,
+                      'data-filename': fileFromSrc
+                    }
+                  };
+                }
+              }
+            } catch (error) {
+              console.warn(`No se pudo cargar la imagen ${fileFromSrc}:`, error);
+            }
+          }
+        }
+        
+        return {
+          ...node,
+          attrs: {
+            ...node.attrs,
+            src: nuevaSrc,
+            'data-filename': filename || node.attrs['data-filename'] // Mantener el filename si existe
+          }
+        };
+      }
+      
+      // Procesar contenido recursivamente
+      if (node.content && Array.isArray(node.content)) {
+        const contenidoProcesado = await Promise.all(node.content.map(procesarNodo));
+        return {
+          ...node,
+          content: contenidoProcesado
+        };
+      }
+      
+      return node;
+    };
+    
+    const contenidoProcesado = await Promise.all(contenido.content.map(procesarNodo));
+    return {
+      ...contenido,
+      content: contenidoProcesado
+    };
+  };
+
+  const guardarContenido = useCallback(async (contenido, mostrarToast = true) => {
+    if (!paginaSeleccionada) return false;
+
+    setGuardando(true);
+    try {
+      const data = await LocalStorageService.readJSONFile(`${paginaSeleccionada}.json`, 'data') || {};
+      
+      // Convertir URLs blob a referencias de archivo antes de guardar
+      const contenidoParaGuardar = convertirBlobsAReferencias(contenido);
+      
+      await LocalStorageService.saveJSONFile(
+        `${paginaSeleccionada}.json`,
+        {
+          ...data,
+          contenido: contenidoParaGuardar,
+          titulo: tituloPaginaActual || data.titulo || 'Sin título',
+          actualizadoEn: new Date().toISOString(),
+          creadoEn: data.creadoEn || new Date().toISOString()
+        },
+        'data'
+      );
+
+      console.log("💾 Autoguardado:", paginaSeleccionada);
+      setHayCambiosSinGuardar(false);
+      
+      if (mostrarToast) {
+        setToast({
+          message: 'Cambios guardados',
+          type: 'success'
+        });
+      }
+      
+      return true;
+    } catch (error) {
+      console.error("Error guardando contenido:", error);
+      if (mostrarToast) {
+        setToast({
+          message: 'Error al guardar. Intenta de nuevo.',
+          type: 'error'
+        });
+      }
+      return false;
+    } finally {
+      setGuardando(false);
+    }
+  }, [paginaSeleccionada, tituloPaginaActual]);
+
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({ codeBlock: false }),
+      CodeBlockLowlight.configure({ lowlight }),
+      Toggle,
+      TablaNotionNode,
+      Heading,
+      Underline,
+      TextStyle,
+      Table,
+      TableRow,
+      TableHeader,
+      TableCellExtended,
+      ImageExtended,
+      Link.configure({
+        openOnClick: true,
+        linkOnPaste: true,
+        autolink: true
+      }),
+      Placeholder.configure({ placeholder: "Escribe '/' para comandos..." }),
+      SlashCommand,
+    ],
+    content: "",
+  });
+
+  // Cargar lista de páginas
+  useEffect(() => {
+    const cargarPaginas = async () => {
+      // Verificar configuración y handle
+      const config = LocalStorageService.config;
+      const hasHandle = !!LocalStorageService.baseDirectoryHandle;
+      
+      console.log('📋 Configuración:', config);
+      console.log('📁 baseDirectoryHandle:', hasHandle ? '✅ Existe' : '❌ No existe');
+      
+      if (config.useLocalStorage && !hasHandle) {
+        console.warn('⚠️ ADVERTENCIA: Configuración indica almacenamiento local pero no hay baseDirectoryHandle.');
+        console.warn('⚠️ Los archivos están en el sistema de archivos pero no se puede acceder sin seleccionar la carpeta nuevamente.');
+        console.warn('⚠️ Para acceder a tus archivos locales, ve a Configuración y vuelve a seleccionar la carpeta.');
+        // No intentar cargar desde localStorage si hay configuración de almacenamiento local
+        setPaginas([]);
+        return;
+      } else if (config.useLocalStorage && hasHandle) {
+        console.log('✅ Acceso a archivos locales activo');
+      }
+      
+      try {
+        const source = hasHandle ? 'archivos locales' : 'localStorage del navegador';
+        console.log(`📂 Listando archivos desde ${source}...`);
+        const files = await LocalStorageService.listFiles('data');
+        console.log(`📄 Archivos encontrados (${source}):`, files);
+        
+        if (files.length === 0 && config.useLocalStorage && !hasHandle) {
+          console.warn('⚠️ No se encontraron archivos. Esto es normal si no has seleccionado la carpeta nuevamente.');
+          setPaginas([]);
+          return;
+        }
+        
+        const paginasData = await Promise.all(
+          files
+            .filter(f => f.endsWith('.json'))
+            .map(async (file) => {
+              const data = await LocalStorageService.readJSONFile(file, 'data');
+              return { 
+                id: file.replace('.json', ''), 
+                ...data 
+              };
+            })
+        );
+
+        // Ordenar por fecha de creación descendente
+        paginasData.sort((a, b) => {
+          const fechaA = new Date(a.creadoEn || 0);
+          const fechaB = new Date(b.creadoEn || 0);
+          return fechaB - fechaA;
+        });
+
+        setPaginas(paginasData);
+      } catch (error) {
+        console.error("Error cargando páginas:", error);
+      }
+    };
+
+    cargarPaginas();
+    
+    // Recargar cada 5 segundos para detectar cambios
+    const interval = setInterval(cargarPaginas, 5000);
+    return () => clearInterval(interval);
+  }, [handleVersion]); // Recargar cuando cambia handleVersion
+
+  // Escuchar cambios en el handle del directorio
+  useEffect(() => {
+    const handleDirectoryChanged = () => {
+      console.log('🔄 Handle de directorio cambió, recargando páginas...');
+      setHandleVersion(prev => prev + 1);
+    };
+
+    // Escuchar evento personalizado cuando se selecciona una carpeta
+    window.addEventListener('directoryHandleChanged', handleDirectoryChanged);
+    
+    // También verificar periódicamente (cada 2 segundos) por si cambió
+    const interval = setInterval(() => {
+      const hasHandle = !!LocalStorageService.baseDirectoryHandle;
+      if (hasHandle) {
+        // Si hay handle y no lo teníamos antes, forzar recarga
+        setHandleVersion(prev => prev + 1);
+      }
+    }, 2000);
+    
+    return () => {
+      window.removeEventListener('directoryHandleChanged', handleDirectoryChanged);
+      clearInterval(interval);
+    };
+  }, []);
+
+  // Cargar contenido de página seleccionada
+  useEffect(() => {
+    if (!editor || !paginaSeleccionada) return;
+
+    const cargarContenido = async () => {
+      try {
+        const data = await LocalStorageService.readJSONFile(`${paginaSeleccionada}.json`, 'data');
+        if (data && data.contenido) {
+          setTitulo(data.titulo || "");
+          setTituloPaginaActual(data.titulo || "");
+          
+          // Convertir referencias de archivo a URLs blob antes de cargar
+          const contenidoConBlobs = await convertirReferenciasABlobs(data.contenido);
+          editor.commands.setContent(contenidoConBlobs);
+          
+          // Guardar el contenido procesado como referencia
+          ultimoContenidoRef.current = JSON.stringify(contenidoConBlobs);
+        } else {
+          editor.commands.setContent({ type: "doc", content: [{ type: "paragraph" }] });
+          ultimoContenidoRef.current = JSON.stringify({ type: "doc", content: [{ type: "paragraph" }] });
+        }
+        setHayCambiosSinGuardar(false);
+      } catch (error) {
+        console.error("Error cargando contenido:", error);
+        editor.commands.setContent({ type: "doc", content: [{ type: "paragraph" }] });
+        ultimoContenidoRef.current = JSON.stringify({ type: "doc", content: [{ type: "paragraph" }] });
+      }
+    };
+
+    cargarContenido();
+
+    // Detectar cambios en el editor
+    const handleUpdate = () => {
+      const contenidoActual = JSON.stringify(editor.getJSON());
+      if (ultimoContenidoRef.current === null) {
+        ultimoContenidoRef.current = contenidoActual;
+        setHayCambiosSinGuardar(false);
+      } else if (contenidoActual !== ultimoContenidoRef.current) {
+        setHayCambiosSinGuardar(true);
+      }
+    };
+
+    editor.on('update', handleUpdate);
+
+    // Autoguardado cada 30 segundos
+    intervaloRef.current = setInterval(() => {
+      if (!editor) return;
+      const json = editor.getJSON();
+      const contenidoActual = JSON.stringify(json);
+      
+      // Solo guardar si hay cambios
+      if (ultimoContenidoRef.current !== contenidoActual) {
+        guardarContenido(json, true).then((guardado) => {
+          if (guardado) {
+            ultimoContenidoRef.current = contenidoActual;
+            setHayCambiosSinGuardar(false);
+          }
+        });
+      }
+    }, 30000);
+
+    return () => {
+      editor.off('update', handleUpdate);
+      if (intervaloRef.current) {
+        clearInterval(intervaloRef.current);
+      }
+    };
+  }, [editor, paginaSeleccionada, guardarContenido]);
+
+  // Prevenir cierre de página si hay cambios sin guardar
+  useEffect(() => {
+    const handleBeforeUnload = async (e) => {
+      if (hayCambiosSinGuardar && !guardando) {
+        // Intentar guardar antes de cerrar
+        if (editor && paginaSeleccionada) {
+          const json = editor.getJSON();
+          await guardarContenido(json, false); // No mostrar toast al cerrar
+        }
+        
+        // Mostrar advertencia del navegador
+        e.preventDefault();
+        e.returnValue = 'Tienes cambios sin guardar. ¿Estás seguro de que quieres salir?';
+        return e.returnValue;
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [hayCambiosSinGuardar, guardando, editor, paginaSeleccionada, guardarContenido]);
+
+  const crearPagina = async (titulo) => {
+    if (!titulo || !titulo.trim()) return;
+
+    const id = `pagina-${Date.now()}`;
+    const nuevaPagina = {
+      id,
+      titulo: titulo.trim(),
+      contenido: {
+        type: "doc",
+        content: [{ type: "paragraph" }],
+      },
+      creadoEn: new Date().toISOString(),
+      actualizadoEn: new Date().toISOString(),
+    };
+
+    try {
+      console.log('📝 Creando nueva página:', titulo.trim());
+      console.log('📁 baseDirectoryHandle:', LocalStorageService.baseDirectoryHandle ? '✅ Existe' : '❌ No existe');
+      
+      const resultado = await LocalStorageService.saveJSONFile(`${id}.json`, nuevaPagina, 'data');
+      console.log('✅ Resultado del guardado:', resultado);
+      
+      setPaginas([nuevaPagina, ...paginas]);
+      setPaginaSeleccionada(id);
+      setTitulo(titulo.trim());
+      setTituloPaginaActual(titulo.trim());
+      editor?.commands.setContent({ type: "doc", content: [{ type: "paragraph" }] });
+    } catch (error) {
+      console.error("❌ Error creando página:", error);
+      setModalError({ 
+        isOpen: true, 
+        message: `No se pudo crear la página. Error: ${error.message}. Verifica la consola para más detalles.`, 
+        title: "Error al crear página" 
+      });
+    }
+  };
+
+  const seleccionarPagina = async (paginaId) => {
+    if (!paginaId || !editor) return;
+    setPaginaSeleccionada(paginaId);
+    setSelectorAbierto(false);
+  };
+
+  // Extraer URLs de imágenes y archivos del contenido
+  const extraerArchivosDelContenido = (contenido) => {
+    const archivos = new Set();
+    
+    const buscarArchivos = (node) => {
+      if (!node) return;
+      
+      // Buscar imágenes
+      if (node.type === 'image' && node.attrs?.src) {
+        const src = node.attrs.src;
+        // Extraer el nombre del archivo de la URL
+        // Puede ser blob:http://... o ./files/filename o indexeddb://filename
+        if (src.includes('./files/')) {
+          const filename = src.replace('./files/', '');
+          archivos.add(filename);
+        } else if (src.startsWith('indexeddb://')) {
+          const filename = src.replace('indexeddb://', '');
+          archivos.add(filename);
+        } else if (src.includes('files/')) {
+          // Para URLs completas, extraer el nombre del archivo
+          const match = src.match(/files\/([^\/\?]+)/);
+          if (match) {
+            archivos.add(match[1]);
+          }
+        }
+      }
+      
+      // Buscar enlaces a archivos
+      if (node.type === 'text' && node.marks) {
+        node.marks.forEach(mark => {
+          if (mark.type === 'link' && mark.attrs?.href) {
+            const href = mark.attrs.href;
+            if (href.includes('./files/')) {
+              const filename = href.replace('./files/', '');
+              archivos.add(filename);
+            } else if (href.startsWith('indexeddb://')) {
+              const filename = href.replace('indexeddb://', '');
+              archivos.add(filename);
+            } else if (href.includes('files/')) {
+              const match = href.match(/files\/([^\/\?]+)/);
+              if (match) {
+                archivos.add(match[1]);
+              }
+            }
+          }
+        });
+      }
+      
+      // Recursivamente buscar en el contenido
+      if (node.content && Array.isArray(node.content)) {
+        node.content.forEach(buscarArchivos);
+      }
+    };
+    
+    if (contenido && contenido.content) {
+      contenido.content.forEach(buscarArchivos);
+    }
+    
+    return Array.from(archivos);
+  };
+
+  const eliminarPagina = async () => {
+    if (!paginaAEliminar) return;
+    
+    setEliminando(true);
+    try {
+      // Cargar el contenido de la página para extraer archivos asociados
+      const data = await LocalStorageService.readJSONFile(`${paginaAEliminar.id}.json`, 'data');
+      
+      // Extraer archivos asociados
+      const archivos = data?.contenido ? extraerArchivosDelContenido(data.contenido) : [];
+      
+      // Eliminar todos los archivos asociados
+      let archivosEliminados = 0;
+      for (const filename of archivos) {
+        try {
+          const eliminado = await LocalStorageService.deleteBinaryFile(filename, 'files');
+          if (eliminado) archivosEliminados++;
+        } catch (error) {
+          console.warn(`No se pudo eliminar el archivo ${filename}:`, error);
+        }
+      }
+      
+      // Eliminar el archivo JSON de la página
+      await LocalStorageService.deleteJSONFile(`${paginaAEliminar.id}.json`, 'data');
+      
+      // Actualizar la lista de páginas
+      setPaginas(paginas.filter(p => p.id !== paginaAEliminar.id));
+      
+      // Si la página eliminada era la seleccionada, limpiar la selección
+      if (paginaSeleccionada === paginaAEliminar.id) {
+        setPaginaSeleccionada(null);
+        setTituloPaginaActual('');
+        editor?.commands.setContent({ type: "doc", content: [{ type: "paragraph" }] });
+      }
+      
+      // Cerrar el modal
+      setShowDeleteModal(false);
+      setPaginaAEliminar(null);
+      
+      // Mostrar mensaje de éxito
+      setToast({
+        message: `Página "${paginaAEliminar.titulo}" eliminada${archivosEliminados > 0 ? ` junto con ${archivosEliminados} archivo(s) asociado(s)` : ''}`,
+        type: 'success'
+      });
+    } catch (error) {
+      console.error("Error eliminando página:", error);
+      setModalError({
+        isOpen: true,
+        message: `No se pudo eliminar la página. Error: ${error.message}`,
+        title: "Error al eliminar página"
+      });
+    } finally {
+      setEliminando(false);
+    }
+  };
+
+  const abrirModalEliminar = (pagina) => {
+    setPaginaAEliminar(pagina);
+    setShowDeleteModal(true);
+  };
+
+  const insertarImagen = async () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = async () => {
+      if (!input.files?.[0]) return;
+      
+      try {
+        const file = input.files[0];
+        const filename = `${Date.now()}-${file.name}`;
+        await LocalStorageService.saveBinaryFile(filename, file, 'files');
+        const url = await LocalStorageService.getFileURL(filename, 'files');
+        
+        if (url && editor) {
+          // Guardar la imagen con la referencia del archivo en un atributo data-filename
+          // y usar la URL blob para mostrar, pero guardar la referencia para poder regenerarla
+          editor.chain().focus().setImage({ 
+            src: url,
+            'data-filename': filename  // Guardar el nombre del archivo para poder regenerar la URL
+          }).run();
+        }
+      } catch (error) {
+        console.error("Error subiendo imagen:", error);
+        setModalError({ 
+          isOpen: true, 
+          message: "No se pudo subir la imagen. Verifica que tengas una carpeta configurada.", 
+          title: "Error al subir imagen" 
+        });
+      }
+    };
+    input.click();
+  };
+
+  const insertarArchivo = async () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+
+      try {
+        const filename = `${Date.now()}-${file.name}`;
+        await LocalStorageService.saveBinaryFile(filename, file, 'files');
+        const url = await LocalStorageService.getFileURL(filename, 'files');
+
+        const extension = file.name.split('.').pop().toLowerCase();
+        const icono = {
+          zip: "🗜️", pdf: "📄", doc: "📝", docx: "📝",
+          xls: "📊", xlsx: "📊", mp4: "🎞️", mp3: "🎵",
+          default: "📎"
+        }[extension] || "📎";
+
+        if (url && editor) {
+          editor
+            .chain()
+            .focus()
+            .insertContent({
+              type: 'paragraph',
+              content: [
+                { type: 'text', text: `${icono} ` },
+                {
+                  type: 'text',
+                  marks: [{ type: 'link', attrs: { href: url, target: "_blank" } }],
+                  text: file.name,
+                },
+              ],
+            })
+            .run();
+        }
+      } catch (error) {
+        console.error("Error subiendo archivo:", error);
+        setModalError({ 
+          isOpen: true, 
+          message: "No se pudo subir el archivo. Verifica que tengas una carpeta configurada.", 
+          title: "Error al subir archivo" 
+        });
+      }
+    };
+    input.click();
+  };
+
+  const exportarAPDF = () => {
+    if (typeof window.html2pdf === 'undefined') {
+      setModalError({ 
+        isOpen: true, 
+        message: "La funcionalidad de PDF no está disponible. Asegúrate de que html2pdf.js esté cargado correctamente.", 
+        title: "PDF no disponible" 
+      });
+      return;
+    }
+    
+    const element = document.querySelector(".ProseMirror");
+    if (!element) {
+      setModalError({ 
+        isOpen: true, 
+        message: "No se encontró contenido para exportar. Asegúrate de tener una página abierta con contenido.", 
+        title: "Sin contenido" 
+      });
+      return;
+    }
+    
+    try {
+      window.html2pdf().from(element).save(`${tituloPaginaActual || 'pagina'}.pdf`);
+      setModalError({ 
+        isOpen: true, 
+        message: `PDF "${tituloPaginaActual || 'pagina'}.pdf" generado correctamente. Se descargará en breve.`, 
+        title: "PDF generado" 
+      });
+    } catch (error) {
+      console.error("Error exportando PDF:", error);
+      setModalError({ 
+        isOpen: true, 
+        message: "Ocurrió un error al generar el PDF. Por favor, intenta de nuevo.", 
+        title: "Error al exportar PDF" 
+      });
+    }
+  };
+
+  const actualizarTitulo = async () => {
+    if (!paginaSeleccionada) return;
+    
+    try {
+      const data = await LocalStorageService.readJSONFile(`${paginaSeleccionada}.json`, 'data') || {};
+      await LocalStorageService.saveJSONFile(
+        `${paginaSeleccionada}.json`,
+        {
+          ...data,
+          titulo: tituloPaginaActual,
+          actualizadoEn: new Date().toISOString()
+        },
+        'data'
+      );
+    } catch (error) {
+      console.error("Error actualizando título:", error);
+    }
+  };
+
+  return (
+    <div className="w-full h-screen flex flex-col bg-gray-50">
+      {/* Advertencia de almacenamiento */}
+      <StorageWarning onOpenConfig={() => setShowConfigModal(true)} />
+      
+      {/* Barra de selector de páginas y acciones */}
+      <div className="bg-white border-b shadow-sm p-2 flex gap-2 items-center">
+        <button
+          type="button"
+          onClick={() => setSelectorAbierto(true)}
+          className="flex-1 min-w-[200px] border border-gray-300 px-3 py-1.5 rounded-md text-sm text-left flex items-center justify-between hover:border-blue-500"
+        >
+          <span className={paginaSeleccionada ? "text-gray-900 font-medium" : "text-gray-500"}>
+            {paginaSeleccionada 
+              ? (paginas.find(p => p.id === paginaSeleccionada)?.titulo || "Página seleccionada") 
+              : "📄 Seleccionar página"}
+          </span>
+          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+          </svg>
+        </button>
+
+        <button
+          onClick={() => setShowNewPageModal(true)}
+          className="bg-blue-600 text-white px-3 py-1.5 rounded-md text-sm hover:bg-blue-700 flex items-center gap-1 transition-colors shadow-sm hover:shadow-md"
+        >
+          <Plus className="w-4 h-4" />
+          Nueva
+        </button>
+
+        <button
+          onClick={() => setShowConfigModal(true)}
+          className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-md flex items-center gap-1.5 transition-all shadow-sm hover:shadow-md text-sm"
+          title="Configuración - Cambiar ubicación de archivos"
+        >
+          <Settings className="w-4 h-4" />
+          <span className="hidden sm:inline font-medium">Configuración</span>
+        </button>
+      </div>
+
+      {/* Modal de selección */}
+      {selectorAbierto && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" 
+          onClick={() => setSelectorAbierto(false)}
+        >
+          <div 
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[80vh] overflow-hidden" 
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-blue-600 text-white p-6 flex items-center justify-between">
+              <h2 className="text-2xl font-bold">Selecciona una página</h2>
+              <button onClick={() => setSelectorAbierto(false)} className="text-white hover:bg-white/20 rounded-full p-2">
+                ✕
+              </button>
+            </div>
+            <div className="p-4 border-b">
+              <input
+                type="text"
+                placeholder="🔍 Buscar..."
+                value={filtroPagina}
+                onChange={(e) => setFiltroPagina(e.target.value)}
+                className="w-full border rounded-lg px-4 py-2"
+              />
+            </div>
+            <div className="p-6 overflow-y-auto max-h-[60vh]">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {paginas
+                  .filter(p => !filtroPagina || p.titulo?.toLowerCase().includes(filtroPagina.toLowerCase()))
+                  .map((p) => (
+                    <div
+                      key={p.id}
+                      className={`relative p-4 rounded-xl border-2 ${
+                        paginaSeleccionada === p.id 
+                          ? 'border-blue-500 bg-blue-50' 
+                          : 'border-gray-200 hover:border-blue-300'
+                      }`}
+                    >
+                      <button
+                        onClick={() => seleccionarPagina(p.id)}
+                        className="w-full text-left"
+                      >
+                        <h3 className="font-semibold">{p.titulo || 'Sin título'}</h3>
+                        <p className="text-xs text-gray-500 mt-1">ID: {p.id}</p>
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          abrirModalEliminar(p);
+                        }}
+                        className="absolute top-2 right-2 p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
+                        title="Eliminar página"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Editor */}
+      {paginaSeleccionada ? (
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Barra de herramientas compacta */}
+          <div className="bg-white border-b px-3 py-1 flex gap-1.5 items-center">
+            <button
+              onClick={insertarArchivo}
+              className="px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-1 text-xs"
+              title="Insertar archivo"
+            >
+              <Paperclip className="w-3 h-3" />
+              Archivo
+            </button>
+            <button
+              onClick={insertarImagen}
+              className="px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-1 text-xs"
+              title="Insertar imagen"
+            >
+              <ImageIcon className="w-3 h-3" />
+              Imagen
+            </button>
+            <button
+              onClick={exportarAPDF}
+              className="px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 flex items-center gap-1 text-xs"
+              title="Exportar PDF"
+            >
+              <Download className="w-3 h-3" />
+              PDF
+            </button>
+          </div>
+
+          {/* Título compacto */}
+          <input
+            type="text"
+            value={tituloPaginaActual}
+            onChange={(e) => setTituloPaginaActual(e.target.value)}
+            onBlur={actualizarTitulo}
+            placeholder="Título de la página"
+            className="border-b px-4 py-2 text-xl font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+          />
+
+          {/* Área de edición */}
+          <div className="flex-1 overflow-y-auto bg-white">
+            <div className="max-w-4xl mx-auto px-4 py-4">
+              <EditorContent editor={editor} className="tiptap" ref={editorRef} />
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="flex-1 flex items-center justify-center text-gray-500">
+          Selecciona o crea una página para comenzar
+        </div>
+      )}
+
+      {/* Modal de error/éxito */}
+      <Modal
+        isOpen={modalError.isOpen}
+        onClose={() => setModalError({ isOpen: false, message: '', title: '' })}
+        title={modalError.title || 'Notificación'}
+        type={modalError.title?.includes('generado') || modalError.title?.includes('PDF generado') ? 'success' : modalError.title?.includes('Error') ? 'error' : 'info'}
+      >
+        <p className="text-gray-700">{modalError.message}</p>
+      </Modal>
+
+      {/* Modal de Configuración */}
+      <ConfigModal
+        isOpen={showConfigModal}
+        onClose={() => setShowConfigModal(false)}
+      />
+
+      {/* Modal de Nueva Página */}
+      <NewPageModal
+        isOpen={showNewPageModal}
+        onClose={() => setShowNewPageModal(false)}
+        onCreate={crearPagina}
+      />
+
+      {/* Modal de Confirmación para Eliminar */}
+      <Modal
+        isOpen={showDeleteModal}
+        onClose={() => {
+          if (!eliminando) {
+            setShowDeleteModal(false);
+            setPaginaAEliminar(null);
+          }
+        }}
+        title="Eliminar página"
+        type="warning"
+        showCloseButton={!eliminando}
+      >
+        {paginaAEliminar && (
+          <div className="space-y-4">
+            <p className="text-gray-700">
+              ¿Estás seguro de que deseas eliminar la página <strong>"{paginaAEliminar.titulo}"</strong>?
+            </p>
+            <p className="text-sm text-gray-600">
+              Esta acción eliminará la página y todos los archivos asociados (imágenes, documentos, etc.). Esta acción no se puede deshacer.
+            </p>
+            <div className="flex gap-3 justify-end pt-4">
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setPaginaAEliminar(null);
+                }}
+                disabled={eliminando}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={eliminarPagina}
+                disabled={eliminando}
+                className="px-4 py-2 text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {eliminando ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Eliminando...
+                  </>
+                ) : (
+                  'Eliminar página'
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Toast de notificaciones */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          duration={3000}
+          onClose={() => setToast(null)}
+        />
+      )}
+
+      {/* Indicador de guardando */}
+      {guardando && (
+        <div className="fixed bottom-4 left-4 z-50 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 text-sm">
+          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+          <span>Guardando...</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
