@@ -1,0 +1,489 @@
+import { Extension } from '@tiptap/core';
+import Suggestion from '@tiptap/suggestion';
+import LocalStorageService from '../services/LocalStorageService';
+
+export const SlashCommand = Extension.create({
+  name: 'slash-command',
+
+  addOptions() {
+    return {
+      suggestion: {
+        char: '/',
+        startOfLine: false,
+        command: ({ editor, range, props }) => {
+          // Función auxiliar para salir de cualquier bloque antes de ejecutar el comando
+          const exitBlock = () => {
+            const { state } = editor;
+            const { $from } = state.selection;
+            
+            // Verificar si estamos dentro de algún bloque especial
+            let needsExit = false;
+            let blockDepth = 0;
+            
+            for (let depth = $from.depth; depth > 0; depth--) {
+              const node = $from.node(depth);
+              const nodeType = node.type.name;
+              
+              // Detectar si estamos en un bloque que necesita salir
+              if (nodeType === 'codeBlock' || 
+                  nodeType === 'listItem' || 
+                  nodeType === 'bulletList' || 
+                  nodeType === 'orderedList' ||
+                  nodeType === 'heading') {
+                needsExit = true;
+                blockDepth = depth;
+                break;
+              }
+            }
+            
+            if (needsExit) {
+              // Encontrar el final del bloque y mover el cursor allí
+              editor.chain().focus().command(({ tr, dispatch }) => {
+                const { $from } = tr.selection;
+                let targetPos = $from.pos;
+                
+                // Buscar el bloque contenedor
+                for (let depth = $from.depth; depth > 0; depth--) {
+                  const node = $from.node(depth);
+                  const nodeType = node.type.name;
+                  
+                  if (nodeType === 'codeBlock' || 
+                      nodeType === 'bulletList' || 
+                      nodeType === 'orderedList' ||
+                      nodeType === 'heading') {
+                    // Encontrar el final de este bloque
+                    const blockStart = $from.start(depth);
+                    const blockEnd = blockStart + node.nodeSize;
+                    targetPos = blockEnd;
+                    break;
+                  } else if (nodeType === 'listItem') {
+                    // Para listItem, buscar el final de la lista padre
+                    for (let parentDepth = depth - 1; parentDepth > 0; parentDepth--) {
+                      const parentNode = $from.node(parentDepth);
+                      if (parentNode.type.name === 'bulletList' || parentNode.type.name === 'orderedList') {
+                        const listStart = $from.start(parentDepth);
+                        const listEnd = listStart + parentNode.nodeSize;
+                        targetPos = listEnd;
+                        break;
+                      }
+                    }
+                    break;
+                  }
+                }
+                
+                if (dispatch && targetPos !== $from.pos) {
+                  tr.setSelection(tr.doc.resolve(targetPos));
+                }
+                return true;
+              }).run();
+              
+              // Insertar un párrafo vacío para separar
+              editor.chain().focus().insertContent({ type: 'paragraph', content: [] }).run();
+            }
+          };
+          
+          // Salir del bloque actual si es necesario
+          exitBlock();
+          
+          // Ejecutar el comando original
+          props.command({ editor, range });
+        },
+        items: () => [
+          {
+  label: "Tabla estilo Notion",
+  description: "Insertar una tabla dinámica con columnas configurables",
+  icon: "📋",
+  command: ({ editor, range }) => {
+    editor.chain().focus().deleteRange(range).insertContent({
+      type: 'tablaNotion',
+    }).run();
+  },
+},
+          {
+  label: 'Lista numerada',
+  description: '1. Item numerado',
+  icon: '🔢',
+  command: ({ editor, range }) => {
+    editor.chain().focus().deleteRange(range).run();
+    
+    // Si estamos dentro de una lista, salir de ella primero
+    const { state } = editor;
+    const { $from } = state.selection;
+    
+    // Verificar si estamos dentro de un listItem
+    let isInList = false;
+    for (let depth = $from.depth; depth > 0; depth--) {
+      const node = $from.node(depth);
+      if (node.type.name === 'listItem') {
+        isInList = true;
+        break;
+      }
+    }
+    
+    if (isInList) {
+      // Salir de la lista: insertar un párrafo después de la lista actual
+      // Primero, encontrar el final de la lista
+      editor.chain().focus().command(({ tr, dispatch }) => {
+        const { $from } = tr.selection;
+        let targetPos = $from.pos;
+        
+        // Buscar hacia arriba para encontrar el final de la lista
+        for (let depth = $from.depth; depth > 0; depth--) {
+          const node = $from.node(depth);
+          if (node.type.name === 'bulletList' || node.type.name === 'orderedList') {
+            // Encontrar el final de esta lista
+            const listStart = $from.start(depth);
+            const listEnd = listStart + node.nodeSize;
+            targetPos = listEnd;
+            break;
+          }
+        }
+        
+        if (dispatch && targetPos !== $from.pos) {
+          tr.setSelection(tr.doc.resolve(targetPos));
+        }
+        return true;
+      }).run();
+      
+      // Insertar un párrafo vacío para separar
+      editor.chain().focus().insertContent({ type: 'paragraph', content: [] }).run();
+    }
+    
+    // Insertar una lista numerada directamente
+    editor.chain().focus().insertContent({
+      type: 'orderedList',
+      content: [
+        {
+          type: 'listItem',
+          content: [
+            {
+              type: 'paragraph',
+              content: []
+            }
+          ]
+        }
+      ]
+    }).run();
+  },
+},
+{
+  label: 'Lista con viñetas',
+  description: '• Item con viñetas',
+  icon: '•',
+  command: ({ editor, range }) => {
+    editor.chain().focus().deleteRange(range).run();
+    
+    // Si estamos dentro de una lista, salir de ella primero
+    const { state } = editor;
+    const { $from } = state.selection;
+    
+    // Verificar si estamos dentro de un listItem
+    let isInList = false;
+    for (let depth = $from.depth; depth > 0; depth--) {
+      const node = $from.node(depth);
+      if (node.type.name === 'listItem') {
+        isInList = true;
+        break;
+      }
+    }
+    
+    if (isInList) {
+      // Salir de la lista: insertar un párrafo después de la lista actual
+      // Primero, encontrar el final de la lista
+      editor.chain().focus().command(({ tr, dispatch }) => {
+        const { $from } = tr.selection;
+        let targetPos = $from.pos;
+        
+        // Buscar hacia arriba para encontrar el final de la lista
+        for (let depth = $from.depth; depth > 0; depth--) {
+          const node = $from.node(depth);
+          if (node.type.name === 'bulletList' || node.type.name === 'orderedList') {
+            // Encontrar el final de esta lista
+            const listStart = $from.start(depth);
+            const listEnd = listStart + node.nodeSize;
+            targetPos = listEnd;
+            break;
+          }
+        }
+        
+        if (dispatch && targetPos !== $from.pos) {
+          tr.setSelection(tr.doc.resolve(targetPos));
+        }
+        return true;
+      }).run();
+      
+      // Insertar un párrafo vacío para separar
+      editor.chain().focus().insertContent({ type: 'paragraph', content: [] }).run();
+    }
+    
+    // Insertar una lista con viñetas directamente
+    editor.chain().focus().insertContent({
+      type: 'bulletList',
+      content: [
+        {
+          type: 'listItem',
+          content: [
+            {
+              type: 'paragraph',
+              content: []
+            }
+          ]
+        }
+      ]
+    }).run();
+  },
+},
+{
+  label: 'To List',
+  description: 'Convertir el bloque actual en una lista con viñetas',
+  icon: '📝',
+  command: ({ editor, range }) => {
+    editor.chain().focus().deleteRange(range).toggleBulletList().run();
+  },
+},
+{
+  label: 'Bloque desplegable',
+  description: 'Contenido que se puede abrir o cerrar',
+  icon: '▸',
+  command: ({ editor, range }) => {
+    console.log("🧩 Insertando toggle");
+
+    editor.chain().focus().deleteRange(range).run();
+
+    const toggleNode = {
+      type: 'toggle',
+      attrs: {
+        abierto: true,
+        titulo: 'Título del bloque',
+      },
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'Contenido del toggle aquí.' }
+          ]
+        },
+        {
+          type: 'paragraph',
+          content: [
+            {
+              type: 'text',
+              text: '✏️ Editar título',
+              marks: [
+                {
+                  type: 'link',
+                  attrs: {
+                    href: '#',
+                    'data-edit-toggle': 'true'
+                  }
+                }
+              ],
+            },
+          ],
+        }
+      ]
+    };
+
+    const success = editor.chain().focus().insertContent(toggleNode).run();
+    console.log("✅ Nodo toggle insertado:", success);
+  }
+},
+          {
+            icon: '📝',
+            label: 'Título grande',
+            description: 'Texto principal grande',
+            command: ({ editor, range }) => {
+              editor.chain().focus().deleteRange(range).run();
+              // Insertar un heading directamente
+              editor.chain().focus().insertContent({
+                type: 'heading',
+                attrs: { level: 1 },
+                content: []
+              }).run();
+            },
+          },
+          {
+            icon: '🔤',
+            label: 'Encabezado',
+            description: 'Subtítulo o sección',
+            command: ({ editor, range }) => {
+              editor.chain().focus().deleteRange(range).run();
+              // Insertar un heading directamente
+              editor.chain().focus().insertContent({
+                type: 'heading',
+                attrs: { level: 2 },
+                content: []
+              }).run();
+            },
+          },
+          {
+            icon: '📄',
+            label: 'Párrafo',
+            description: 'Texto normal para escribir',
+            command: ({ editor, range }) => {
+              editor.chain().focus().deleteRange(range).run();
+              // Insertar un párrafo directamente
+              editor.chain().focus().insertContent({
+                type: 'paragraph',
+                content: []
+              }).run();
+            },
+          },
+          {
+            icon: '💻',
+            label: 'Bloque de código',
+            description: 'Escribe código con resaltado',
+            command: ({ editor, range }) =>
+              editor
+                .chain()
+                .focus()
+                .deleteRange(range)
+                .setNode('codeBlock', { language: 'javascript' })
+                .run(),
+          },
+          {
+            icon: '🖼️',
+            label: 'Insertar imagen',
+            description: 'Sube una imagen desde tu dispositivo',
+            command: async ({ editor, range }) => {
+              editor.chain().focus().deleteRange(range).run();
+
+              const input = document.createElement('input');
+              input.type = 'file';
+              input.accept = 'image/*';
+              input.onchange = async () => {
+                const file = input.files?.[0];
+                if (!file) return;
+
+                try {
+                  const filename = `${Date.now()}-${file.name}`;
+                  await LocalStorageService.saveBinaryFile(filename, file, 'files');
+                  const url = await LocalStorageService.getFileURL(filename, 'files');
+                  
+                  if (url) {
+                    // Guardar la imagen con la referencia del archivo en un atributo data-filename
+                    editor.chain().focus().setImage({ 
+                      src: url,
+                      'data-filename': filename  // Guardar el nombre del archivo para poder regenerar la URL
+                    }).run();
+                  } else {
+                    alert('Error al subir la imagen.');
+                  }
+                } catch (error) {
+                  console.error('Error subiendo imagen:', error);
+                  alert('Error al subir la imagen.');
+                }
+              };
+              input.click();
+            },
+          },
+        ],
+        render: () => {
+          let popup;
+
+          return {
+            onStart: (props) => {
+              if (!props.editor?.isEditable) return;
+
+              popup = document.createElement('div');
+              popup.className =
+                'absolute z-50 bg-white border border-gray-300 rounded shadow text-sm';
+              popup.style.minWidth = '250px';
+
+              props.items.forEach((item) => {
+                const button = document.createElement('button');
+                button.className =
+                  'block w-full px-3 py-2 text-left hover:bg-gray-100';
+                button.innerHTML = `
+                  <div class="flex gap-2 items-start">
+                    <span class="text-lg">${item.icon}</span>
+                    <div>
+                      <div class="font-semibold">${item.label}</div>
+                      ${
+                        item.description
+                          ? `<div class="text-xs text-gray-500">${item.description}</div>`
+                          : ''
+                      }
+                    </div>
+                  </div>
+                `;
+
+                button.onclick = async (event) => {
+                  event.stopPropagation();
+                  const { editor, range } = props;
+                  editor.chain().focus().deleteRange(range).run();
+                  await item.command({ editor, range });
+                };
+
+                popup.appendChild(button);
+              });
+
+              document.body.appendChild(popup);
+              updatePopupPosition(popup, props.clientRect);
+            },
+            onUpdate: (props) => {
+              if (!popup) return;
+              popup.innerHTML = '';
+              props.items.forEach((item) => {
+                const button = document.createElement('button');
+                button.className =
+                  'block w-full px-3 py-2 text-left hover:bg-gray-100';
+                button.innerHTML = `
+                  <div class="flex gap-2 items-start">
+                    <span class="text-lg">${item.icon}</span>
+                    <div>
+                      <div class="font-semibold">${item.label}</div>
+                      ${
+                        item.description
+                          ? `<div class="text-xs text-gray-500">${item.description}</div>`
+                          : ''
+                      }
+                    </div>
+                  </div>
+                `;
+
+                button.onclick = async (event) => {
+                  event.stopPropagation();
+                  const { editor, range } = props;
+                  editor.chain().focus().deleteRange(range).run();
+                  await item.command({ editor, range });
+                };
+
+                popup.appendChild(button);
+              });
+              updatePopupPosition(popup, props.clientRect);
+            },
+            onExit: () => {
+              if (popup) {
+                document.body.removeChild(popup);
+                popup = null;
+              }
+            },
+          };
+        },
+      },
+    };
+  },
+
+  addProseMirrorPlugins() {
+    return [
+      Suggestion({
+        ...this.options.suggestion,
+        editor: this.editor,
+      }),
+    ];
+  },
+});
+
+function updatePopupPosition(popup, clientRect) {
+  if (!popup || typeof clientRect !== 'function') return;
+
+  const rect = clientRect();
+  if (!rect) return;
+
+  popup.style.position = 'absolute';
+  popup.style.left = `${rect.left + window.scrollX}px`;
+  popup.style.top = `${rect.top + rect.height + window.scrollY + 6}px`;
+  popup.style.zIndex = '9999';
+}
+
