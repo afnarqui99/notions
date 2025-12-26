@@ -76,6 +76,53 @@ notion-local-editor/
 
 Para otros navegadores, se usará el almacenamiento del navegador como fallback.
 
+## Ejecutar con Electron
+
+La aplicación puede ejecutarse como aplicación de escritorio usando Electron.
+
+### Modo Desarrollo
+
+Para probar la aplicación con Electron en modo desarrollo:
+
+```bash
+# Asegúrate de tener el servidor de desarrollo corriendo en otra terminal
+npm run dev
+
+# En otra terminal, ejecuta Electron
+npm run electron:dev
+```
+
+### Generar Ejecutable para Windows
+
+Para crear un instalador ejecutable de Windows (.exe) que no requiere Node.js:
+
+```bash
+# 1. Instalar todas las dependencias (incluye Electron)
+npm install
+
+# 2. Generar el ejecutable
+npm run electron:build:win
+```
+
+El instalador se generará en:
+```
+release/Notion Local Editor Setup 1.0.0.exe
+```
+
+**Características del ejecutable:**
+- ✅ No requiere Node.js instalado
+- ✅ Instalación simple (solo hacer doble clic)
+- ✅ Auto-inicio al iniciar Windows
+- ✅ Crea accesos directos en escritorio y menú de inicio
+- ✅ Desinstalación fácil desde el Panel de Control
+
+**Distribución:**
+1. Comparte el archivo `.exe` generado
+2. El usuario solo necesita hacer doble clic e instalar
+3. La aplicación se ejecutará automáticamente al iniciar Windows
+
+**Nota:** El instalador es grande (~100-150 MB) porque incluye Node.js y todas las dependencias empaquetadas.
+
 ## Desarrollo
 
 Este proyecto está basado en el componente `EditorNotionLike` del proyecto principal, pero adaptado para:
