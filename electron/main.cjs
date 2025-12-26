@@ -1,10 +1,6 @@
-import { app, BrowserWindow, shell } from 'electron';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import AutoLaunch from 'auto-launch';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const { app, BrowserWindow, shell } = require('electron');
+const path = require('path');
+const AutoLaunch = require('auto-launch');
 
 // Configurar auto-inicio en Windows
 let autoLauncher;
@@ -33,7 +29,7 @@ function createWindow() {
       contextIsolation: true,
       enableRemoteModule: false,
       webSecurity: true,
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, 'preload.cjs'),
     },
     icon: path.join(__dirname, '../build/icon.ico'), // Icono de la aplicación (opcional)
     show: false, // No mostrar hasta que esté listo
@@ -49,7 +45,43 @@ function createWindow() {
     mainWindow.webContents.openDevTools();
   } else {
     // En producción, cargar desde los archivos estáticos
-    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+    const htmlPath = path.join(__dirname, '../dist/index.html');
+    console.log('Cargando HTML desde:', htmlPath);
+    console.log('__dirname:', __dirname);
+    
+    // Usar loadFile que maneja mejor las rutas relativas
+    mainWindow.loadFile(htmlPath).catch(err => {
+      console.error('Error cargando HTML:', err);
+      // Intentar con loadURL como fallback
+      const fileUrl = `file://${htmlPath.replace(/\\/g, '/')}`;
+      console.log('Intentando con loadURL:', fileUrl);
+      mainWindow.loadURL(fileUrl).catch(err2 => {
+        console.error('Error con loadURL:', err2);
+      });
+    });
+    
+    // Deshabilitar DevTools en producción
+    // Bloquear F12 y Ctrl+Shift+I
+    mainWindow.webContents.on('before-input-event', (event, input) => {
+      if (input.key === 'F12' || (input.control && input.shift && input.key === 'I')) {
+        event.preventDefault();
+      }
+    });
+    
+    // Deshabilitar el menú contextual (clic derecho -> Inspeccionar)
+    mainWindow.webContents.on('context-menu', (event) => {
+      event.preventDefault();
+    });
+    
+    // Escuchar errores de carga
+    mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+      console.error('Error cargando:', errorCode, errorDescription, validatedURL);
+    });
+    
+    // Escuchar cuando la página termine de cargar
+    mainWindow.webContents.on('did-finish-load', () => {
+      console.log('Página cargada correctamente');
+    });
   }
 
   // Mostrar ventana cuando esté lista
@@ -106,4 +138,3 @@ app.on('open-file', (event, path) => {
   event.preventDefault();
   // Aquí puedes manejar la apertura de archivos si lo necesitas
 });
-

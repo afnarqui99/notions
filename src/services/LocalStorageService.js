@@ -16,20 +16,38 @@ class LocalStorageService {
 
   // Cargar configuración desde localStorage
   loadConfig() {
-    const saved = localStorage.getItem('notion-local-config');
-    if (saved) {
-      return JSON.parse(saved);
+    try {
+      const saved = localStorage.getItem('notion-local-config');
+      console.log('📋 loadConfig: localStorage.getItem result:', saved ? '✅ Encontrado' : '❌ No encontrado');
+      if (saved) {
+        const config = JSON.parse(saved);
+        console.log('📋 loadConfig: Configuración cargada:', config);
+        return config;
+      }
+      console.log('📋 loadConfig: No hay configuración guardada, usando valores por defecto');
+      return {
+        useLocalStorage: false,
+        basePath: null,
+        lastSelectedPath: null
+      };
+    } catch (error) {
+      console.error('❌ loadConfig: Error cargando configuración:', error);
+      return {
+        useLocalStorage: false,
+        basePath: null,
+        lastSelectedPath: null
+      };
     }
-    return {
-      useLocalStorage: false,
-      basePath: null,
-      lastSelectedPath: null
-    };
   }
 
   // Intentar restaurar el acceso al directorio usando permisos persistentes
   async attemptRestoreDirectoryAccess(force = false) {
-    console.log('🔄 attemptRestoreDirectoryAccess: Iniciando restauración...', { force, restoreAttempted: this.restoreAttempted });
+    console.log('🔄 attemptRestoreDirectoryAccess: Iniciando restauración...', { 
+      force, 
+      restoreAttempted: this.restoreAttempted,
+      config: this.config,
+      hasHandle: !!this.baseDirectoryHandle
+    });
     
     // Si ya hay handle, no necesitamos restaurar
     if (this.baseDirectoryHandle) {
@@ -39,7 +57,12 @@ class LocalStorageService {
 
     // Solo intentar si hay configuración guardada pero no hay handle
     if (!this.config.useLocalStorage || !this.config.lastSelectedPath) {
-      console.log('⚠️ attemptRestoreDirectoryAccess: No hay configuración de almacenamiento local');
+      console.log('⚠️ attemptRestoreDirectoryAccess: No hay configuración de almacenamiento local', {
+        useLocalStorage: this.config.useLocalStorage,
+        lastSelectedPath: this.config.lastSelectedPath,
+        config: this.config
+      });
+      console.log('💡 Esto es normal la primera vez que ejecutas la aplicación. Ve a Configuración para seleccionar una carpeta.');
       return false;
     }
 

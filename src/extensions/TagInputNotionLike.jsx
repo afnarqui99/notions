@@ -29,35 +29,44 @@ export default function TagInputNotionLike({ value = [], onChange }) {
   };
 
   return (
-    <div className="flex flex-wrap gap-2 border px-2 py-1 rounded">
-      {value.map((tag, idx) => (
-        <div
-          key={idx}
-          className="flex items-center gap-1 text-sm px-2 py-1 rounded"
-          style={{ backgroundColor: tag.color || '#ddd' }}
-        >
-          <span>{tag.label}</span>
-          <input
-            type="color"
-            value={tag.color || '#ddd'}
-            onChange={(e) => updateColor(idx, e.target.value)}
-            className="w-4 h-4 cursor-pointer"
-          />
-          <button
-            onClick={() => handleRemove(idx)}
-            className="text-white text-xs ml-1 hover:text-black"
+    <div 
+      className="flex items-center gap-1 px-0 py-0 overflow-x-auto overflow-y-hidden flex-nowrap" 
+      style={{ 
+        maxHeight: '20px',
+        minHeight: '18px',
+        height: 'auto'
+      }}
+    >
+      <div className="flex items-center gap-1 flex-nowrap flex-shrink-0 h-full">
+        {value.map((tag, idx) => (
+          <div
+            key={idx}
+            className="flex items-center gap-1 text-xs px-1.5 py-0 rounded flex-shrink-0 whitespace-nowrap"
+            style={{ 
+              backgroundColor: tag.color || 'rgba(206, 205, 202, 0.3)',
+              color: tag.color ? 'white' : 'rgb(55, 53, 47)',
+              height: '16px',
+              lineHeight: '1.2',
+              fontSize: '0.75rem'
+            }}
           >
-            ×
-          </button>
-        </div>
-      ))}
+            <span className="leading-tight">{tag.label || tag.value || tag}</span>
+          </div>
+        ))}
+      </div>
       <input
         type="text"
         value={inputValue}
         onChange={(e) => setInputValue(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="Escribe y presiona Enter"
-        className="flex-1 min-w-[100px] border-none outline-none"
+        placeholder="+"
+        className="min-w-[16px] max-w-[60px] border-none outline-none text-xs flex-shrink-0 bg-transparent"
+        onClick={(e) => e.stopPropagation()}
+        style={{ 
+          padding: '1px 3px',
+          height: '16px',
+          color: 'rgba(55, 53, 47, 0.5)'
+        }}
       />
     </div>
   );
