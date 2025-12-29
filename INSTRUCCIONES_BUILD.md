@@ -79,3 +79,4 @@ npm install auto-launch --save
 - Revisa la configuración de inicio de Windows
 
 
+

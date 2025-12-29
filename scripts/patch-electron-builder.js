@@ -20,3 +20,4 @@ console.log('Para evitar el error, asegúrate de que sign: false esté en packag
 console.log('El error de enlaces simbólicos no debería afectar la generación del ejecutable');
 
 
+
