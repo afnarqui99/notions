@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 /**
  * Componente que muestra fórmulas sugeridas para gestión ágil
  */
-export default function FormulaSuggestions({ onSelectFormula, propiedades }) {
+export default function FormulaSuggestions({ onSelectFormula, propiedades, formulaActual = "" }) {
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('progreso');
   const [mostrarCrearFormula, setMostrarCrearFormula] = useState(false);
   const [nuevaFormula, setNuevaFormula] = useState({ nombre: '', formula: '', descripcion: '', categoria: 'personalizadas' });
@@ -291,6 +291,9 @@ export default function FormulaSuggestions({ onSelectFormula, propiedades }) {
                   <div className="flex-1 mr-4">
                     <div className="flex items-center gap-2 mb-1">
                       <h4 className="font-bold text-base text-gray-900">{formula.nombre}</h4>
+                      {esFormulaActual && (
+                        <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded font-semibold">✓ Actual</span>
+                      )}
                       {esPersonalizada && (
                         <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded">Personalizada</span>
                       )}

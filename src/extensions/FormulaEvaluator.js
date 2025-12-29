@@ -563,6 +563,82 @@ export class FormulaEvaluator {
         }
       }
 
+      // Evaluar date() - date(fechaString) convierte fecha a timestamp en milisegundos
+      const dateRegex = /date\s*\(/g;
+      let dateMatch;
+      const dateMatches = [];
+      while ((dateMatch = dateRegex.exec(result)) !== null) {
+        dateMatches.push(dateMatch.index);
+      }
+      for (let i = dateMatches.length - 1; i >= 0; i--) {
+        const startPos = dateMatches[i];
+        const openParenPos = result.indexOf('(', startPos);
+        const closeParenPos = this.findMatchingParen(result, openParenPos);
+        if (closeParenPos === -1) continue;
+        const fechaStr = result.substring(openParenPos + 1, closeParenPos).trim();
+        // Remover comillas si existen
+        const fecha = fechaStr.startsWith('"') && fechaStr.endsWith('"') 
+          ? fechaStr.slice(1, -1) 
+          : this.evaluateExpression(this.evaluateFunctions(fechaStr));
+        const fechaObj = new Date(fecha);
+        const timestamp = fechaObj.getTime();
+        if (isNaN(timestamp)) {
+          result = result.substring(0, startPos) + '0' + result.substring(closeParenPos + 1);
+        } else {
+          result = result.substring(0, startPos) + timestamp.toString() + result.substring(closeParenPos + 1);
+        }
+      }
+
+      // Evaluar calcularDiasHabiles() - calcularDiasHabiles(fechaInicio, fechaFin)
+      // Calcula días hábiles (excluyendo sábados y domingos) entre dos fechas
+      const calcularDiasHabilesRegex = /calcularDiasHabiles\s*\(/g;
+      let calcularMatch;
+      const calcularMatches = [];
+      while ((calcularMatch = calcularDiasHabilesRegex.exec(result)) !== null) {
+        calcularMatches.push(calcularMatch.index);
+      }
+      for (let i = calcularMatches.length - 1; i >= 0; i--) {
+        const startPos = calcularMatches[i];
+        const openParenPos = result.indexOf('(', startPos);
+        const closeParenPos = this.findMatchingParen(result, openParenPos);
+        if (closeParenPos === -1) continue;
+        const innerContent = result.substring(openParenPos + 1, closeParenPos);
+        const parts = this.splitByCommas(innerContent);
+        if (parts.length >= 2) {
+          let fechaInicioStr = parts[0].trim();
+          let fechaFinStr = parts[1].trim();
+          
+          // Evaluar las expresiones de fecha
+          fechaInicioStr = this.evaluateFunctions(fechaInicioStr);
+          fechaFinStr = this.evaluateFunctions(fechaFinStr);
+          
+          // Remover comillas si existen
+          const fechaInicio = fechaInicioStr.startsWith('"') && fechaInicioStr.endsWith('"') 
+            ? fechaInicioStr.slice(1, -1) 
+            : this.evaluateExpression(fechaInicioStr);
+          const fechaFin = fechaFinStr.startsWith('"') && fechaFinStr.endsWith('"') 
+            ? fechaFinStr.slice(1, -1) 
+            : this.evaluateExpression(fechaFinStr);
+          
+          // Calcular días hábiles
+          const inicio = new Date(fechaInicio);
+          const fin = new Date(fechaFin);
+          let dias = 0;
+          const fechaActual = new Date(inicio);
+          
+          while (fechaActual <= fin) {
+            const diaSemana = fechaActual.getDay();
+            // 0 = domingo, 6 = sábado
+            if (diaSemana !== 0 && diaSemana !== 6) {
+              dias++;
+            }
+            fechaActual.setDate(fechaActual.getDate() + 1);
+          }
+          
+          result = result.substring(0, startPos) + dias.toString() + result.substring(closeParenPos + 1);
+        }
+      }
+
       // Verificar si hubo cambios
       changed = (before !== result);
     }

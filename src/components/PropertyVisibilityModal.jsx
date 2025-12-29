@@ -6,9 +6,12 @@ export default function PropertyVisibilityModal({
   propiedades, 
   onToggleVisibility,
   onShowAll,
-  onHideAll 
+  onHideAll,
+  onReorder
 }) {
   const [searchTerm, setSearchTerm] = useState('');
+  const [draggedIndex, setDraggedIndex] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
 
   // Excluir "Name" de las propiedades ya que es el título principal
   const propiedadesFiltradas = useMemo(() => 
@@ -41,11 +44,8 @@ export default function PropertyVisibilityModal({
   );
 
   const getTypeIcon = (type, name) => {
-    // Para campos de fecha, usar icono de calendario
-    if (name && (name.toLowerCase().includes('date') || name.toLowerCase().includes('created') || name.toLowerCase().includes('expiration'))) {
-      return '📅';
-    }
     switch (type) {
+      case 'date': return '📅';
       case 'text': return 'Aa';
       case 'number': return '#';
       case 'percent': return 'Σ';
@@ -56,7 +56,12 @@ export default function PropertyVisibilityModal({
         // Assign tiene @, otros tags tienen otro icono
         if (name && name.toLowerCase() === 'assign') return '@';
         return '🏷';
-      default: return '•';
+      default: 
+        // Para campos de fecha por nombre (backward compatibility)
+        if (name && (name.toLowerCase().includes('date') || name.toLowerCase().includes('created') || name.toLowerCase().includes('expiration'))) {
+          return '📅';
+        }
+        return '•';
     }
   };
 
@@ -118,18 +123,62 @@ export default function PropertyVisibilityModal({
                 )}
               </div>
               <div className="space-y-1">
-                {propiedadesVisiblesFiltradas.map((prop) => (
-                  <div
-                    key={prop.name}
-                    className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded cursor-pointer"
-                    onClick={() => onToggleVisibility(prop.name)}
-                  >
-                    <span className="text-gray-400 text-sm">⋮⋮</span>
-                    <span className="text-sm text-gray-600 w-6 text-center">{getTypeIcon(prop.type, prop.name)}</span>
-                    <span className="flex-1 text-sm text-gray-900">{prop.name}</span>
-                    <span className="text-blue-600">👁️</span>
-                  </div>
-                ))}
+                {propiedadesVisiblesFiltradas.map((prop, index) => {
+                  const originalIndex = propiedadesVisibles.findIndex(p => p.name === prop.name);
+                  return (
+                    <div
+                      key={prop.name}
+                      draggable={!searchTerm}
+                      onDragStart={(e) => {
+                        if (!searchTerm) {
+                          setDraggedIndex(originalIndex);
+                          e.dataTransfer.effectAllowed = 'move';
+                          e.dataTransfer.setData('text/html', e.currentTarget);
+                        }
+                      }}
+                      onDragOver={(e) => {
+                        if (!searchTerm && draggedIndex !== null && draggedIndex !== originalIndex) {
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = 'move';
+                          setDragOverIndex(originalIndex);
+                        }
+                      }}
+                      onDragLeave={() => {
+                        setDragOverIndex(null);
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (!searchTerm && draggedIndex !== null && draggedIndex !== originalIndex && onReorder) {
+                          onReorder(draggedIndex, originalIndex);
+                        }
+                        setDraggedIndex(null);
+                        setDragOverIndex(null);
+                      }}
+                      onDragEnd={() => {
+                        setDraggedIndex(null);
+                        setDragOverIndex(null);
+                      }}
+                      className={`flex items-center gap-3 p-2 rounded transition-all ${
+                        draggedIndex === originalIndex ? 'opacity-50 scale-95' : ''
+                      } ${
+                        dragOverIndex === originalIndex ? 'bg-blue-100 border-l-4 border-blue-500' : 'hover:bg-gray-50'
+                      } ${searchTerm ? 'cursor-pointer' : 'cursor-move'}`}
+                      onClick={(e) => {
+                        if (searchTerm || !e.target.closest('.drag-handle')) {
+                          onToggleVisibility(prop.name);
+                        }
+                      }}
+                    >
+                      <span 
+                        className={`text-gray-400 text-sm drag-handle ${!searchTerm ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                        title={searchTerm ? '' : 'Arrastra para reordenar'}
+                      >⋮⋮</span>
+                      <span className="text-sm text-gray-600 w-6 text-center">{getTypeIcon(prop.type, prop.name)}</span>
+                      <span className="flex-1 text-sm text-gray-900">{prop.name}</span>
+                      <span className="text-blue-600">👁️</span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
