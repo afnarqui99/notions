@@ -176,6 +176,7 @@ const tipos = [
   { value: "select", label: "🎨 Select con color" },
   { value: "tags", label: "🏷️ Tags" },
   { value: "formula", label: "🧮 Fórmula" },
+  { value: "date", label: "📅 Fecha" },
 ];
 
 export default function TablaNotionStyle({ node, updateAttributes, getPos, editor }) {
@@ -288,8 +289,21 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
   }, [tipoVista]);
 
   const actualizarValor = (filaIdx, key, valor) => {
-    const nuevas = [...filas];
-    nuevas[filaIdx].properties[key].value = valor;
+    const nuevas = filas.map((fila, idx) => {
+      if (idx === filaIdx) {
+        return {
+          ...fila,
+          properties: {
+            ...fila.properties,
+            [key]: {
+              ...fila.properties[key],
+              value: valor
+            }
+          }
+        };
+      }
+      return fila;
+    });
     setFilas(nuevas);
   };
 
@@ -340,30 +354,296 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
     setDrawerExpandido(false); // Resetear el estado de expansión al cerrar
   };
 
+  // Función para obtener la fórmula por defecto según el nombre de la columna
+  const obtenerFormulaPorDefecto = (nombreColumna) => {
+    const nombreNormalizado = nombreColumna.trim().toLowerCase();
+    
+    // Primero verificar coincidencias exactas (solo para Objective/Objetivo)
+    if (nombreNormalizado === 'objective' || nombreNormalizado === 'objetivo') {
+      return 'if(empty(prop("Objective")), 100, prop("Objective"))';
+    }
+    
+    // Mapeo de nombres comunes a sus fórmulas por defecto (coincidencias parciales)
+    const formulasPorDefecto = {
+      'percent': 'if(((prop("Progress") / prop("Objective")) >= 1), "✅", if(and(empty(prop("Progress")), !empty(prop("Objective"))), "0%", substring("➖➖➖➖", 0, floor((prop("Progress") / prop("Objective")) * 10)) + " " + format(round((prop("Progress") / prop("Objective")) * 100)) + "%"))',
+      'percent total': 'if((prop("Time Estimated") > 0), format(round((prop("Time Spent") * 100) / prop("Time Estimated"))) + "%", "0%")',
+      'missing percentage': 'if((prop("Type") == "DONE"), 0, if((prop("Time Estimated") > 0), format(round(((prop("Time Estimated") - prop("Time Spent")) / prop("Time Estimated")) * 100)) + "%", "0%"))',
+      'porcentaje': 'if(((prop("Progress") / prop("Objective")) >= 1), "✅", if(and(empty(prop("Progress")), !empty(prop("Objective"))), "0%", substring("➖➖➖➖", 0, floor((prop("Progress") / prop("Objective")) * 10)) + " " + format(round((prop("Progress") / prop("Objective")) * 100)) + "%"))',
+      'porcentaje total': 'if((prop("Time Estimated") > 0), format(round((prop("Time Spent") * 100) / prop("Time Estimated"))) + "%", "0%")',
+      'porcentaje faltante': 'if((prop("Type") == "DONE"), 0, if((prop("Time Estimated") > 0), format(round(((prop("Time Estimated") - prop("Time Spent")) / prop("Time Estimated")) * 100)) + "%", "0%"))',
+      'tiempo restante': 'if((prop("Time Spent") >= prop("Time Estimated")), "0", prop("Time Estimated") - prop("Time Spent"))',
+      'time remaining': 'if((prop("Time Spent") >= prop("Time Estimated")), "0", prop("Time Estimated") - prop("Time Spent"))',
+      'velocidad sprint': 'if(empty(prop("Sprint Days")), "N/A", format(round(prop("Tasks Completed") / prop("Sprint Days"), 2)))',
+      'sprint velocity': 'if(empty(prop("Sprint Days")), "N/A", format(round(prop("Tasks Completed") / prop("Sprint Days"), 2)))',
+      'progreso sprint': 'format(round((prop("Days Elapsed") / prop("Sprint Days")) * 100)) + "%"',
+      'sprint progress': 'format(round((prop("Days Elapsed") / prop("Sprint Days")) * 100)) + "%"',
+      'tareas restantes': 'prop("Total Tasks") - prop("Tasks Completed")',
+      'tasks remaining': 'prop("Total Tasks") - prop("Tasks Completed")',
+      'tasa completitud': 'format(round((prop("Tasks Completed") / prop("Total Tasks")) * 100)) + "%"',
+      'completion rate': 'format(round((prop("Tasks Completed") / prop("Total Tasks")) * 100)) + "%"',
+      'eficiencia': 'if(empty(prop("Time Estimated")), "N/A", format(round((prop("Objective") / prop("Time Estimated")) * 100, 1)))',
+      'efficiency': 'if(empty(prop("Time Estimated")), "N/A", format(round((prop("Objective") / prop("Time Estimated")) * 100, 1)))',
+      'dias transcurridos sprint': 'if(and(!empty(prop("Sprint Start Date")), !empty(prop("Current Date"))), calcularDiasHabiles(prop("Sprint Start Date"), prop("Current Date")), 0)',
+      'dias transcurridos': 'if(and(!empty(prop("Sprint Start Date")), !empty(prop("Current Date"))), calcularDiasHabiles(prop("Sprint Start Date"), prop("Current Date")), 0)',
+      'dias faltantes sprint': 'if(and(!empty(prop("Current Date")), !empty(prop("Sprint End Date"))), calcularDiasHabiles(prop("Current Date"), prop("Sprint End Date")), 0)',
+      'dias faltantes': 'if(and(!empty(prop("Current Date")), !empty(prop("Sprint End Date"))), calcularDiasHabiles(prop("Current Date"), prop("Sprint End Date")), 0)',
+      'dias habiles transcurridos': 'if(and(!empty(prop("Sprint Start Date")), !empty(prop("Current Date"))), calcularDiasHabiles(prop("Sprint Start Date"), prop("Current Date")), 0)',
+      'horas disponibles': 'if(and(!empty(prop("Dias Habiles Transcurridos")), !empty(prop("Horas Diarias"))), prop("Dias Habiles Transcurridos") * prop("Horas Diarias"), 0)',
+      'horas totales sprint': 'if(and(!empty(prop("Sprint Start Date")), !empty(prop("Sprint End Date")), !empty(prop("Horas Diarias"))), calcularDiasHabiles(prop("Sprint Start Date"), prop("Sprint End Date")) * prop("Horas Diarias"), 0)',
+      'sobrecarga': 'if(and(!empty(prop("Time Estimated")), !empty(prop("Horas Disponibles"))), if((prop("Time Estimated") > prop("Horas Disponibles")), "⚠️ Sobrecarga", "✅ OK"), "N/A")',
+      'sprint start date': 'prop("Sprint Start Date")',
+      'sprint end date': 'prop("Sprint End Date")',
+      'fecha inicio sprint': 'prop("Sprint Start Date")',
+      'fecha fin sprint': 'prop("Sprint End Date")',
+      'current date': 'prop("Current Date")',
+      'fecha actual': 'prop("Current Date")',
+    };
+    
+    // Buscar coincidencia parcial (pero no para Objective que ya se manejó arriba)
+    for (const [key, formula] of Object.entries(formulasPorDefecto)) {
+      if (nombreNormalizado.includes(key)) {
+        return formula;
+      }
+    }
+    
+    return ""; // Si no hay coincidencia, retornar string vacío
+  };
+
+  // Función para crear automáticamente columnas de fórmula relacionadas con fechas y sprint
+  const crearColumnasFormulaAutomaticas = (propiedadesActuales, nombreColumnaAgregada) => {
+    const nombreNormalizado = nombreColumnaAgregada.trim().toLowerCase();
+    const columnasFormulaAAgregar = [];
+    
+    // Detectar columnas base relacionadas con fechas y sprint
+    const esFechaInicial = nombreNormalizado.includes('fecha inicial') || 
+                           nombreNormalizado.includes('fecha inicio') || 
+                           nombreNormalizado.includes('sprint start') ||
+                           nombreNormalizado.includes('inicio sprint') ||
+                           nombreNormalizado.includes('start date');
+    
+    const esFechaFinal = nombreNormalizado.includes('fecha final') || 
+                        nombreNormalizado.includes('fecha fin') || 
+                        nombreNormalizado.includes('sprint end') ||
+                        nombreNormalizado.includes('fin sprint') ||
+                        nombreNormalizado.includes('end date');
+    
+    const esFechaActual = nombreNormalizado.includes('fecha actual') || 
+                          nombreNormalizado.includes('current date') ||
+                          nombreNormalizado.includes('hoy');
+    
+    const esHorasDiarias = nombreNormalizado.includes('horas diarias') || 
+                           nombreNormalizado.includes('horas por dia') ||
+                           nombreNormalizado.includes('daily hours');
+    
+    const esDiasNoLaborales = nombreNormalizado.includes('dias no laborales') || 
+                              nombreNormalizado.includes('dias no trabajados') ||
+                              nombreNormalizado.includes('non working days');
+    
+    // Buscar las columnas base existentes (incluyendo la que acabamos de agregar)
+    const todasLasPropiedades = [...propiedadesActuales];
+    const fechaInicial = todasLasPropiedades.find(p => {
+      const n = p.name.toLowerCase();
+      return n.includes('fecha inicial') || n.includes('fecha inicio') || n.includes('sprint start') || n.includes('inicio sprint') || n.includes('start date');
+    });
+    
+    const fechaFinal = todasLasPropiedades.find(p => {
+      const n = p.name.toLowerCase();
+      return n.includes('fecha final') || n.includes('fecha fin') || n.includes('sprint end') || n.includes('fin sprint') || n.includes('end date');
+    });
+    
+    const fechaActual = todasLasPropiedades.find(p => {
+      const n = p.name.toLowerCase();
+      return n.includes('fecha actual') || n.includes('current date') || n.includes('hoy');
+    });
+    
+    const horasDiarias = todasLasPropiedades.find(p => {
+      const n = p.name.toLowerCase();
+      return n.includes('horas diarias') || n.includes('horas por dia') || n.includes('daily hours');
+    });
+    
+    // Si tenemos fecha inicial y fecha actual, crear "Dias Transcurridos"
+    if (fechaInicial && fechaActual) {
+      const existeDiasTranscurridos = todasLasPropiedades.find(p => 
+        p.name.toLowerCase().includes('dias transcurridos') || p.name.toLowerCase().includes('dias habiles transcurridos')
+      );
+      if (!existeDiasTranscurridos) {
+        columnasFormulaAAgregar.push({
+          name: "Dias Transcurridos",
+          type: "formula",
+          formula: `if(and(!empty(prop("${fechaInicial.name}")), !empty(prop("${fechaActual.name}"))), calcularDiasHabiles(prop("${fechaInicial.name}"), prop("${fechaActual.name}")), 0)`,
+          visible: false
+        });
+      }
+    }
+    
+    // Si tenemos fecha actual y fecha final, crear "Dias Faltantes"
+    if (fechaActual && fechaFinal) {
+      const existeDiasFaltantes = todasLasPropiedades.find(p => 
+        p.name.toLowerCase().includes('dias faltantes')
+      );
+      if (!existeDiasFaltantes) {
+        columnasFormulaAAgregar.push({
+          name: "Dias Faltantes",
+          type: "formula",
+          formula: `if(and(!empty(prop("${fechaActual.name}")), !empty(prop("${fechaFinal.name}"))), calcularDiasHabiles(prop("${fechaActual.name}"), prop("${fechaFinal.name}")), 0)`,
+          visible: false
+        });
+      }
+    }
+    
+    // Si tenemos fecha inicial y fecha final, crear "Dias Totales Sprint"
+    if (fechaInicial && fechaFinal) {
+      const existeDiasTotales = todasLasPropiedades.find(p => 
+        p.name.toLowerCase().includes('dias totales') || p.name.toLowerCase().includes('dias habiles totales')
+      );
+      if (!existeDiasTotales) {
+        columnasFormulaAAgregar.push({
+          name: "Dias Totales Sprint",
+          type: "formula",
+          formula: `if(and(!empty(prop("${fechaInicial.name}")), !empty(prop("${fechaFinal.name}"))), calcularDiasHabiles(prop("${fechaInicial.name}"), prop("${fechaFinal.name}")), 0)`,
+          visible: false
+        });
+      }
+    }
+    
+    // Si tenemos "Dias Transcurridos" y "Horas Diarias", crear "Horas Disponibles"
+    const diasTranscurridos = todasLasPropiedades.find(p => 
+      p.name.toLowerCase().includes('dias transcurridos') || p.name.toLowerCase().includes('dias habiles transcurridos')
+    );
+    if (diasTranscurridos && horasDiarias) {
+      const existeHorasDisponibles = todasLasPropiedades.find(p => 
+        p.name.toLowerCase().includes('horas disponibles')
+      );
+      if (!existeHorasDisponibles) {
+        columnasFormulaAAgregar.push({
+          name: "Horas Disponibles",
+          type: "formula",
+          formula: `if(and(!empty(prop("${diasTranscurridos.name}")), !empty(prop("${horasDiarias.name}"))), prop("${diasTranscurridos.name}") * prop("${horasDiarias.name}"), 0)`,
+          visible: false
+        });
+      }
+    }
+    
+    // Si tenemos "Dias Totales Sprint" y "Horas Diarias", crear "Horas Totales Sprint"
+    const diasTotales = todasLasPropiedades.find(p => 
+      p.name.toLowerCase().includes('dias totales') || p.name.toLowerCase().includes('dias habiles totales')
+    );
+    if (diasTotales && horasDiarias) {
+      const existeHorasTotales = todasLasPropiedades.find(p => 
+        p.name.toLowerCase().includes('horas totales sprint')
+      );
+      if (!existeHorasTotales) {
+        columnasFormulaAAgregar.push({
+          name: "Horas Totales Sprint",
+          type: "formula",
+          formula: `if(and(!empty(prop("${diasTotales.name}")), !empty(prop("${horasDiarias.name}"))), prop("${diasTotales.name}") * prop("${horasDiarias.name}"), 0)`,
+          visible: false
+        });
+      }
+    }
+    
+    // Si tenemos "Time Estimated" y "Horas Disponibles", crear "Sobrecarga"
+    const timeEstimated = todasLasPropiedades.find(p => 
+      p.name.toLowerCase().includes('time estimated') || p.name.toLowerCase().includes('tiempo estimado')
+    );
+    const horasDisponibles = todasLasPropiedades.find(p => 
+      p.name.toLowerCase().includes('horas disponibles')
+    );
+    if (timeEstimated && horasDisponibles) {
+      const existeSobrecarga = todasLasPropiedades.find(p => 
+        p.name.toLowerCase().includes('sobrecarga')
+      );
+      if (!existeSobrecarga) {
+        columnasFormulaAAgregar.push({
+          name: "Sobrecarga",
+          type: "formula",
+          formula: `if(and(!empty(prop("${timeEstimated.name}")), !empty(prop("${horasDisponibles.name}"))), if((prop("${timeEstimated.name}") > prop("${horasDisponibles.name}")), "⚠️ Sobrecarga", "✅ OK"), "N/A")`,
+          visible: false
+        });
+      }
+    }
+    
+    return columnasFormulaAAgregar;
+  };
+
   const agregarPropiedad = () => {
     if (!nuevoCampo.name) return;
+    
+    // Si el nombre sugiere que es una fecha pero el tipo no es "date", cambiar automáticamente a "date"
+    const nombreNormalizado = nuevoCampo.name.trim().toLowerCase();
+    const esFecha = nombreNormalizado.includes('date') || 
+                    nombreNormalizado.includes('fecha') || 
+                    nombreNormalizado.includes('created') || 
+                    nombreNormalizado.includes('expiration');
+    
+    let tipoFinal = nuevoCampo.type;
+    if (esFecha && nuevoCampo.type === "text") {
+      tipoFinal = "date";
+    }
+    
+    // Si es tipo formula y no tiene fórmula asignada, intentar obtener una por defecto
+    let formulaFinal = nuevoCampo.formula || "";
+    if (tipoFinal === "formula" && !formulaFinal) {
+      formulaFinal = obtenerFormulaPorDefecto(nuevoCampo.name);
+    }
+    
     const nuevas = [...propiedades, { 
       ...nuevoCampo, 
-      totalizar: nuevoCampo.type === "number" || nuevoCampo.type === "percent" ? false : undefined,
-      formula: nuevoCampo.type === "formula" ? (nuevoCampo.formula || "") : undefined,
+      type: tipoFinal,
+      totalizar: tipoFinal === "number" || tipoFinal === "percent" ? false : undefined,
+      formula: tipoFinal === "formula" ? formulaFinal : undefined,
       visible: nuevoCampo.visible !== undefined ? nuevoCampo.visible : true
     }];
+    
+    // Si la columna agregada es una columna base (fecha inicial, fecha final, horas diarias, etc.)
+    // crear automáticamente las columnas de fórmula relacionadas
+    const columnasFormulaAAgregar = crearColumnasFormulaAutomaticas(nuevas, nuevoCampo.name);
+    
+    // Agregar las columnas de fórmula automáticas
+    if (columnasFormulaAAgregar.length > 0) {
+      columnasFormulaAAgregar.forEach(columna => {
+        // Verificar que no exista ya
+        if (!nuevas.find(p => p.name === columna.name)) {
+          nuevas.push({
+            ...columna,
+            totalizar: undefined,
+            visible: columna.visible !== undefined ? columna.visible : false
+          });
+        }
+      });
+    }
+    
     setPropiedades(nuevas);
 
+    // Actualizar todas las filas con la nueva propiedad y las fórmulas automáticas
     const nuevasFilas = filas.map((fila) => {
+      const nuevasProperties = { ...fila.properties };
+      
+      // Agregar la propiedad principal
+      nuevasProperties[nuevoCampo.name] = {
+        type: tipoFinal,
+        value: tipoFinal === "checkbox" ? false : tipoFinal === "tags" ? [] : tipoFinal === "formula" ? "" : tipoFinal === "date" ? "" : "",
+        color: tipoFinal === "select" ? "#3b82f6" : undefined,
+        formula: tipoFinal === "formula" ? formulaFinal : undefined,
+      };
+      
+      // Agregar las propiedades de fórmula automáticas
+      columnasFormulaAAgregar.forEach(columna => {
+        if (!nuevasProperties[columna.name]) {
+          nuevasProperties[columna.name] = {
+            type: "formula",
+            value: "",
+            formula: columna.formula
+          };
+        }
+      });
+      
       return {
         ...fila,
-        properties: {
-          ...fila.properties,
-          [nuevoCampo.name]: {
-            type: nuevoCampo.type,
-            value: nuevoCampo.type === "checkbox" ? false : nuevoCampo.type === "tags" ? [] : nuevoCampo.type === "formula" ? "" : "",
-            color: nuevoCampo.type === "select" ? "#3b82f6" : undefined,
-            formula: nuevoCampo.type === "formula" ? (nuevoCampo.formula || "") : undefined,
-          },
-        },
+        properties: nuevasProperties
       };
     });
+    
     setFilas(nuevasFilas);
     setNuevoCampo({ name: "", type: "text", formula: "", visible: true });
   };
@@ -1004,6 +1284,31 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
     setPropiedades(nuevasPropiedades);
   };
 
+  // Función para reordenar propiedades
+  const reordenarPropiedades = (fromIndex, toIndex) => {
+    // Solo reordenar propiedades visibles (excluyendo "Name")
+    const propiedadesVisibles = propiedades.filter(p => p.name !== "Name" && p.visible !== false);
+    const propiedadesOcultas = propiedades.filter(p => p.name === "Name" || p.visible === false);
+    
+    // Asegurar que los índices estén dentro del rango de propiedades visibles
+    if (fromIndex < 0 || fromIndex >= propiedadesVisibles.length || 
+        toIndex < 0 || toIndex >= propiedadesVisibles.length) {
+      return;
+    }
+    
+    // Reordenar
+    const [moved] = propiedadesVisibles.splice(fromIndex, 1);
+    propiedadesVisibles.splice(toIndex, 0, moved);
+    
+    // Reconstruir el array completo: Name primero, luego visibles, luego ocultas
+    const nameProp = propiedades.find(p => p.name === "Name");
+    const nuevasPropiedades = nameProp 
+      ? [nameProp, ...propiedadesVisibles, ...propiedadesOcultas]
+      : [...propiedadesVisibles, ...propiedadesOcultas];
+    
+    setPropiedades(nuevasPropiedades);
+  };
+
   // Función para renderizar la vista Timeline
   const renderTimelineView = () => {
     // Obtener todas las fechas de inicio y fin para calcular el rango
@@ -1604,6 +1909,9 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                 } else if (p.type === "number" || p.type === "percent") {
                   minWidth = '120px';
                   width = '120px';
+                } else if (p.type === "date") {
+                  minWidth = '140px';
+                  width = '140px';
                 } else if (p.type === "formula") {
                   minWidth = '130px';
                   width = '130px';
@@ -1649,6 +1957,7 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                       {p.type === "text" && "Aa"}
                       {p.type === "number" && "#"}
                       {p.type === "percent" && "%"}
+                      {p.type === "date" && "📅"}
                       {p.type === "checkbox" && "☑"}
                       {p.type === "select" && "▼"}
                       {p.type === "tags" && "🏷"}
@@ -1722,9 +2031,9 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                         padding: '2px 8px', 
                         overflow: prop.type === "tags" ? 'visible' : 'hidden',
                         whiteSpace: prop.type === "checkbox" ? 'nowrap' : (prop.type === "tags" ? 'normal' : 'nowrap'),
-                        width: prop.type === "checkbox" ? '50px' : (prop.type === "number" || prop.type === "percent" ? '120px' : prop.type === "formula" ? '130px' : prop.type === "tags" ? '180px' : prop.type === "select" ? '140px' : '150px'),
-                        minWidth: prop.type === "checkbox" ? '50px' : (prop.type === "number" || prop.type === "percent" ? '120px' : prop.type === "formula" ? '130px' : prop.type === "tags" ? '180px' : prop.type === "select" ? '140px' : '150px'),
-                        maxWidth: prop.type === "checkbox" ? '50px' : (prop.type === "number" || prop.type === "percent" ? '120px' : prop.type === "formula" ? '130px' : prop.type === "tags" ? '180px' : prop.type === "select" ? '140px' : '150px')
+                        width: prop.type === "checkbox" ? '50px' : (prop.type === "number" || prop.type === "percent" ? '120px' : prop.type === "date" ? '140px' : prop.type === "formula" ? '130px' : prop.type === "tags" ? '180px' : prop.type === "select" ? '140px' : '150px'),
+                        minWidth: prop.type === "checkbox" ? '50px' : (prop.type === "number" || prop.type === "percent" ? '120px' : prop.type === "date" ? '140px' : prop.type === "formula" ? '130px' : prop.type === "tags" ? '180px' : prop.type === "select" ? '140px' : '150px'),
+                        maxWidth: prop.type === "checkbox" ? '50px' : (prop.type === "number" || prop.type === "percent" ? '120px' : prop.type === "date" ? '140px' : prop.type === "formula" ? '130px' : prop.type === "tags" ? '180px' : prop.type === "select" ? '140px' : '150px')
                       }}
                       onClick={(e) => {
                         // Solo permitir que se abra el drawer desde la columna de nombre
@@ -1825,6 +2134,28 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                               )}
                             </div>
                       </div>
+                    ) : prop.type === "date" ? (
+                      <input
+                        type="date"
+                        className="group relative w-full border-none outline-none bg-transparent"
+                        style={{
+                          backgroundColor: 'transparent',
+                          color: 'rgb(55, 53, 47)',
+                          padding: '1px 4px',
+                          fontSize: '0.8125rem'
+                        }}
+                        value={fila.properties?.[prop.name]?.value || ""}
+                        onChange={(e) => actualizarValor(fi, prop.name, e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
+                        onFocus={(e) => {
+                          e.target.style.backgroundColor = 'white';
+                          e.target.style.border = '1.5px solid rgb(46, 170, 220)';
+                        }}
+                        onBlur={(e) => {
+                          e.target.style.backgroundColor = 'transparent';
+                          e.target.style.border = 'none';
+                        }}
+                      />
                     ) : (
                       <input
                         type="text"
@@ -2010,6 +2341,13 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                           <span role="img" aria-label="copiar">📋</span>
                         </button>
                       </div>
+                    ) : prop.type === "date" ? (
+                      <input
+                        type="date"
+                        className="w-full px-2 py-1 border rounded"
+                        value={fila.properties?.[prop.name]?.value || ""}
+                        onChange={(e) => actualizarValor(fi, prop.name, e.target.value)}
+                      />
                     ) : (
                       <input
                         type="text"
@@ -2438,6 +2776,13 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                   setEsNuevoCampo(false);
                 }}
                 propiedades={propiedades}
+                formulaActual={
+                  esNuevoCampo 
+                    ? nuevoCampo.formula || ""
+                    : (propiedadFormulaEditando && filaSeleccionada !== null)
+                      ? (filas[filaSeleccionada]?.properties?.[propiedadFormulaEditando]?.formula || "")
+                      : ""
+                }
               />
             </div>
     </div>
@@ -2517,6 +2862,7 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
         onToggleVisibility={togglePropertyVisibility}
         onShowAll={showAllProperties}
         onHideAll={hideAllProperties}
+        onReorder={reordenarPropiedades}
       />
 
       {/* Modal de confirmación para eliminar fila */}
