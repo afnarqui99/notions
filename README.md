@@ -255,3 +255,146 @@ Este proyecto está basado en el componente `EditorNotionLike` del proyecto prin
 
 5. **Las fórmulas se calculan automáticamente**: No necesitas editarlas manualmente, solo actualiza las columnas base (Progress, Objective, Time Spent, Time Estimated, Type)
 
+## 📅 Fórmulas del Sprint (Generales para Todas las Filas)
+
+Las fórmulas del sprint son **generales** y se aplican a todas las filas de la grid. Estas fórmulas calculan días hábiles, horas disponibles y sobrecarga de trabajo basándose en las fechas y horas del sprint.
+
+### Columnas Base del Sprint (Debes Crearlas Manualmente)
+
+Para que las fórmulas del sprint funcionen, necesitas crear estas columnas base:
+
+**1. Fecha Inicial del Sprint (Texto o Fecha)**
+- **Nombres válidos**: `Sprint Start Date`, `Fecha Inicial`, `Fecha Inicio`, `Start Date`, `Inicio Sprint`
+- **Tipo**: `text` o `date`
+- **Qué es**: Fecha de inicio del sprint
+- **Ejemplo**: `2025-12-26`
+- **Importante**: Esta fecha es la misma para todas las filas (general del sprint)
+
+**2. Fecha Final del Sprint (Texto o Fecha)**
+- **Nombres válidos**: `Sprint End Date`, `Fecha Final`, `Fecha Fin`, `End Date`, `Fin Sprint`
+- **Tipo**: `text` o `date`
+- **Qué es**: Fecha de fin del sprint
+- **Ejemplo**: `2026-01-08`
+- **Importante**: Esta fecha es la misma para todas las filas (general del sprint)
+
+**3. Horas Diarias (Número)**
+- **Nombres válidos**: `Horas Diarias`, `Horas Diarias Sprint`, `Horas por Día`, `Daily Hours`
+- **Tipo**: `number`
+- **Qué es**: Horas trabajadas por día hábil
+- **Ejemplo**: `8`
+- **Importante**: Este valor es el mismo para todas las filas (general del sprint)
+
+**4. Fecha Actual (Texto o Fecha)**
+- **Nombres válidos**: `Current Date`, `Fecha Actual`, `Hoy`
+- **Tipo**: `text` o `date`
+- **Qué es**: Fecha actual (se actualiza automáticamente o manualmente)
+- **Ejemplo**: `2025-12-20`
+- **Importante**: Esta fecha es la misma para todas las filas (general del sprint)
+
+### Fórmulas Calculadas Automáticamente
+
+Una vez que creas las columnas base, el sistema crea automáticamente estas fórmulas:
+
+**1. Dias Transcurridos (Fórmula)**
+- **Qué calcula**: Días hábiles transcurridos desde el inicio del sprint hasta la fecha actual
+- **Fórmula**: `if(and(!empty(prop("Sprint Start Date")), !empty(prop("Current Date"))), calcularDiasHabiles(prop("Sprint Start Date"), prop("Current Date")), 0)`
+- **Qué muestra**: Número de días hábiles (excluye sábados y domingos)
+- **Ejemplo**: Si el sprint inició el 26/12/2025 y hoy es 20/12/2025, muestra `0` (aún no ha iniciado)
+
+**2. Dias Faltantes (Fórmula)**
+- **Qué calcula**: Días hábiles faltantes desde la fecha actual hasta el fin del sprint
+- **Fórmula**: `if(and(!empty(prop("Current Date")), !empty(prop("Sprint End Date"))), calcularDiasHabiles(prop("Current Date"), prop("Sprint End Date")), 0)`
+- **Qué muestra**: Número de días hábiles restantes
+- **Ejemplo**: Si hoy es 20/12/2025 y el sprint termina el 08/01/2026, muestra los días hábiles entre esas fechas
+
+**3. Dias Totales Sprint (Fórmula)**
+- **Qué calcula**: Total de días hábiles del sprint completo
+- **Fórmula**: `if(and(!empty(prop("Sprint Start Date")), !empty(prop("Sprint End Date"))), calcularDiasHabiles(prop("Sprint Start Date"), prop("Sprint End Date")), 0)`
+- **Qué muestra**: Total de días hábiles del sprint
+- **Ejemplo**: Si el sprint va del 26/12/2025 al 08/01/2026, calcula los días hábiles totales
+
+**4. Horas Disponibles (Fórmula)**
+- **Qué calcula**: Horas disponibles basadas en días transcurridos y horas diarias
+- **Fórmula**: `if(and(!empty(prop("Dias Transcurridos")), !empty(prop("Horas Diarias"))), prop("Dias Transcurridos") * prop("Horas Diarias"), 0)`
+- **Qué muestra**: Horas disponibles hasta la fecha actual
+- **Ejemplo**: Si han transcurrido 5 días hábiles y trabajas 8 horas diarias, muestra `40`
+
+**5. Horas Totales Sprint (Fórmula)**
+- **Qué calcula**: Total de horas del sprint completo
+- **Fórmula**: `if(and(!empty(prop("Sprint Start Date")), !empty(prop("Sprint End Date")), !empty(prop("Horas Diarias"))), calcularDiasHabiles(prop("Sprint Start Date"), prop("Sprint End Date")) * prop("Horas Diarias"), 0)`
+- **Qué muestra**: Total de horas disponibles en todo el sprint
+- **Ejemplo**: Si el sprint tiene 10 días hábiles y trabajas 8 horas diarias, muestra `80`
+
+**6. Sobrecarga (Fórmula)**
+- **Qué calcula**: Indica si el tiempo estimado de una tarea excede las horas disponibles
+- **Fórmula**: `if(and(!empty(prop("Time Estimated")), !empty(prop("Horas Disponibles"))), if((prop("Time Estimated") > prop("Horas Disponibles")), "⚠️ Sobrecarga", "✅ OK"), "N/A")`
+- **Qué muestra**: 
+  - `⚠️ Sobrecarga` si Time Estimated > Horas Disponibles
+  - `✅ OK` si Time Estimated <= Horas Disponibles
+  - `N/A` si faltan datos
+- **Ejemplo**: Si Time Estimated = 50 y Horas Disponibles = 40, muestra `⚠️ Sobrecarga`
+
+### Función calcularDiasHabiles
+
+La función `calcularDiasHabiles(fechaInicio, fechaFin)` calcula los días hábiles entre dos fechas, **excluyendo sábados y domingos**.
+
+**Cómo funciona**:
+- Recibe dos fechas en formato texto (ej: `"2025-12-26"`)
+- Cuenta solo los días de lunes a viernes
+- Retorna el número de días hábiles
+
+**Ejemplo**:
+- Fecha inicio: `2025-12-26` (viernes)
+- Fecha fin: `2026-01-08` (miércoles)
+- Días hábiles: Cuenta del 26/12 (viernes) al 08/01 (miércoles), excluyendo sábados y domingos
+
+### Cómo Configurar el Sprint
+
+1. **Crea las columnas base**:
+   - Agrega una columna tipo `text` llamada `Sprint Start Date` (o cualquier nombre válido)
+   - Agrega una columna tipo `text` llamada `Sprint End Date` (o cualquier nombre válido)
+   - Agrega una columna tipo `number` llamada `Horas Diarias` (o cualquier nombre válido)
+   - Agrega una columna tipo `text` llamada `Current Date` (o cualquier nombre válido)
+
+2. **Asigna valores generales** (los mismos para todas las filas):
+   - En `Sprint Start Date`: Ingresa la fecha de inicio del sprint (ej: `2025-12-26`)
+   - En `Sprint End Date`: Ingresa la fecha de fin del sprint (ej: `2026-01-08`)
+   - En `Horas Diarias`: Ingresa las horas trabajadas por día (ej: `8`)
+   - En `Current Date`: Ingresa la fecha actual (ej: `2025-12-20`)
+
+3. **Las fórmulas se crean automáticamente**:
+   - El sistema detecta las columnas base y crea automáticamente las fórmulas calculadas
+   - No necesitas crear las fórmulas manualmente
+
+4. **Usa las fórmulas**:
+   - `Horas Disponibles`: Te dice cuántas horas tienes disponibles hasta hoy
+   - `Horas Totales Sprint`: Te dice el total de horas del sprint completo
+   - `Sobrecarga`: Te alerta si una tarea excede las horas disponibles
+
+### Ejemplo Completo
+
+**Configuración del Sprint**:
+- Sprint Start Date: `2025-12-26`
+- Sprint End Date: `2026-01-08`
+- Horas Diarias: `8`
+- Current Date: `2025-12-20`
+
+**Resultados automáticos**:
+- Dias Transcurridos: `0` (el sprint aún no ha iniciado)
+- Dias Faltantes: Calcula días hábiles desde 20/12 hasta 08/01
+- Dias Totales Sprint: Calcula días hábiles desde 26/12 hasta 08/01
+- Horas Disponibles: `0` (aún no ha iniciado el sprint)
+- Horas Totales Sprint: Dias Totales Sprint × 8 horas
+
+### Notas Importantes
+
+1. **Las columnas base son generales**: Los valores de `Sprint Start Date`, `Sprint End Date`, `Horas Diarias` y `Current Date` son los mismos para todas las filas del sprint.
+
+2. **Formato de fechas**: Usa el formato `YYYY-MM-DD` (ej: `2025-12-26`)
+
+3. **Días hábiles**: La función excluye automáticamente sábados y domingos
+
+4. **Actualización automática**: Las fórmulas se recalculan automáticamente cuando cambias las fechas o valores base
+
+5. **Detección automática**: El sistema detecta las columnas base por su nombre (no importa mayúsculas/minúsculas), así que puedes usar cualquier variación de los nombres válidos
+

@@ -73,7 +73,7 @@ export default function PropertyVisibilityModal({
       onClick={onClose}
     >
       <div 
-        className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col"
+        className="bg-white rounded-lg shadow-xl w-full max-w-5xl max-h-[80vh] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -122,7 +122,7 @@ export default function PropertyVisibilityModal({
                   </button>
                 )}
               </div>
-              <div className="space-y-1">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
                 {propiedadesVisiblesFiltradas.map((prop, index) => {
                   const originalIndex = propiedadesVisibles.findIndex(p => p.name === prop.name);
                   return (
@@ -158,7 +158,7 @@ export default function PropertyVisibilityModal({
                         setDraggedIndex(null);
                         setDragOverIndex(null);
                       }}
-                      className={`flex items-center gap-3 p-2 rounded transition-all ${
+                      className={`flex items-center gap-2 p-2 rounded transition-all ${
                         draggedIndex === originalIndex ? 'opacity-50 scale-95' : ''
                       } ${
                         dragOverIndex === originalIndex ? 'bg-blue-100 border-l-4 border-blue-500' : 'hover:bg-gray-50'
@@ -170,12 +170,12 @@ export default function PropertyVisibilityModal({
                       }}
                     >
                       <span 
-                        className={`text-gray-400 text-sm drag-handle ${!searchTerm ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                        className={`text-gray-400 text-xs drag-handle flex-shrink-0 ${!searchTerm ? 'cursor-grab active:cursor-grabbing' : ''}`}
                         title={searchTerm ? '' : 'Arrastra para reordenar'}
                       >⋮⋮</span>
-                      <span className="text-sm text-gray-600 w-6 text-center">{getTypeIcon(prop.type, prop.name)}</span>
-                      <span className="flex-1 text-sm text-gray-900">{prop.name}</span>
-                      <span className="text-blue-600">👁️</span>
+                      <span className="text-xs text-gray-600 w-5 text-center flex-shrink-0">{getTypeIcon(prop.type, prop.name)}</span>
+                      <span className="flex-1 text-xs text-gray-900 truncate min-w-0">{prop.name}</span>
+                      <span className="text-blue-600 flex-shrink-0 text-xs">👁️</span>
                     </div>
                   );
                 })}
@@ -197,17 +197,17 @@ export default function PropertyVisibilityModal({
                   </button>
                 )}
               </div>
-              <div className="space-y-1">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
                 {propiedadesOcultasFiltradas.map((prop) => (
                   <div
                     key={prop.name}
-                    className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded cursor-pointer"
+                    className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer"
                     onClick={() => onToggleVisibility(prop.name)}
                   >
-                    <span className="text-gray-400 text-sm cursor-move">⋮⋮</span>
-                    <span className="text-sm text-gray-600 w-6 text-center">{getTypeIcon(prop.type)}</span>
-                    <span className="flex-1 text-sm text-gray-900">{prop.name}</span>
-                    <span className="text-gray-400 line-through">👁️</span>
+                    <span className="text-gray-400 text-xs cursor-move flex-shrink-0">⋮⋮</span>
+                    <span className="text-xs text-gray-600 w-5 text-center flex-shrink-0">{getTypeIcon(prop.type, prop.name)}</span>
+                    <span className="flex-1 text-xs text-gray-900 truncate min-w-0">{prop.name}</span>
+                    <span className="text-gray-400 line-through flex-shrink-0 text-xs">👁️</span>
                   </div>
                 ))}
               </div>
