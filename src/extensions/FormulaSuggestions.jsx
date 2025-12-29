@@ -1,10 +1,20 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 /**
  * Componente que muestra fórmulas sugeridas para gestión ágil
  */
 export default function FormulaSuggestions({ onSelectFormula, propiedades }) {
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('progreso');
+  const [mostrarCrearFormula, setMostrarCrearFormula] = useState(false);
+  const [nuevaFormula, setNuevaFormula] = useState({ nombre: '', formula: '', descripcion: '', categoria: 'personalizadas' });
+  const [formulasPersonalizadas, setFormulasPersonalizadas] = useState(() => {
+    try {
+      const saved = localStorage.getItem('notion-formulas-personalizadas');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
 
   const formulas = {
     progreso: [
@@ -126,10 +136,47 @@ export default function FormulaSuggestions({ onSelectFormula, propiedades }) {
     { id: 'tiempo', nombre: '⏱️ Tiempo', icon: '⏱️' },
     { id: 'sprint', nombre: '🏃 Sprint', icon: '🏃' },
     { id: 'productividad', nombre: '⚡ Productividad', icon: '⚡' },
-    { id: 'fechas', nombre: '📅 Fechas', icon: '📅' }
+    { id: 'fechas', nombre: '📅 Fechas', icon: '📅' },
+    { id: 'personalizadas', nombre: '⭐ Personalizadas', icon: '⭐' }
   ];
 
-  const formulasCategoria = formulas[categoriaSeleccionada] || [];
+  // Guardar fórmulas personalizadas en localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('notion-formulas-personalizadas', JSON.stringify(formulasPersonalizadas));
+    } catch (error) {
+      console.error('Error guardando fórmulas personalizadas:', error);
+    }
+  }, [formulasPersonalizadas]);
+
+  const guardarFormulaPersonalizada = () => {
+    if (!nuevaFormula.nombre || !nuevaFormula.formula) {
+      alert('Por favor completa el nombre y la fórmula');
+      return;
+    }
+    const nueva = {
+      ...nuevaFormula,
+      id: Date.now(),
+      campos: []
+    };
+    setFormulasPersonalizadas([...formulasPersonalizadas, nueva]);
+    setNuevaFormula({ nombre: '', formula: '', descripcion: '', categoria: 'personalizadas' });
+    setMostrarCrearFormula(false);
+  };
+
+  const eliminarFormulaPersonalizada = (id) => {
+    if (confirm('¿Estás seguro de que deseas eliminar esta fórmula personalizada?')) {
+      setFormulasPersonalizadas(formulasPersonalizadas.filter(f => f.id !== id));
+    }
+  };
+
+  // Combinar fórmulas predefinidas con personalizadas
+  let formulasCategoria = [];
+  if (categoriaSeleccionada === 'personalizadas') {
+    formulasCategoria = formulasPersonalizadas;
+  } else {
+    formulasCategoria = formulas[categoriaSeleccionada] || [];
+  }
 
   return (
     <div>
@@ -150,65 +197,158 @@ export default function FormulaSuggestions({ onSelectFormula, propiedades }) {
         ))}
       </div>
 
-      {/* Lista de fórmulas */}
-      <div className="space-y-3">
-        {formulasCategoria.map((formula, idx) => {
-          const camposDisponibles = propiedades.map(p => p.name);
-          const camposNecesarios = formula.campos || [];
-          const tieneCampos = camposNecesarios.every(campo => camposDisponibles.includes(campo));
-          
-          return (
-            <div
-              key={idx}
-              className={`p-4 rounded-lg border-2 shadow-sm ${
-                tieneCampos
-                  ? 'bg-green-50 border-green-300 hover:shadow-md transition-shadow'
-                  : 'bg-gray-50 border-gray-300'
-              }`}
+      {/* Botón para crear nueva fórmula personalizada */}
+      {categoriaSeleccionada === 'personalizadas' && (
+        <div className="mb-4">
+          {!mostrarCrearFormula ? (
+            <button
+              onClick={() => setMostrarCrearFormula(true)}
+              className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2 shadow-sm"
             >
-              <div className="flex justify-between items-start mb-2">
-                <div className="flex-1 mr-4">
-                  <h4 className="font-bold text-base text-gray-900 mb-1">{formula.nombre}</h4>
-                  <p className="text-sm text-gray-600 mb-3">{formula.descripcion}</p>
-                  {camposNecesarios.length > 0 && (
-                    <div className="mt-2">
-                      <span className="text-sm font-medium text-gray-700">Campos requeridos: </span>
-                      {camposNecesarios.map((campo, i) => (
-                        <span
-                          key={i}
-                          className={`text-sm px-2 py-1 rounded-md mx-1 font-medium ${
-                            camposDisponibles.includes(campo)
-                              ? 'bg-green-200 text-green-800 border border-green-300'
-                              : 'bg-yellow-200 text-yellow-800 border border-yellow-300'
-                          }`}
-                        >
-                          {campo}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+              ➕ Crear Nueva Fórmula Personalizada
+            </button>
+          ) : (
+            <div className="p-4 bg-white border-2 border-green-300 rounded-lg shadow-sm">
+              <h3 className="font-bold text-lg mb-3 text-gray-900">Crear Nueva Fórmula</h3>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Nombre de la fórmula *</label>
+                  <input
+                    type="text"
+                    value={nuevaFormula.nombre}
+                    onChange={(e) => setNuevaFormula({ ...nuevaFormula, nombre: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                    placeholder="Ej: Mi Fórmula Personalizada"
+                  />
                 </div>
-                <button
-                  onClick={() => onSelectFormula(formula.formula)}
-                  className={`ml-2 px-4 py-2 text-sm font-semibold rounded-lg transition-all shadow-sm ${
-                    tieneCampos
-                      ? 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-md'
-                      : 'bg-gray-400 text-white cursor-not-allowed'
-                  }`}
-                  disabled={!tieneCampos}
-                  title={tieneCampos ? 'Usar esta fórmula' : 'Faltan campos requeridos'}
-                >
-                  Usar
-                </button>
-              </div>
-              <div className="mt-3 p-3 bg-white rounded border border-gray-300">
-                <code className="text-sm font-mono text-gray-800 break-all whitespace-pre-wrap">
-                  {formula.formula}
-                </code>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Fórmula *</label>
+                  <textarea
+                    value={nuevaFormula.formula}
+                    onChange={(e) => setNuevaFormula({ ...nuevaFormula, formula: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded text-sm font-mono focus:outline-none focus:ring-2 focus:ring-green-500"
+                    rows={3}
+                    placeholder='Ej: if(prop("Progress") > 50, "✅", "⏳")'
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Descripción (opcional)</label>
+                  <input
+                    type="text"
+                    value={nuevaFormula.descripcion}
+                    onChange={(e) => setNuevaFormula({ ...nuevaFormula, descripcion: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                    placeholder="Describe qué hace esta fórmula"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={guardarFormulaPersonalizada}
+                    className="flex-1 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors font-medium"
+                  >
+                    💾 Guardar Fórmula
+                  </button>
+                  <button
+                    onClick={() => {
+                      setMostrarCrearFormula(false);
+                      setNuevaFormula({ nombre: '', formula: '', descripcion: '', categoria: 'personalizadas' });
+                    }}
+                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                </div>
               </div>
             </div>
-          );
-        })}
+          )}
+        </div>
+      )}
+
+      {/* Lista de fórmulas */}
+      <div className="space-y-3">
+        {formulasCategoria.length === 0 && categoriaSeleccionada === 'personalizadas' ? (
+          <div className="p-6 text-center bg-gray-50 rounded-lg border border-gray-200">
+            <p className="text-gray-600 mb-2">No tienes fórmulas personalizadas aún</p>
+            <p className="text-sm text-gray-500">Crea tu primera fórmula usando el botón de arriba</p>
+          </div>
+        ) : (
+          formulasCategoria.map((formula, idx) => {
+            const camposDisponibles = propiedades.map(p => p.name);
+            const camposNecesarios = formula.campos || [];
+            const tieneCampos = camposNecesarios.length === 0 || camposNecesarios.every(campo => camposDisponibles.includes(campo));
+            const esPersonalizada = categoriaSeleccionada === 'personalizadas';
+            
+            return (
+              <div
+                key={esPersonalizada ? formula.id : idx}
+                className={`p-4 rounded-lg border-2 shadow-sm ${
+                  tieneCampos
+                    ? 'bg-green-50 border-green-300 hover:shadow-md transition-shadow'
+                    : 'bg-gray-50 border-gray-300'
+                }`}
+              >
+                <div className="flex justify-between items-start mb-2">
+                  <div className="flex-1 mr-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h4 className="font-bold text-base text-gray-900">{formula.nombre}</h4>
+                      {esPersonalizada && (
+                        <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded">Personalizada</span>
+                      )}
+                    </div>
+                    {formula.descripcion && (
+                      <p className="text-sm text-gray-600 mb-3">{formula.descripcion}</p>
+                    )}
+                    {camposNecesarios.length > 0 && (
+                      <div className="mt-2">
+                        <span className="text-sm font-medium text-gray-700">Campos requeridos: </span>
+                        {camposNecesarios.map((campo, i) => (
+                          <span
+                            key={i}
+                            className={`text-sm px-2 py-1 rounded-md mx-1 font-medium ${
+                              camposDisponibles.includes(campo)
+                                ? 'bg-green-200 text-green-800 border border-green-300'
+                                : 'bg-yellow-200 text-yellow-800 border border-yellow-300'
+                            }`}
+                          >
+                            {campo}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {esPersonalizada && (
+                      <button
+                        onClick={() => eliminarFormulaPersonalizada(formula.id)}
+                        className="px-3 py-2 text-sm font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700 transition-all shadow-sm"
+                        title="Eliminar fórmula personalizada"
+                      >
+                        🗑️
+                      </button>
+                    )}
+                    <button
+                      onClick={() => onSelectFormula(formula.formula)}
+                      className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all shadow-sm ${
+                        tieneCampos
+                          ? 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-md'
+                          : 'bg-gray-400 text-white cursor-not-allowed'
+                      }`}
+                      disabled={!tieneCampos}
+                      title={tieneCampos ? 'Usar esta fórmula' : 'Faltan campos requeridos'}
+                    >
+                      Usar
+                    </button>
+                  </div>
+                </div>
+                <div className="mt-3 p-3 bg-white rounded border border-gray-300">
+                  <code className="text-sm font-mono text-gray-800 break-all whitespace-pre-wrap">
+                    {formula.formula}
+                  </code>
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
 
       {/* Información adicional */}
