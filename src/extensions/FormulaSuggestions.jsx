@@ -277,6 +277,7 @@ export default function FormulaSuggestions({ onSelectFormula, propiedades, formu
             const camposNecesarios = formula.campos || [];
             const tieneCampos = camposNecesarios.length === 0 || camposNecesarios.every(campo => camposDisponibles.includes(campo));
             const esPersonalizada = categoriaSeleccionada === 'personalizadas';
+            const esFormulaActual = formulaActual && formulaActual.trim() === formula.formula.trim();
             
             return (
               <div
