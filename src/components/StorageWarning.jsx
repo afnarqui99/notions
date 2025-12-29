@@ -124,7 +124,7 @@ export default function StorageWarning({ onOpenConfig }) {
   if (!showWarning) return null;
 
   return (
-    <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
+    <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4 shadow-sm">
       <div className="flex items-start">
         <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
         <div className="ml-3 flex-1">

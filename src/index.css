@@ -127,10 +127,12 @@ tabla-notion {
 
 /* Estilos para NodeViewWrapper con ancho completo */
 .notion-table-fullwidth {
-  width: 100vw !important;
-  max-width: 100vw !important;
-  margin-left: calc(-50vw + 50%) !important;
-  margin-right: calc(-50vw + 50%) !important;
+  position: relative !important;
+  left: calc(-1 * (50vw - 50% - var(--sidebar-width, 256px) + 1rem)) !important;
+  width: calc(100vw - var(--sidebar-width, 256px)) !important;
+  max-width: calc(100vw - var(--sidebar-width, 256px)) !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
   padding-left: 1rem !important;
   padding-right: 1rem !important;
   box-sizing: border-box !important;
@@ -141,6 +143,17 @@ tabla-notion {
 .tiptap .notion-table-fullwidth {
   position: relative;
   z-index: 1;
+  overflow: visible;
+}
+
+/* Permitir que el contenedor padre se expanda */
+.tiptap {
+  overflow-x: visible;
+}
+
+/* Asegurar que el contenedor max-w-4xl permita overflow */
+.max-w-4xl {
+  overflow-x: visible;
 }
 
 .notion-table-desktop table {
