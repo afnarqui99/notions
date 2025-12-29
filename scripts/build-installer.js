@@ -32,3 +32,4 @@ console.log('   2. Usar NSIS (gratis): https://nsis.sourceforge.io/');
 console.log('   3. Comprimir la carpeta win-unpacked en un ZIP');
 console.log('   4. El ejecutable funciona directamente sin instalador');
 
+

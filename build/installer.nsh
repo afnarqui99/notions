@@ -10,3 +10,4 @@
   ; Limpiar el auto-launch al desinstalar
 !macroend
 
+

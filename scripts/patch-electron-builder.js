@@ -19,3 +19,4 @@ exit /b 0
 console.log('Para evitar el error, asegúrate de que sign: false esté en package.json');
 console.log('El error de enlaces simbólicos no debería afectar la generación del ejecutable');
 
+

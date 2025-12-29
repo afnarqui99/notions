@@ -78,3 +78,4 @@ npm install auto-launch --save
 - Verifica que la aplicación tenga permisos de administrador
 - Revisa la configuración de inicio de Windows
 
+

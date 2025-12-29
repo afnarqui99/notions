@@ -112,9 +112,11 @@ tabla-notion {
 .notion-table-desktop {
   width: 100%;
   overflow-x: auto;
+  overflow-y: visible;
   border: 1px solid rgba(55, 53, 47, 0.16);
   border-radius: 3px;
   background: white;
+  position: relative;
 }
 
 /* Estilos para tabla con ancho completo */
@@ -142,11 +144,11 @@ tabla-notion {
 }
 
 .notion-table-desktop table {
-  width: 100%;
+  width: auto;
+  min-width: 100%;
   border-collapse: separate;
   border-spacing: 0;
   table-layout: auto;
-  min-width: 100%;
 }
 
 .notion-table-desktop table thead tr th:first-child {
@@ -165,22 +167,26 @@ tabla-notion {
 }
 
 .notion-table-desktop th {
-  padding: 4px 6px;
+  padding: 2px 10px;
   text-align: left;
   font-weight: 500;
   font-size: 0.7rem;
   color: rgba(55, 53, 47, 0.65);
   border-right: 1px solid rgba(55, 53, 47, 0.09);
   border-bottom: 1px solid rgba(55, 53, 47, 0.09);
-  white-space: normal;
+  white-space: nowrap;
   background-color: rgba(55, 53, 47, 0.03);
   position: relative;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow: visible !important;
+  text-overflow: clip;
   text-transform: uppercase;
   letter-spacing: 0.03em;
   width: auto;
-  max-width: 150px;
+}
+
+.notion-table-desktop th > div {
+  overflow: visible !important;
+  min-width: fit-content;
 }
 
 .notion-table-desktop th:hover {
@@ -189,29 +195,87 @@ tabla-notion {
 
 .notion-table-desktop th:first-child {
   border-left: none;
+  position: sticky;
+  left: 0;
+  z-index: 20;
+  background-color: rgba(55, 53, 47, 0.03) !important;
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
+}
+
+.notion-table-desktop th:first-child::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background-color: rgba(55, 53, 47, 0.09);
+}
+
+.notion-table-desktop th:first-child:hover {
+  background-color: rgba(55, 53, 47, 0.06) !important;
 }
 
 .notion-table-desktop td {
-  padding: 2px 6px;
+  padding: 2px 8px;
   border-right: 1px solid rgba(55, 53, 47, 0.09);
   border-bottom: 1px solid rgba(55, 53, 47, 0.09);
   font-size: 0.8125rem;
   color: rgb(55, 53, 47);
-  vertical-align: top;
+  vertical-align: middle;
   background-color: white;
   width: auto;
-  max-width: 150px;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.notion-table-desktop td:first-child {
+/* Estilos especiales para celdas de tags */
+.notion-table-desktop td.tags-cell {
+  overflow: visible !important;
+  white-space: normal !important;
+  min-width: 140px;
+}
+
+.notion-table-desktop td:first-child,
+.notion-table-desktop td.sticky-name-cell {
   border-left: none;
+  position: sticky;
+  left: 0;
+  z-index: 10;
+  background-color: white;
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
+}
+
+.notion-table-desktop td:first-child::after,
+.notion-table-desktop td.sticky-name-cell::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background-color: rgba(55, 53, 47, 0.09);
+}
+
+.notion-table-desktop tr.bg-gray-200 td:first-child,
+.notion-table-desktop tr.bg-gray-200 td.sticky-name-cell {
+  background-color: #e5e7eb;
+}
+
+.notion-table-desktop tr:hover td:first-child,
+.notion-table-desktop tr:hover td.sticky-name-cell {
+  background-color: rgba(55, 53, 47, 0.03);
+}
+
+.notion-table-desktop tr.bg-gray-200:hover td:first-child,
+.notion-table-desktop tr.bg-gray-200:hover td.sticky-name-cell {
+  background-color: #d1d5db;
 }
 
 .notion-table-desktop tr {
   height: auto;
-  min-height: 24px;
+  min-height: 20px;
 }
 
 .notion-table-desktop tbody tr:hover {
