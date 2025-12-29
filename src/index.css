@@ -2,6 +2,25 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Animaciones para el drawer estilo Notion */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
 /* Estilos para el editor TipTap */
 .ProseMirror {
   outline: none;

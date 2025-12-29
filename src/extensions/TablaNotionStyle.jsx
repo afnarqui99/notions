@@ -226,6 +226,7 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
   });
   const [filaSeleccionada, setFilaSeleccionada] = useState(null);
   const [showDrawer, setShowDrawer] = useState(false);
+  const [drawerExpandido, setDrawerExpandido] = useState(false);
   const [nuevoCampo, setNuevoCampo] = useState({ name: "", type: "text", formula: "", visible: true });
   const [sortBy, setSortBy] = useState(null);
   const [sortAsc, setSortAsc] = useState(true);
@@ -335,6 +336,7 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
     // No necesitamos Firebase, se guarda en el contenido del editor
     setShowDrawer(false);
     setFilaSeleccionada(null);
+    setDrawerExpandido(false); // Resetear el estado de expansión al cerrar
   };
 
   const agregarPropiedad = () => {
@@ -1999,21 +2001,64 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
       )}
 
 {showDrawer && (
-    <div className="fixed inset-0 z-50 bg-black/30 flex justify-center items-center">
-    <div className="bg-white w-full h-full overflow-y-auto p-6 shadow-xl rounded-none">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold">Editar fila</h2>
-        <button onClick={cerrarDrawer} className="text-red-500 text-2xl font-bold">×</button>
-      </div>
+    <>
+      {/* Overlay con animación */}
+      <div 
+        className="fixed inset-0 z-50 bg-black/40 transition-opacity"
+        onClick={cerrarDrawer}
+        style={{ animation: 'fadeIn 0.2s ease-out' }}
+      />
+      {/* Panel lateral con animación */}
+      <div 
+        className={`fixed top-0 bottom-0 z-50 bg-white shadow-2xl overflow-y-auto transition-all duration-300 ease-out ${
+          drawerExpandido ? 'right-0 w-full' : 'right-0 w-1/2'
+        }`}
+        style={{ 
+          animation: 'slideInRight 0.3s ease-out',
+          boxShadow: '-4px 0 24px rgba(0, 0, 0, 0.15)'
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center z-10">
+          <h2 className="text-lg font-semibold text-gray-900">
+            {filaSeleccionada !== null ? filas[filaSeleccionada]?.Name || "Sin nombre" : "Editar fila"}
+          </h2>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => setDrawerExpandido(!drawerExpandido)} 
+              className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded hover:bg-gray-100"
+              title={drawerExpandido ? "Reducir" : "Expandir al 100%"}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {drawerExpandido ? (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                ) : (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                )}
+              </svg>
+            </button>
+            <button 
+              onClick={cerrarDrawer} 
+              className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded hover:bg-gray-100"
+              title="Cerrar"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div className="p-6">
 
       {filaSeleccionada !== null && (
         <>
-          <div className="mb-4">
-            <label className="block text-xs text-gray-600 mb-1">Título</label>
+          {/* Título editable en la parte superior */}
+          <div className="mb-6">
             <input
               type="text"
-              className="border w-full px-2 py-1 rounded"
-              value={filas[filaSeleccionada].Name}
+              className="w-full text-2xl font-semibold border-none outline-none focus:bg-gray-50 px-2 py-1 rounded transition-colors"
+              value={filas[filaSeleccionada].Name || ""}
+              placeholder="Sin título"
               onChange={(e) => {
                 const nuevas = [...filas];
                 nuevas[filaSeleccionada].Name = e.target.value;
@@ -2057,17 +2102,18 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+          {/* Propiedades */}
+          <div className="space-y-6">
             {propiedades.map((prop, pi) => (
-              <div key={pi} className={prop.type === "formula" ? "col-span-full" : ""}>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs text-gray-600">
+              <div key={pi} className="border-b border-gray-100 pb-4 last:border-b-0">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs font-medium text-gray-700 uppercase tracking-wide">
                     {prop.name}
                     {prop.type === "formula" && " (Fórmula)"}
                     {prop.totalizar && " (Totalizar)"}
                     {prop.visible === false && " 👁️ Oculto"}
                   </label>
-                  <label className="flex items-center gap-1 text-xs text-gray-500 cursor-pointer">
+                  <label className="flex items-center gap-1 text-xs text-gray-500 cursor-pointer hover:text-gray-700 transition-colors">
                     <input
                       type="checkbox"
                       checked={prop.visible !== false}
@@ -2253,8 +2299,10 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
               </div>
             ))}
           </div>
- <div className="mt-4 border-t pt-4">
-                <h3 className="font-semibold text-sm mb-2">➕ Agregar propiedad</h3>
+          
+          {/* Sección para agregar nueva propiedad */}
+          <div className="mt-8 border-t border-gray-200 pt-6">
+                <h3 className="font-semibold text-sm mb-3 text-gray-700">➕ Agregar propiedad</h3>
                 <input
                   type="text"
                   placeholder="Nombre de la propiedad"
@@ -2318,9 +2366,10 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
 />
         </>
       )}
-    </div>
-  </div>
-)}
+        </div>
+      </div>
+    </>
+  )}
 
       {/* Modal de fórmulas sugeridas */}
       {showFormulaModal && (
