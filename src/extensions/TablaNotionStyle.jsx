@@ -851,6 +851,27 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
     return dias;
   };
 
+  // Función para agregar días hábiles a una fecha
+  const agregarDiasHabiles = (fechaInicio, diasHabiles) => {
+    const fecha = new Date(fechaInicio);
+    let diasAgregados = 0;
+    
+    while (diasAgregados < diasHabiles) {
+      fecha.setDate(fecha.getDate() + 1);
+      const diaSemana = fecha.getDay();
+      // 0 = domingo, 6 = sábado
+      if (diaSemana !== 0 && diaSemana !== 6) {
+        diasAgregados++;
+      }
+    }
+    
+    // Formatear como YYYY-MM-DD
+    const año = fecha.getFullYear();
+    const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+    const dia = String(fecha.getDate()).padStart(2, '0');
+    return `${año}-${mes}-${dia}`;
+  };
+
   // Función para cargar plantilla de metodología ágil Azure DevOps
   const cargarPlantillaAgil = () => {
     const plantillaCampos = [
@@ -918,10 +939,20 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
 
   // Función para cargar plantilla con ejemplos completos de sprint
   const cargarPlantillaEjemplo = () => {
-    // Fechas del sprint
-    const sprintInicio = "2025-12-26";
-    const sprintFin = "2026-01-08";
-    const hoy = "2025-12-20";
+    // Calcular fechas del sprint automáticamente
+    // Fecha actual (hoy)
+    const fechaActual = new Date();
+    const año = fechaActual.getFullYear();
+    const mes = String(fechaActual.getMonth() + 1).padStart(2, '0');
+    const dia = String(fechaActual.getDate()).padStart(2, '0');
+    const hoy = `${año}-${mes}-${dia}`;
+    
+    // Sprint Start Date = hoy
+    const sprintInicio = hoy;
+    
+    // Sprint End Date = 15 días hábiles después de hoy
+    const sprintFin = agregarDiasHabiles(hoy, 15);
+    
     const horasDiarias = 8;
     
     // Calcular días hábiles del sprint
@@ -929,12 +960,8 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
     const horasTotalesSprint = diasHabilesSprint * horasDiarias;
     
     // Calcular días hábiles transcurridos (desde inicio del sprint hasta hoy)
-    // Si hoy es antes del inicio del sprint, los días transcurridos son 0
-    const fechaInicio = new Date(sprintInicio);
-    const fechaHoy = new Date(hoy);
-    const diasHabilesTranscurridos = fechaHoy < fechaInicio 
-      ? 0 
-      : calcularDiasHabiles(sprintInicio, hoy);
+    // Como el sprint inicia hoy, los días transcurridos son 0
+    const diasHabilesTranscurridos = 0;
     
     // Definir todos los campos con fórmulas (incluyendo los de Notion de la imagen)
     const plantillaCampos = [
@@ -947,6 +974,10 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
       // Campos de tiempo (ocultos inicialmente)
       { name: "Time Spent", type: "number", visible: false, totalizar: true },
       { name: "Time Estimated", type: "number", visible: false, totalizar: true },
+      // Campos base del sprint (ocultos inicialmente, valores generales para todas las filas)
+      { name: "Sprint Start Date", type: "text", visible: false },
+      { name: "Sprint End Date", type: "text", visible: false },
+      { name: "Horas Diarias Sprint", type: "number", visible: false, totalizar: false },
       // Campos de fechas (ocultos inicialmente)
       { name: "Start Date", type: "text", visible: false },
       { name: "End Date", type: "text", visible: false },
@@ -994,7 +1025,7 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
       { name: "iteracion", type: "text", visible: false },
       { name: "puntos de historia", type: "number", visible: false, totalizar: false },
       { name: "release", type: "text", visible: false },
-      // Campo oculto para cálculos
+      // Campo oculto para cálculos (con valor por defecto 100)
       { name: "Objective", type: "number", visible: false, totalizar: false },
     ];
 
@@ -1023,7 +1054,7 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
       const nuevasFilas = filas.map((fila) => {
         const nuevasProperties = { ...fila.properties };
         nuevosCampos.forEach(campo => {
-          let defaultValue = campo.type === "checkbox" ? false : campo.type === "tags" ? [] : campo.type === "formula" ? "" : "";
+          let defaultValue = campo.type === "checkbox" ? false : campo.type === "tags" ? [] : campo.type === "formula" ? "" : campo.type === "number" ? 0 : "";
           let defaultColor = undefined;
           
           // Valores por defecto para Priority
@@ -1034,6 +1065,28 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
           // Valores por defecto para Type
           if (campo.name === "Type" && campo.type === "tags") {
             defaultValue = [{ label: "TO DO", color: "#6b7280" }]; // Gris por defecto
+          }
+          
+          // Valores por defecto para Objective
+          if (campo.name === "Objective" && campo.type === "number") {
+            defaultValue = 100; // 100 por defecto
+          }
+          
+          // Valores por defecto para campos base del sprint (generales para todas las filas)
+          if (campo.name === "Sprint Start Date" && campo.type === "text") {
+            defaultValue = sprintInicio; // Fecha de inicio del sprint
+          }
+          
+          if (campo.name === "Sprint End Date" && campo.type === "text") {
+            defaultValue = sprintFin; // Fecha de fin del sprint
+          }
+          
+          if (campo.name === "Horas Diarias Sprint" && campo.type === "number") {
+            defaultValue = horasDiarias; // Horas diarias del sprint
+          }
+          
+          if (campo.name === "Current Date" && campo.type === "text") {
+            defaultValue = hoy; // Fecha actual
           }
           
           nuevasProperties[campo.name] = {
@@ -1058,7 +1111,7 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
         const nuevasProperties = { ...fila.properties };
         nuevosCampos.forEach(campo => {
           if (!nuevasProperties[campo.name]) {
-            let defaultValue = campo.type === "checkbox" ? false : campo.type === "tags" ? [] : campo.type === "formula" ? "" : "";
+            let defaultValue = campo.type === "checkbox" ? false : campo.type === "tags" ? [] : campo.type === "formula" ? "" : campo.type === "number" ? 0 : "";
             let defaultColor = undefined;
             
             // Valores por defecto para Priority
@@ -1069,6 +1122,28 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
             // Valores por defecto para Type
             if (campo.name === "Type" && campo.type === "tags") {
               defaultValue = [{ label: "TO DO", color: "#6b7280" }]; // Gris por defecto
+            }
+            
+            // Valores por defecto para Objective
+            if (campo.name === "Objective" && campo.type === "number") {
+              defaultValue = 100; // 100 por defecto
+            }
+            
+            // Valores por defecto para campos base del sprint (generales para todas las filas)
+            if (campo.name === "Sprint Start Date" && campo.type === "text") {
+              defaultValue = sprintInicio; // Fecha de inicio del sprint
+            }
+            
+            if (campo.name === "Sprint End Date" && campo.type === "text") {
+              defaultValue = sprintFin; // Fecha de fin del sprint
+            }
+            
+            if (campo.name === "Horas Diarias Sprint" && campo.type === "number") {
+              defaultValue = horasDiarias; // Horas diarias del sprint
+            }
+            
+            if (campo.name === "Current Date" && campo.type === "text") {
+              defaultValue = hoy; // Fecha actual
             }
             
             nuevasProperties[campo.name] = {
@@ -1097,10 +1172,20 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
   const crearTareasEjemplo = (cantidad) => {
     setShowEjemploModal(false);
     
-    // Fechas del sprint
-    const sprintInicio = "2025-12-26";
-    const sprintFin = "2026-01-08";
-    const hoy = "2025-12-20";
+    // Calcular fechas del sprint automáticamente
+    // Fecha actual (hoy)
+    const fechaActual = new Date();
+    const año = fechaActual.getFullYear();
+    const mes = String(fechaActual.getMonth() + 1).padStart(2, '0');
+    const dia = String(fechaActual.getDate()).padStart(2, '0');
+    const hoy = `${año}-${mes}-${dia}`;
+    
+    // Sprint Start Date = hoy
+    const sprintInicio = hoy;
+    
+    // Sprint End Date = 15 días hábiles después de hoy
+    const sprintFin = agregarDiasHabiles(hoy, 15);
+    
     const horasDiarias = 8;
     
     // Calcular días hábiles del sprint
@@ -1108,11 +1193,8 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
     const horasTotalesSprint = diasHabilesSprint * horasDiarias;
     
     // Calcular días hábiles transcurridos
-    const fechaInicio = new Date(sprintInicio);
-    const fechaHoy = new Date(hoy);
-    const diasHabilesTranscurridos = fechaHoy < fechaInicio 
-      ? 0 
-      : calcularDiasHabiles(sprintInicio, hoy);
+    // Como el sprint inicia hoy, los días transcurridos son 0
+    const diasHabilesTranscurridos = 0;
     
     // Obtener los campos de la plantilla (ya agregados anteriormente)
     const plantillaCampos = [
@@ -1123,6 +1205,10 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
       { name: "Progress", type: "number", visible: true, totalizar: false },
       { name: "Time Spent", type: "number", visible: false, totalizar: true },
       { name: "Time Estimated", type: "number", visible: false, totalizar: true },
+      // Campos base del sprint (ocultos inicialmente, valores generales para todas las filas)
+      { name: "Sprint Start Date", type: "text", visible: false },
+      { name: "Sprint End Date", type: "text", visible: false },
+      { name: "Horas Diarias Sprint", type: "number", visible: false, totalizar: false },
       { name: "Start Date", type: "text", visible: false },
       { name: "End Date", type: "text", visible: false },
       { name: "Current Date", type: "text", visible: false },
@@ -1162,7 +1248,7 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
         } else if (campo.name === "Progress") {
           properties[campo.name] = { type: "number", value: tarea.progress };
         } else if (campo.name === "Objective") {
-          properties[campo.name] = { type: "number", value: tarea.objective };
+          properties[campo.name] = { type: "number", value: 100 }; // Siempre 100 por defecto
         } else if (campo.name === "Priority") {
           const priorityValue = tarea.priority || "Medium";
           let priorityColor = "#fbbf24"; // Default Medium (amarillo)
@@ -1225,6 +1311,14 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
           properties[campo.name] = { type: "number", value: horasTotalesSprint };
         } else if (campo.name === "Dias Habiles Transcurridos") {
           properties[campo.name] = { type: "number", value: diasHabilesTranscurridos };
+        } else if (campo.name === "Sprint Start Date") {
+          properties[campo.name] = { type: "text", value: sprintInicio };
+        } else if (campo.name === "Sprint End Date") {
+          properties[campo.name] = { type: "text", value: sprintFin };
+        } else if (campo.name === "Horas Diarias Sprint") {
+          properties[campo.name] = { type: "number", value: horasDiarias };
+        } else if (campo.name === "Objective") {
+          properties[campo.name] = { type: "number", value: 100 };
         } else if (campo.name === "Tasks Completed") {
           properties[campo.name] = { type: "number", value: tarea.tasksCompleted };
         } else if (campo.name === "Total Tasks") {
@@ -1280,6 +1374,28 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
           // Valores por defecto para Type
           if (campo.name === "Type" && campo.type === "tags") {
             defaultValue = [{ label: "TO DO", color: "#6b7280" }]; // Gris por defecto
+          }
+          
+          // Valores por defecto para Objective
+          if (campo.name === "Objective" && campo.type === "number") {
+            defaultValue = 100; // 100 por defecto
+          }
+          
+          // Valores por defecto para campos base del sprint (generales para todas las filas)
+          if (campo.name === "Sprint Start Date" && campo.type === "text") {
+            defaultValue = sprintInicio; // Fecha de inicio del sprint
+          }
+          
+          if (campo.name === "Sprint End Date" && campo.type === "text") {
+            defaultValue = sprintFin; // Fecha de fin del sprint
+          }
+          
+          if (campo.name === "Horas Diarias Sprint" && campo.type === "number") {
+            defaultValue = horasDiarias; // Horas diarias del sprint
+          }
+          
+          if (campo.name === "Current Date" && campo.type === "text") {
+            defaultValue = hoy; // Fecha actual
           }
           
           properties[campo.name] = {

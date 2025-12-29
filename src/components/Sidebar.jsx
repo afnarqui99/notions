@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Star, ChevronDown, Settings, Plus, Trash2 } from 'lucide-react';
+import { Search, Star, ChevronDown, Settings, Plus, Trash2, Github } from 'lucide-react';
 
 export default function Sidebar({ 
   paginas = [], 
@@ -260,9 +260,18 @@ export default function Sidebar({
 
       {/* Footer con configuración */}
       <div className="p-2 border-t border-gray-200">
+        <a
+          href="https://github.com/afnarqui99/notions"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="w-full flex items-center gap-2 px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-200 rounded transition-colors"
+        >
+          <Github className="w-4 h-4" />
+          <span>Repository</span>
+        </a>
         <button
           onClick={onShowConfig}
-          className="w-full flex items-center gap-2 px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-200 rounded transition-colors"
+          className="w-full flex items-center gap-2 px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-200 rounded transition-colors mt-1"
         >
           <Settings className="w-4 h-4" />
           <span>Settings</span>
