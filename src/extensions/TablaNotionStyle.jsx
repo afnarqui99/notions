@@ -1235,6 +1235,8 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
     ];
 
     // Crear filas con todas las propiedades
+    // Limitar a la cantidad solicitada
+    const tareasEjemplo = todasTareasEjemplo.slice(0, cantidad);
     const nuevasFilas = tareasEjemplo.map(tarea => {
       const properties = {};
       
@@ -1411,7 +1413,33 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
       };
     });
 
-    setFilas(nuevasFilas);
+    // Evaluar todas las fórmulas y guardar los resultados en value
+    const filasConFormulasEvaluadas = nuevasFilas.map(fila => {
+      const propiedadesEvaluadas = { ...fila.properties };
+      
+      // Evaluar cada propiedad que sea fórmula
+      Object.keys(propiedadesEvaluadas).forEach(propName => {
+        const prop = propiedadesEvaluadas[propName];
+        if (prop.type === "formula" && prop.formula) {
+          try {
+            const evaluator = new FormulaEvaluator(fila, nuevasFilas);
+            const resultado = evaluator.evaluate(prop.formula);
+            // Guardar el resultado en value para que se muestre inmediatamente
+            prop.value = resultado !== undefined && resultado !== null ? String(resultado) : "";
+          } catch (error) {
+            console.error(`Error evaluando fórmula ${propName}:`, error);
+            prop.value = "Error";
+          }
+        }
+      });
+      
+      return {
+        ...fila,
+        properties: propiedadesEvaluadas
+      };
+    });
+
+    setFilas(filasConFormulasEvaluadas);
     
     // Guardar información del sprint para mostrarla después
     setSprintInfo({
@@ -2024,6 +2052,8 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
           let fechaInicioSprint = null;
           let fechaFinSprint = null;
           
+          let porcentajesIndividuales = [];
+          
           filas.forEach(fila => {
             // Tareas completadas
             const done = fila.properties?.["Done"]?.value || false;
@@ -2036,11 +2066,18 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
               tareasPendientes++;
             }
             
-            // Progress y Objective
+            // Progress y Objective - calcular porcentaje individual por fila
             const progress = parseFloat(fila.properties?.["Progress"]?.value || 0);
-            const objective = parseFloat(fila.properties?.["Objective"]?.value || 0);
+            // Si no hay Objective definido, usar 100 como valor por defecto (cada tarea es sobre 100%)
+            const objective = parseFloat(fila.properties?.["Objective"]?.value || 100);
             totalProgress += progress;
             totalObjective += objective;
+            
+            // Calcular porcentaje individual de esta fila
+            // Siempre calcular el porcentaje, usando 100 como default si objective es 0
+            const objectiveParaCalculo = objective > 0 ? objective : 100;
+            const porcentajeIndividual = (progress / objectiveParaCalculo) * 100;
+            porcentajesIndividuales.push(porcentajeIndividual);
             
             // Time Spent y Estimated
             const timeSpent = parseFloat(fila.properties?.["Time Spent"]?.value || 0);
@@ -2085,7 +2122,22 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
           }
           
           // Calcular porcentajes
-          const porcentajeCumplimiento = totalObjective > 0 ? Math.round((totalProgress / totalObjective) * 100) : 0;
+          // El porcentaje de cumplimiento debe ser el promedio de los porcentajes individuales de cada fila
+          // porque cada fila tiene su propio 100% (Objective)
+          let porcentajeCumplimiento = 0;
+          if (porcentajesIndividuales.length > 0) {
+            const sumaPorcentajes = porcentajesIndividuales.reduce((sum, p) => sum + p, 0);
+            const promedio = sumaPorcentajes / porcentajesIndividuales.length;
+            porcentajeCumplimiento = Math.round(promedio);
+            // Debug: mostrar el cálculo
+            console.log('📊 Cálculo de cumplimiento:', {
+              porcentajesIndividuales,
+              sumaPorcentajes,
+              promedio,
+              porcentajeCumplimiento,
+              totalFilas: porcentajesIndividuales.length
+            });
+          }
           const porcentajeTareas = totalTareas > 0 ? Math.round((tareasCompletadas / totalTareas) * 100) : 0;
           const porcentajeTiempo = totalTimeEstimated > 0 ? Math.round((totalTimeSpent / totalTimeEstimated) * 100) : 0;
           const porcentajeSubtareas = totalTasksTotal > 0 ? Math.round((totalTasksCompleted / totalTasksTotal) * 100) : 0;
