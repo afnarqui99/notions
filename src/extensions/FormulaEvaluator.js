@@ -27,19 +27,63 @@ export class FormulaEvaluator {
       console.log('⚙️ Después de evaluateFunctions:', processed);
       
       // Evaluar expresiones matemáticas básicas
-      const result = this.evaluateMath(processed);
-      console.log('✅ Resultado final:', result);
+      let result = this.evaluateMath(processed);
+      console.log('✅ Resultado final antes de limpiar:', result);
       
       // Si el resultado todavía parece una fórmula sin evaluar, intentar evaluarlo de nuevo
       if (typeof result === 'string' && (result.includes('if(') || result.includes('prop(') || result.includes('format('))) {
         console.warn('⚠️ Fórmula no completamente evaluada, reintentando:', result);
         // Intentar una evaluación más agresiva
         const retry = this.evaluateFunctions(result);
-        const finalResult = this.evaluateMath(retry);
-        console.log('🔄 Resultado después de reintento:', finalResult);
-        return finalResult;
+        result = this.evaluateMath(retry);
+        console.log('🔄 Resultado después de reintento:', result);
       }
       
+      // Limpiar comillas y paréntesis extra del resultado final
+      if (typeof result === 'string') {
+        result = result.trim();
+        
+        // Limpiar patrones problemáticos como "%")" al final - hacerlo primero
+        result = result.replace(/"%\)+"$/g, '%'); // Elimina "%")", "%"))", etc.
+        result = result.replace(/\)+"%\)+"$/g, '%'); // Elimina )"%")", ))"%"))", etc.
+        result = result.replace(/\)+$/g, ''); // Elimina cualquier paréntesis de cierre al final
+        
+        // Quitar comillas externas si existen
+        if (result.startsWith('"') && result.endsWith('"')) {
+          result = result.slice(1, -1);
+        }
+        
+        // Quitar paréntesis externos si existen y no son necesarios
+        result = result.trim();
+        while (result.startsWith('(') && result.endsWith(')')) {
+          // Verificar que los paréntesis sean un par completo
+          let depth = 0;
+          let shouldRemove = true;
+          for (let i = 1; i < result.length - 1; i++) {
+            if (result[i] === '(') depth++;
+            else if (result[i] === ')') {
+              depth--;
+              if (depth < 0) {
+                shouldRemove = false;
+                break;
+              }
+            }
+          }
+          if (shouldRemove && depth === 0) {
+            result = result.slice(1, -1).trim();
+          } else {
+            break;
+          }
+        }
+        
+        // Limpiar cualquier patrón restante de "%")" o similar después de quitar comillas
+        result = result.replace(/"%\)+"$/g, '%');
+        result = result.replace(/\)+"%\)+"$/g, '%');
+        result = result.replace(/\)+$/g, ''); // Elimina cualquier paréntesis de cierre al final
+        result = result.replace(/^\)+/g, ''); // Elimina cualquier paréntesis de apertura al inicio
+      }
+      
+      console.log('✅ Resultado final limpio:', result);
       return result;
     } catch (error) {
       console.error('❌ Error evaluando fórmula:', error, formula);
@@ -87,6 +131,12 @@ export class FormulaEvaluator {
     const prop = this.fila.properties[campo];
     if (!prop) {
       return null;
+    }
+
+    // Si es un array (tags), devolver el label del primer elemento
+    if (Array.isArray(prop.value) && prop.value.length > 0) {
+      const firstTag = prop.value[0];
+      return firstTag.label || firstTag.value || firstTag;
     }
 
     return prop.value;
@@ -291,11 +341,46 @@ export class FormulaEvaluator {
           const valor = condResult ? verdadero.trim() : falso;
           console.log(`  📌 Usando ${condResult ? 'verdadero' : 'falso'}: "${valor}"`);
           
-          const valorEvaluado = this.evaluateFunctions(valor);
-          console.log(`  🎯 Valor evaluado: "${valorEvaluado}"`);
+          // Evaluar recursivamente el valor seleccionado
+          let valorEvaluado = this.evaluateFunctions(valor);
+          valorEvaluado = this.evaluateMath(valorEvaluado);
+          
+          // Limpiar comillas y paréntesis extra del resultado
+          if (typeof valorEvaluado === 'string') {
+            // Quitar comillas externas si existen
+            valorEvaluado = valorEvaluado.trim();
+            if (valorEvaluado.startsWith('"') && valorEvaluado.endsWith('"')) {
+              valorEvaluado = valorEvaluado.slice(1, -1);
+            }
+            // Quitar paréntesis externos si existen y no son necesarios
+            valorEvaluado = valorEvaluado.trim();
+            if (valorEvaluado.startsWith('(') && valorEvaluado.endsWith(')')) {
+              // Verificar que los paréntesis sean un par completo
+              let depth = 0;
+              let shouldRemove = true;
+              for (let i = 1; i < valorEvaluado.length - 1; i++) {
+                if (valorEvaluado[i] === '(') depth++;
+                else if (valorEvaluado[i] === ')') {
+                  depth--;
+                  if (depth < 0) {
+                    shouldRemove = false;
+                    break;
+                  }
+                }
+              }
+              if (shouldRemove && depth === 0) {
+                valorEvaluado = valorEvaluado.slice(1, -1).trim();
+              }
+            }
+          }
+          
+          console.log(`  🎯 Valor evaluado final: "${valorEvaluado}"`);
           
           // Reemplazar el if() completo con el resultado
-          result = result.substring(0, startPos) + valorEvaluado + result.substring(closeParenPos + 1);
+          // El valor ya está limpio (sin comillas ni paréntesis extra)
+          // Agregar comillas para mantener consistencia con el formato de strings
+          let valorParaReemplazar = `"${String(valorEvaluado)}"`;
+          result = result.substring(0, startPos) + valorParaReemplazar + result.substring(closeParenPos + 1);
           
           // Reiniciar la búsqueda
           break;
@@ -375,6 +460,7 @@ export class FormulaEvaluator {
           console.log(`  🔍 format(${num}, ${dec}) = ${numVal} => "${formatted}"`);
           
           // Reemplazar el format() completo con el resultado entre comillas
+          // Pero si está dentro de una concatenación, no agregar comillas (se agregarán en la concatenación)
           result = result.substring(0, startPos) + `"${formatted}"` + result.substring(closeParenPos + 1);
         }
       }
@@ -424,12 +510,58 @@ export class FormulaEvaluator {
       }
 
       // Evaluar substring() - substring(texto, inicio, fin?)
-      const substringRegex = /substring\s*\(\s*"([^"]+)"\s*,\s*(\d+)\s*(?:,\s*(\d+))?\s*\)/g;
-      result = result.replace(substringRegex, (match, texto, inicio, fin) => {
-        const start = parseInt(inicio);
-        const end = fin ? parseInt(fin) : texto.length;
-        return `"${texto.substring(start, end)}"`;
-      });
+      // Primero evaluar las expresiones dentro de substring antes de procesarlo
+      const substringRegex = /substring\s*\(/g;
+      let substringMatch;
+      const substringMatches = [];
+      while ((substringMatch = substringRegex.exec(result)) !== null) {
+        substringMatches.push(substringMatch.index);
+      }
+      
+      // Procesar desde el último hacia el primero
+      for (let i = substringMatches.length - 1; i >= 0; i--) {
+        const startPos = substringMatches[i];
+        const openParenPos = result.indexOf('(', startPos);
+        const closeParenPos = this.findMatchingParen(result, openParenPos);
+        
+        if (closeParenPos === -1) continue;
+        
+        const innerContent = result.substring(openParenPos + 1, closeParenPos);
+        const parts = this.splitByCommas(innerContent);
+        
+        if (parts.length >= 2) {
+          // Primer parámetro: texto (debe ser string literal)
+          let texto = parts[0].trim();
+          if (texto.startsWith('"') && texto.endsWith('"')) {
+            texto = texto.slice(1, -1);
+          } else {
+            // Si no es un string literal, intentar evaluarlo
+            texto = this.evaluateExpression(this.evaluateFunctions(texto));
+            if (texto.startsWith('"') && texto.endsWith('"')) {
+              texto = texto.slice(1, -1);
+            }
+          }
+          
+          // Segundo parámetro: inicio (puede ser expresión)
+          let inicioExpr = parts[1].trim();
+          inicioExpr = this.evaluateFunctions(inicioExpr);
+          const start = parseInt(this.evaluateExpression(inicioExpr)) || 0;
+          
+          // Tercer parámetro opcional: fin (puede ser expresión)
+          let end = texto.length;
+          if (parts.length >= 3) {
+            let finExpr = parts[2].trim();
+            finExpr = this.evaluateFunctions(finExpr);
+            const endVal = parseInt(this.evaluateExpression(finExpr));
+            if (!isNaN(endVal)) {
+              end = endVal;
+            }
+          }
+          
+          const substringResult = texto.substring(start, end);
+          result = result.substring(0, startPos) + `"${substringResult}"` + result.substring(closeParenPos + 1);
+        }
+      }
 
       // Verificar si hubo cambios
       changed = (before !== result);
@@ -526,19 +658,101 @@ export class FormulaEvaluator {
             return result;
           }
           // Evaluar la expresión (puede ser un número o una expresión matemática)
-          const evalResult = this.evaluateExpression(trimmed);
+          let evalResult = this.evaluateExpression(trimmed);
+          
+          // Limpiar comillas y paréntesis del resultado
+          if (typeof evalResult === 'string') {
+            evalResult = evalResult.trim();
+            // Quitar comillas externas si existen
+            if (evalResult.startsWith('"') && evalResult.endsWith('"')) {
+              evalResult = evalResult.slice(1, -1);
+            }
+            // Quitar paréntesis externos si existen y no son necesarios
+            evalResult = evalResult.trim();
+            if (evalResult.startsWith('(') && evalResult.endsWith(')')) {
+              let depth = 0;
+              let shouldRemove = true;
+              for (let i = 1; i < evalResult.length - 1; i++) {
+                if (evalResult[i] === '(') depth++;
+                else if (evalResult[i] === ')') {
+                  depth--;
+                  if (depth < 0) {
+                    shouldRemove = false;
+                    break;
+                  }
+                }
+              }
+              if (shouldRemove && depth === 0) {
+                evalResult = evalResult.slice(1, -1).trim();
+              }
+            }
+          }
+          
           const strResult = String(evalResult);
-          console.log(`      => Evaluado: ${evalResult} => "${strResult}"`);
+          console.log(`      => Evaluado: ${trimmed} => "${strResult}"`);
           return strResult;
         }).join('');
         console.log(`  📐 Resultado concatenado: "${concatenated}"`);
-        return concatenated;
+        // Limpiar cualquier comilla o paréntesis extra que pueda haber quedado
+        let cleaned = concatenated.trim();
+        // Quitar comillas externas si existen
+        if (cleaned.startsWith('"') && cleaned.endsWith('"')) {
+          cleaned = cleaned.slice(1, -1);
+        }
+        // Quitar paréntesis externos si existen
+        cleaned = cleaned.trim();
+        if (cleaned.startsWith('(') && cleaned.endsWith(')')) {
+          let depth = 0;
+          let shouldRemove = true;
+          for (let i = 1; i < cleaned.length - 1; i++) {
+            if (cleaned[i] === '(') depth++;
+            else if (cleaned[i] === ')') {
+              depth--;
+              if (depth < 0) {
+                shouldRemove = false;
+                break;
+              }
+            }
+          }
+          if (shouldRemove && depth === 0) {
+            cleaned = cleaned.slice(1, -1).trim();
+          }
+        }
+        // Limpiar patrones problemáticos
+        cleaned = cleaned.replace(/"%\)+"$/g, '%');
+        cleaned = cleaned.replace(/\)+"%\)+"$/g, '%');
+        console.log(`  📐 Resultado concatenado limpio: "${cleaned}"`);
+        return cleaned;
       }
     }
 
-    // Si es un string entre comillas simple, devolverlo
+    // Si es un string entre comillas simple, devolverlo sin las comillas
     if (expr.startsWith('"') && expr.endsWith('"')) {
-      return expr.slice(1, -1);
+      let content = expr.slice(1, -1);
+      // Limpiar patrones problemáticos dentro del string
+      content = content.replace(/"%\)+"$/g, '%');
+      content = content.replace(/\)+"%\)+"$/g, '%');
+      content = content.replace(/\)+$/g, '');
+      // Quitar paréntesis externos si existen
+      content = content.trim();
+      if (content.startsWith('(') && content.endsWith(')')) {
+        let depth = 0;
+        let shouldRemove = true;
+        for (let i = 1; i < content.length - 1; i++) {
+          if (content[i] === '(') depth++;
+          else if (content[i] === ')') {
+            depth--;
+            if (depth < 0) {
+              shouldRemove = false;
+              break;
+            }
+          }
+        }
+        if (shouldRemove && depth === 0) {
+          content = content.slice(1, -1).trim();
+        }
+      }
+      return content;
     }
 
     // Remover comillas de strings que quedaron si no hay concatenación

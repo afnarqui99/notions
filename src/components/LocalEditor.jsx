@@ -23,6 +23,7 @@ import ConfigModal from "./ConfigModal";
 import NewPageModal from "./NewPageModal";
 import StorageWarning from "./StorageWarning";
 import Toast from "./Toast";
+import Sidebar from "./Sidebar";
 
 export default function LocalEditor({ onShowConfig }) {
   const [titulo, setTitulo] = useState("");
@@ -44,6 +45,7 @@ export default function LocalEditor({ onShowConfig }) {
   const [hayCambiosSinGuardar, setHayCambiosSinGuardar] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const ultimoContenidoRef = useRef(null);
+  const [sidebarColapsado, setSidebarColapsado] = useState(false);
 
   // Convertir URLs blob a referencias de archivo antes de guardar
   const convertirBlobsAReferencias = (contenido) => {
@@ -823,45 +825,32 @@ export default function LocalEditor({ onShowConfig }) {
     }
   };
 
+  // Establecer CSS variable para el ancho del sidebar
+  useEffect(() => {
+    // w-16 = 4rem = 64px cuando está colapsado (16 * 4 = 64px)
+    // w-64 = 16rem = 256px cuando está expandido, pero ajustamos a 216px para mejor espaciado
+    const sidebarWidth = sidebarColapsado ? 64 : 216;
+    document.documentElement.style.setProperty('--sidebar-width', `${sidebarWidth}px`);
+  }, [sidebarColapsado]);
+
   return (
-    <div className="w-full h-screen flex flex-col bg-gray-50">
-      {/* Advertencia de almacenamiento */}
-      <StorageWarning onOpenConfig={() => setShowConfigModal(true)} />
-      
-      {/* Barra de selector de páginas y acciones */}
-      <div className="bg-white border-b shadow-sm p-2 flex gap-2 items-center">
-        <button
-          type="button"
-          onClick={() => setSelectorAbierto(true)}
-          className="flex-1 min-w-[200px] border border-gray-300 px-3 py-1.5 rounded-md text-sm text-left flex items-center justify-between hover:border-blue-500"
-        >
-          <span className={paginaSeleccionada ? "text-gray-900 font-medium" : "text-gray-500"}>
-            {paginaSeleccionada 
-              ? (paginas.find(p => p.id === paginaSeleccionada)?.titulo || "Página seleccionada") 
-              : "📄 Seleccionar página"}
-          </span>
-          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-          </svg>
-        </button>
-
-        <button
-          onClick={() => setShowNewPageModal(true)}
-          className="bg-blue-600 text-white px-3 py-1.5 rounded-md text-sm hover:bg-blue-700 flex items-center gap-1 transition-colors shadow-sm hover:shadow-md"
-        >
-          <Plus className="w-4 h-4" />
-          Nueva
-        </button>
-
-        <button
-          onClick={() => setShowConfigModal(true)}
-          className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-md flex items-center gap-1.5 transition-all shadow-sm hover:shadow-md text-sm"
-          title="Configuración - Cambiar ubicación de archivos"
-        >
-          <Settings className="w-4 h-4" />
-          <span className="hidden sm:inline font-medium">Configuración</span>
-        </button>
+    <div className="w-full h-screen flex bg-gray-50 relative">
+      {/* Advertencia de almacenamiento - Posicionada de forma absoluta */}
+      <div className="absolute top-0 left-0 right-0 z-50">
+        <StorageWarning onOpenConfig={() => setShowConfigModal(true)} />
       </div>
+      
+      {/* Sidebar */}
+      <Sidebar
+        paginas={paginas}
+        paginaSeleccionada={paginaSeleccionada}
+        onSeleccionarPagina={seleccionarPagina}
+        onNuevaPagina={() => setShowNewPageModal(true)}
+        onShowConfig={() => setShowConfigModal(true)}
+        filtroPagina={filtroPagina}
+        setFiltroPagina={setFiltroPagina}
+        onSidebarStateChange={setSidebarColapsado}
+      />
 
       {/* Modal de selección */}
       {selectorAbierto && (
@@ -928,9 +917,11 @@ export default function LocalEditor({ onShowConfig }) {
         </div>
       )}
 
-      {/* Editor */}
-      {paginaSeleccionada ? (
-        <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Contenido principal */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Editor */}
+        {paginaSeleccionada ? (
+          <div className="flex-1 flex flex-col overflow-hidden">
           {/* Barra de herramientas compacta */}
           <div className="bg-white border-b px-3 py-1 flex gap-1.5 items-center">
             <button
@@ -976,11 +967,12 @@ export default function LocalEditor({ onShowConfig }) {
             </div>
           </div>
         </div>
-      ) : (
-        <div className="flex-1 flex items-center justify-center text-gray-500">
-          Selecciona o crea una página para comenzar
-        </div>
-      )}
+        ) : (
+          <div className="flex-1 flex items-center justify-center text-gray-500">
+            Selecciona o crea una página para comenzar
+          </div>
+        )}
+      </div>
 
       {/* Modal de error/éxito */}
       <Modal

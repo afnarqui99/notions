@@ -241,6 +241,8 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
   const [sprintInfo, setSprintInfo] = useState(null);
   const [showPropertyVisibilityModal, setShowPropertyVisibilityModal] = useState(false);
   const [esNuevoCampo, setEsNuevoCampo] = useState(false); // Para saber si es un nuevo campo o uno existente
+  const [showTagsModal, setShowTagsModal] = useState(false);
+  const [tagsEditando, setTagsEditando] = useState({ filaIndex: null, propName: null, tags: [] });
   
   // Estado para controlar si la tabla usa todo el ancho
   const [usarAnchoCompleto, setUsarAnchoCompleto] = useState(() => {
@@ -298,10 +300,23 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
     };
 
     propiedades.forEach((prop) => {
+      let defaultValue = prop.type === "checkbox" ? false : prop.type === "tags" ? [] : prop.type === "formula" ? "" : "";
+      let defaultColor = undefined;
+      
+      // Valores por defecto para Priority
+      if (prop.name === "Priority" && prop.type === "tags") {
+        defaultValue = [{ label: "Medium", color: "#fbbf24" }]; // Amarillo por defecto
+      }
+      
+      // Valores por defecto para Type
+      if (prop.name === "Type" && prop.type === "tags") {
+        defaultValue = [{ label: "TO DO", color: "#6b7280" }]; // Gris por defecto
+      }
+      
       nuevaFila.properties[prop.name] = {
         type: prop.type,
-        value: prop.type === "checkbox" ? false : prop.type === "tags" ? [] : prop.type === "formula" ? "" : "",
-        color: prop.type === "select" ? "#3b82f6" : undefined,
+        value: defaultValue,
+        color: prop.type === "select" ? "#3b82f6" : defaultColor,
         formula: prop.type === "formula" ? "" : undefined,
       };
     });
@@ -456,10 +471,10 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
     // Definir todos los campos con fórmulas (incluyendo los de Notion de la imagen)
     const plantillaCampos = [
       // Campos principales visibles (como en Notion)
-      { name: "Priority", type: "select", visible: true },
-      { name: "Type", type: "select", visible: true },
-      { name: "Percent", type: "formula", visible: true, formula: 'if((prop("Objective") > 0), format(round((prop("Progress") / prop("Objective")) * 100)) + "%", "0%")' },
-      { name: "Percent Total", type: "formula", visible: true, formula: 'if((prop("Total Tasks") > 0), format(round((prop("Tasks Completed") / prop("Total Tasks")) * 100)) + "%", "0%")' },
+      { name: "Priority", type: "tags", visible: true },
+      { name: "Type", type: "tags", visible: true },
+      { name: "Percent", type: "formula", visible: true, formula: 'if(((prop("Progress") / prop("Objective")) >= 1), "✅", if(and(empty(prop("Progress")), !empty(prop("Objective"))), "0%", substring("➖➖➖➖", 0, floor((prop("Progress") / prop("Objective")) * 10)) + " " + format(round((prop("Progress") / prop("Objective")) * 100)) + "%"))' },
+      { name: "Percent Total", type: "formula", visible: true, formula: 'if((prop("Time Estimated") > 0), format(round((prop("Time Spent") * 100) / prop("Time Estimated"))) + "%", "0%")' },
       { name: "Progress", type: "number", visible: true, totalizar: false },
       // Campos de tiempo (ocultos inicialmente)
       { name: "Time Spent", type: "number", visible: false, totalizar: true },
@@ -472,7 +487,7 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
       { name: "Expiration date", type: "text", visible: false },
       // Campos calculados y fórmulas (ocultos inicialmente)
       { name: "Progreso", type: "formula", visible: false, formula: 'if(((prop("Progress") / prop("Objective")) >= 1), "✅", (if(and(empty(prop("Progress")), !empty(prop("Objective"))), "0%", format(round((prop("Progress") / prop("Objective")) * 100)) + "%")))' },
-      { name: "missing percentage", type: "formula", visible: false, formula: 'if((prop("Objective") > 0), format(round(((prop("Objective") - prop("Progress")) / prop("Objective")) * 100)) + "%", "0%")' },
+      { name: "missing percentage", type: "formula", visible: false, formula: 'if((prop("Type") == "DONE"), 0, if((prop("Time Estimated") > 0), format(round((prop("Time Spent") * 100) / prop("Time Estimated"))) + "%", "0%"))' },
       { name: "Tiempo Restante", type: "formula", visible: false, formula: 'if((prop("Time Spent") >= prop("Time Estimated")), "0", prop("Time Estimated") - prop("Time Spent"))' },
       { name: "Porcentaje Tiempo", type: "formula", visible: false, formula: 'if((prop("Time Estimated") > 0), format(round((prop("Time Spent") / prop("Time Estimated")) * 100)) + "%", "0%")' },
       // Campos de días y horas (ocultos inicialmente)
@@ -484,6 +499,8 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
       { name: "Dias Habiles Transcurridos", type: "number", visible: false, totalizar: false },
       { name: "Horas Disponibles", type: "formula", visible: false, formula: 'prop("Dias Habiles Transcurridos") * prop("Horas Diarias")' },
       { name: "Sobrecarga", type: "formula", visible: false, formula: 'if((prop("Time Estimated") > prop("Horas Disponibles")), "⚠️ Sobrecarga", "✅ OK")' },
+      { name: "Dias Transcurridos Sprint", type: "formula", visible: false, formula: 'if(and(!empty(prop("Start Date")), !empty(prop("Current Date"))), if((date(prop("Current Date")) >= date(prop("Start Date"))), floor((date(prop("Current Date")) - date(prop("Start Date"))) / 86400000) + 1, 0), 0)' },
+      { name: "Dias Faltantes Sprint", type: "formula", visible: false, formula: 'if(and(!empty(prop("End Date")), !empty(prop("Current Date"))), if((date(prop("Current Date")) <= date(prop("End Date"))), floor((date(prop("End Date")) - date(prop("Current Date"))) / 86400000), 0), 0)' },
       // Campos de tareas (ocultos inicialmente)
       { name: "Tasks Completed", type: "number", visible: false, totalizar: true },
       { name: "Total Tasks", type: "number", visible: false, totalizar: false },
@@ -538,10 +555,23 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
       const nuevasFilas = filas.map((fila) => {
         const nuevasProperties = { ...fila.properties };
         nuevosCampos.forEach(campo => {
+          let defaultValue = campo.type === "checkbox" ? false : campo.type === "tags" ? [] : campo.type === "formula" ? "" : "";
+          let defaultColor = undefined;
+          
+          // Valores por defecto para Priority
+          if (campo.name === "Priority" && campo.type === "tags") {
+            defaultValue = [{ label: "Medium", color: "#fbbf24" }]; // Amarillo por defecto
+          }
+          
+          // Valores por defecto para Type
+          if (campo.name === "Type" && campo.type === "tags") {
+            defaultValue = [{ label: "TO DO", color: "#6b7280" }]; // Gris por defecto
+          }
+          
           nuevasProperties[campo.name] = {
             type: campo.type,
-            value: campo.type === "checkbox" ? false : campo.type === "tags" ? [] : campo.type === "formula" ? "" : "",
-            color: campo.type === "select" ? "#3b82f6" : undefined,
+            value: defaultValue,
+            color: campo.type === "select" ? "#3b82f6" : defaultColor,
             formula: campo.formula || undefined,
           };
         });
@@ -557,18 +587,18 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
     if (filas.length === 0) {
       // Crear tareas de ejemplo con todos los campos
       const tareasEjemplo = [
-      { nombre: "Diseño de UI/UX", progress: 80, objective: 100, timeSpent: 12, timeEstimated: 16, daysWorked: 2, startDate: "2025-12-26", endDate: "2025-12-30", tasksCompleted: 4, totalTasks: 5, daysElapsed: 2, estado: "En progreso", priority: "Alta", type: "Tarea", tags: ["Frontend", "Diseño"], assign: [], done: false, created: hoy, expirationDate: "", link: "", retrospective: "", video: "", lambdas: "", nameRepo: "", property: "", to: "" },
-      { nombre: "Implementación API Backend", progress: 60, objective: 100, timeSpent: 20, timeEstimated: 32, daysWorked: 3, startDate: "2025-12-26", endDate: "2026-01-02", tasksCompleted: 6, totalTasks: 10, daysElapsed: 3, estado: "En progreso", priority: "Alta", type: "Tarea", tags: ["Backend", "API"], assign: [], done: false, created: hoy, expirationDate: "", link: "", retrospective: "", video: "", lambdas: "", nameRepo: "", property: "", to: "" },
-      { nombre: "Integración Base de Datos", progress: 40, objective: 100, timeSpent: 8, timeEstimated: 24, daysWorked: 1, startDate: "2025-12-27", endDate: "2026-01-03", tasksCompleted: 2, totalTasks: 5, daysElapsed: 1, estado: "En progreso", priority: "Media", type: "Tarea", tags: ["Database", "Backend"], assign: [], done: false, created: hoy, expirationDate: "", link: "", retrospective: "", video: "", lambdas: "", nameRepo: "", property: "", to: "" },
-      { nombre: "Pruebas Unitarias", progress: 30, objective: 100, timeSpent: 6, timeEstimated: 20, daysWorked: 1, startDate: "2025-12-28", endDate: "2026-01-05", tasksCompleted: 3, totalTasks: 10, daysElapsed: 1, estado: "En progreso", priority: "Media", type: "Tarea", tags: ["Testing", "QA"], assign: [], done: false, created: hoy, expirationDate: "", link: "", retrospective: "", video: "", lambdas: "", nameRepo: "", property: "", to: "" },
-      { nombre: "Documentación Técnica", progress: 50, objective: 100, timeSpent: 4, timeEstimated: 8, daysWorked: 1, startDate: "2025-12-29", endDate: "2026-01-06", tasksCompleted: 2, totalTasks: 4, daysElapsed: 1, estado: "En progreso", priority: "Baja", type: "Tarea", tags: ["Documentación"], assign: [], done: false, created: hoy, expirationDate: "", link: "", retrospective: "", video: "", lambdas: "", nameRepo: "", property: "", to: "" },
-      { nombre: "Optimización Performance", progress: 20, objective: 100, timeSpent: 4, timeEstimated: 16, daysWorked: 1, startDate: "2025-12-30", endDate: "2026-01-07", tasksCompleted: 1, totalTasks: 5, daysElapsed: 1, estado: "Pendiente", priority: "Media", type: "Tarea", tags: ["Performance", "Optimización"], assign: [], done: false, created: hoy, expirationDate: "", link: "", retrospective: "", video: "", lambdas: "", nameRepo: "", property: "", to: "" },
-      { nombre: "Configuración CI/CD", progress: 70, objective: 100, timeSpent: 10, timeEstimated: 12, daysWorked: 2, startDate: "2025-12-26", endDate: "2025-12-31", tasksCompleted: 7, totalTasks: 10, daysElapsed: 2, estado: "En progreso", priority: "Alta", type: "Tarea", tags: ["DevOps", "CI/CD"], assign: [], done: false, created: hoy, expirationDate: "", link: "", retrospective: "", video: "", lambdas: "", nameRepo: "", property: "", to: "" },
-      { nombre: "Revisión de Código", progress: 45, objective: 100, timeSpent: 9, timeEstimated: 20, daysWorked: 2, startDate: "2025-12-27", endDate: "2026-01-04", tasksCompleted: 9, totalTasks: 20, daysElapsed: 2, estado: "En progreso", priority: "Media", type: "Tarea", tags: ["Code Review"], assign: [], done: false, created: hoy, expirationDate: "", link: "", retrospective: "", video: "", lambdas: "", nameRepo: "", property: "", to: "" },
-      { nombre: "Corrección de Bugs", progress: 55, objective: 100, timeSpent: 11, timeEstimated: 18, daysWorked: 2, startDate: "2025-12-28", endDate: "2026-01-05", tasksCompleted: 11, totalTasks: 20, daysElapsed: 2, estado: "En progreso", priority: "Alta", type: "Bug", tags: ["Bugs", "Fix"], assign: [], done: false, created: hoy, expirationDate: "", link: "", retrospective: "", video: "", lambdas: "", nameRepo: "", property: "", to: "" },
-      { nombre: "Despliegue en Staging", progress: 0, objective: 100, timeSpent: 0, timeEstimated: 8, daysWorked: 0, startDate: "2026-01-06", endDate: "2026-01-08", tasksCompleted: 0, totalTasks: 3, daysElapsed: 0, estado: "Pendiente", priority: "Alta", type: "Tarea", tags: ["Deployment", "Staging"], assign: [], done: false, created: hoy, expirationDate: "", link: "", retrospective: "", video: "", lambdas: "", nameRepo: "", property: "", to: "" },
-      { nombre: "Pruebas de Integración", progress: 25, objective: 100, timeSpent: 5, timeEstimated: 16, daysWorked: 1, startDate: "2025-12-30", endDate: "2026-01-07", tasksCompleted: 2, totalTasks: 8, daysElapsed: 1, estado: "En progreso", priority: "Media", type: "Tarea", tags: ["Testing", "Integración"], assign: [], done: false, created: hoy, expirationDate: "", link: "", retrospective: "", video: "", lambdas: "", nameRepo: "", property: "", to: "" },
-      { nombre: "Preparación Demo", progress: 10, objective: 100, timeSpent: 2, timeEstimated: 12, daysWorked: 1, startDate: "2026-01-02", endDate: "2026-01-08", tasksCompleted: 1, totalTasks: 10, daysElapsed: 0, estado: "Pendiente", priority: "Baja", type: "Tarea", tags: ["Demo", "Presentación"], assign: [], done: false, created: hoy, expirationDate: "", link: "", retrospective: "", video: "", lambdas: "", nameRepo: "", property: "", to: "" },
+      { nombre: "Diseño de UI/UX", progress: 80, objective: 100, timeSpent: 12, timeEstimated: 16, daysWorked: 2, startDate: "2025-12-26", endDate: "2025-12-30", tasksCompleted: 4, totalTasks: 5, daysElapsed: 2, estado: "En progreso", priority: "Critical", type: "IN PROGRESS", tags: ["Frontend", "Diseño"], assign: [], done: false, created: hoy, expirationDate: "", link: "", retrospective: "", video: "", lambdas: "", nameRepo: "", property: "", to: "" },
+      { nombre: "Implementación API Backend", progress: 60, objective: 100, timeSpent: 20, timeEstimated: 32, daysWorked: 3, startDate: "2025-12-26", endDate: "2026-01-02", tasksCompleted: 6, totalTasks: 10, daysElapsed: 3, estado: "En progreso", priority: "Critical", type: "IN PROGRESS", tags: ["Backend", "API"], assign: [], done: false, created: hoy, expirationDate: "", link: "", retrospective: "", video: "", lambdas: "", nameRepo: "", property: "", to: "" },
+      { nombre: "Integración Base de Datos", progress: 40, objective: 100, timeSpent: 8, timeEstimated: 24, daysWorked: 1, startDate: "2025-12-27", endDate: "2026-01-03", tasksCompleted: 2, totalTasks: 5, daysElapsed: 1, estado: "En progreso", priority: "Medium", type: "IN PROGRESS", tags: ["Database", "Backend"], assign: [], done: false, created: hoy, expirationDate: "", link: "", retrospective: "", video: "", lambdas: "", nameRepo: "", property: "", to: "" },
+      { nombre: "Pruebas Unitarias", progress: 30, objective: 100, timeSpent: 6, timeEstimated: 20, daysWorked: 1, startDate: "2025-12-28", endDate: "2026-01-05", tasksCompleted: 3, totalTasks: 10, daysElapsed: 1, estado: "En progreso", priority: "Medium", type: "QA", tags: ["Testing", "QA"], assign: [], done: false, created: hoy, expirationDate: "", link: "", retrospective: "", video: "", lambdas: "", nameRepo: "", property: "", to: "" },
+      { nombre: "Documentación Técnica", progress: 50, objective: 100, timeSpent: 4, timeEstimated: 8, daysWorked: 1, startDate: "2025-12-29", endDate: "2026-01-06", tasksCompleted: 2, totalTasks: 4, daysElapsed: 1, estado: "En progreso", priority: "Low", type: "UNDER REVIEW", tags: ["Documentación"], assign: [], done: false, created: hoy, expirationDate: "", link: "", retrospective: "", video: "", lambdas: "", nameRepo: "", property: "", to: "" },
+      { nombre: "Optimización Performance", progress: 20, objective: 100, timeSpent: 4, timeEstimated: 16, daysWorked: 1, startDate: "2025-12-30", endDate: "2026-01-07", tasksCompleted: 1, totalTasks: 5, daysElapsed: 1, estado: "Pendiente", priority: "Medium", type: "TO DO", tags: ["Performance", "Optimización"], assign: [], done: false, created: hoy, expirationDate: "", link: "", retrospective: "", video: "", lambdas: "", nameRepo: "", property: "", to: "" },
+      { nombre: "Configuración CI/CD", progress: 70, objective: 100, timeSpent: 10, timeEstimated: 12, daysWorked: 2, startDate: "2025-12-26", endDate: "2025-12-31", tasksCompleted: 7, totalTasks: 10, daysElapsed: 2, estado: "En progreso", priority: "Critical", type: "IN PROGRESS", tags: ["DevOps", "CI/CD"], assign: [], done: false, created: hoy, expirationDate: "", link: "", retrospective: "", video: "", lambdas: "", nameRepo: "", property: "", to: "" },
+      { nombre: "Revisión de Código", progress: 45, objective: 100, timeSpent: 9, timeEstimated: 20, daysWorked: 2, startDate: "2025-12-27", endDate: "2026-01-04", tasksCompleted: 9, totalTasks: 20, daysElapsed: 2, estado: "En progreso", priority: "Medium", type: "UNDER REVIEW", tags: ["Code Review"], assign: [], done: false, created: hoy, expirationDate: "", link: "", retrospective: "", video: "", lambdas: "", nameRepo: "", property: "", to: "" },
+      { nombre: "Corrección de Bugs", progress: 55, objective: 100, timeSpent: 11, timeEstimated: 18, daysWorked: 2, startDate: "2025-12-28", endDate: "2026-01-05", tasksCompleted: 11, totalTasks: 20, daysElapsed: 2, estado: "En progreso", priority: "Critical", type: "IN PROGRESS", tags: ["Bugs", "Fix"], assign: [], done: false, created: hoy, expirationDate: "", link: "", retrospective: "", video: "", lambdas: "", nameRepo: "", property: "", to: "" },
+      { nombre: "Despliegue en Staging", progress: 0, objective: 100, timeSpent: 0, timeEstimated: 8, daysWorked: 0, startDate: "2026-01-06", endDate: "2026-01-08", tasksCompleted: 0, totalTasks: 3, daysElapsed: 0, estado: "Pendiente", priority: "Critical", type: "TO DO", tags: ["Deployment", "Staging"], assign: [], done: false, created: hoy, expirationDate: "", link: "", retrospective: "", video: "", lambdas: "", nameRepo: "", property: "", to: "" },
+      { nombre: "Pruebas de Integración", progress: 25, objective: 100, timeSpent: 5, timeEstimated: 16, daysWorked: 1, startDate: "2025-12-30", endDate: "2026-01-07", tasksCompleted: 2, totalTasks: 8, daysElapsed: 1, estado: "En progreso", priority: "Medium", type: "QA", tags: ["Testing", "Integración"], assign: [], done: false, created: hoy, expirationDate: "", link: "", retrospective: "", video: "", lambdas: "", nameRepo: "", property: "", to: "" },
+      { nombre: "Preparación Demo", progress: 10, objective: 100, timeSpent: 2, timeEstimated: 12, daysWorked: 1, startDate: "2026-01-02", endDate: "2026-01-08", tasksCompleted: 1, totalTasks: 10, daysElapsed: 0, estado: "Pendiente", priority: "Low", type: "TO DO", tags: ["Demo", "Presentación"], assign: [], done: false, created: hoy, expirationDate: "", link: "", retrospective: "", video: "", lambdas: "", nameRepo: "", property: "", to: "" },
     ];
 
     // Crear filas con todas las propiedades
@@ -587,9 +617,43 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
         } else if (campo.name === "Objective") {
           properties[campo.name] = { type: "number", value: tarea.objective };
         } else if (campo.name === "Priority") {
-          properties[campo.name] = { type: "select", value: tarea.priority || "Media", color: tarea.priority === "Alta" ? "#ef4444" : tarea.priority === "Media" ? "#f59e0b" : "#6b7280" };
+          const priorityValue = tarea.priority || "Medium";
+          let priorityColor = "#fbbf24"; // Default Medium (amarillo)
+          if (priorityValue === "Critical" || priorityValue === "Alta") {
+            priorityColor = "#ef4444"; // Rojo
+          } else if (priorityValue === "Low" || priorityValue === "Baja") {
+            priorityColor = "#10b981"; // Verde
+          } else if (priorityValue === "Medium" || priorityValue === "Media") {
+            priorityColor = "#fbbf24"; // Amarillo
+          }
+          // Mapear valores antiguos a nuevos
+          const mappedPriority = priorityValue === "Alta" ? "Critical" : priorityValue === "Baja" ? "Low" : priorityValue === "Media" ? "Medium" : priorityValue;
+          properties[campo.name] = { type: "tags", value: [{ label: mappedPriority, color: priorityColor }] };
         } else if (campo.name === "Type") {
-          properties[campo.name] = { type: "select", value: tarea.type || "Tarea", color: tarea.type === "Bug" ? "#ef4444" : "#3b82f6" };
+          const typeValue = tarea.type || "TO DO";
+          let typeColor = "#6b7280"; // Default gris (TO DO)
+          let mappedType = typeValue;
+          
+          // Mapear valores antiguos a nuevos
+          if (typeValue === "Tarea" || typeValue === "Bug") {
+            mappedType = "TO DO";
+            typeColor = "#6b7280"; // Gris
+          } else if (typeValue === "DONE") {
+            typeColor = "#10b981"; // Verde
+          } else if (typeValue === "STOPPED") {
+            typeColor = "#ef4444"; // Rojo
+          } else if (typeValue === "IN PROGRESS") {
+            typeColor = "#3b82f6"; // Azul
+          } else if (typeValue === "REOPENED") {
+            typeColor = "#f59e0b"; // Naranja
+          } else if (typeValue === "UNDER REVIEW") {
+            typeColor = "#8b5cf6"; // Morado
+          } else if (typeValue === "QA") {
+            typeColor = "#06b6d4"; // Cyan
+          } else if (typeValue === "TO DO") {
+            typeColor = "#6b7280"; // Gris
+          }
+          properties[campo.name] = { type: "tags", value: [{ label: mappedType, color: typeColor }] };
         } else if (campo.name === "Time Spent") {
           properties[campo.name] = { type: "number", value: tarea.timeSpent };
         } else if (campo.name === "Time Estimated") {
@@ -659,9 +723,21 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
         } else if (campo.name === "release") {
           properties[campo.name] = { type: "text", value: tarea.release || "" };
         } else {
+          let defaultValue = campo.type === "checkbox" ? false : campo.type === "tags" ? [] : "";
+          
+          // Valores por defecto para Priority
+          if (campo.name === "Priority" && campo.type === "tags") {
+            defaultValue = [{ label: "Medium", color: "#fbbf24" }]; // Amarillo por defecto
+          }
+          
+          // Valores por defecto para Type
+          if (campo.name === "Type" && campo.type === "tags") {
+            defaultValue = [{ label: "TO DO", color: "#6b7280" }]; // Gris por defecto
+          }
+          
           properties[campo.name] = {
             type: campo.type,
-            value: campo.type === "checkbox" ? false : campo.type === "tags" ? [] : ""
+            value: defaultValue
           };
         }
       });
@@ -679,10 +755,23 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
         const nuevasProperties = { ...fila.properties };
         nuevosCampos.forEach(campo => {
           if (!nuevasProperties[campo.name]) {
+            let defaultValue = campo.type === "checkbox" ? false : campo.type === "tags" ? [] : campo.type === "formula" ? "" : "";
+            let defaultColor = undefined;
+            
+            // Valores por defecto para Priority
+            if (campo.name === "Priority" && campo.type === "tags") {
+              defaultValue = [{ label: "Medium", color: "#fbbf24" }]; // Amarillo por defecto
+            }
+            
+            // Valores por defecto para Type
+            if (campo.name === "Type" && campo.type === "tags") {
+              defaultValue = [{ label: "TO DO", color: "#6b7280" }]; // Gris por defecto
+            }
+            
             nuevasProperties[campo.name] = {
               type: campo.type,
-              value: campo.type === "checkbox" ? false : campo.type === "tags" ? [] : campo.type === "formula" ? "" : "",
-              color: campo.type === "select" ? "#3b82f6" : undefined,
+              value: defaultValue,
+              color: campo.type === "select" ? "#3b82f6" : defaultColor,
               formula: campo.formula || undefined,
             };
           }
@@ -1070,10 +1159,12 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
     <NodeViewWrapper 
       className={`relative group border rounded bg-white shadow p-4 text-sm ${usarAnchoCompleto ? 'notion-table-fullwidth' : ''}`}
       style={usarAnchoCompleto ? { 
-        marginLeft: 'calc(-50vw + 50%)',
-        marginRight: 'calc(-50vw + 50%)',
-        width: '100vw',
-        maxWidth: '100vw',
+        position: 'relative',
+        left: `calc(-1 * (50vw - 50% - var(--sidebar-width, 256px) + 1rem))`,
+        width: `calc(100vw - var(--sidebar-width, 256px))`,
+        maxWidth: `calc(100vw - var(--sidebar-width, 256px))`,
+        marginLeft: 0,
+        marginRight: 0,
         paddingLeft: '1rem',
         paddingRight: '1rem'
       } : {}}
@@ -1238,6 +1329,193 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
         </div>
       </div>
 
+      {/* Panel de Indicadores del Sprint */}
+      {(tipoVista === 'table' || tipoVista === 'timeline') && (() => {
+        // Calcular indicadores del sprint
+        const calcularIndicadores = () => {
+          const hoy = new Date();
+          const hoyStr = hoy.toISOString().split('T')[0];
+          
+          let totalTareas = filas.length;
+          let tareasCompletadas = 0;
+          let tareasEnProgreso = 0;
+          let tareasPendientes = 0;
+          let totalProgress = 0;
+          let totalObjective = 0;
+          let totalTimeSpent = 0;
+          let totalTimeEstimated = 0;
+          let totalTasksCompleted = 0;
+          let totalTasksTotal = 0;
+          let diasTranscurridos = 0;
+          let diasFaltantes = 0;
+          let fechaInicioSprint = null;
+          let fechaFinSprint = null;
+          
+          filas.forEach(fila => {
+            // Tareas completadas
+            const done = fila.properties?.["Done"]?.value || false;
+            const estado = fila.properties?.["Estado"]?.value || "";
+            if (done || estado === "Completado") {
+              tareasCompletadas++;
+            } else if (estado === "En progreso" || estado === "En pr") {
+              tareasEnProgreso++;
+            } else {
+              tareasPendientes++;
+            }
+            
+            // Progress y Objective
+            const progress = parseFloat(fila.properties?.["Progress"]?.value || 0);
+            const objective = parseFloat(fila.properties?.["Objective"]?.value || 0);
+            totalProgress += progress;
+            totalObjective += objective;
+            
+            // Time Spent y Estimated
+            const timeSpent = parseFloat(fila.properties?.["Time Spent"]?.value || 0);
+            const timeEstimated = parseFloat(fila.properties?.["Time Estimated"]?.value || 0);
+            totalTimeSpent += timeSpent;
+            totalTimeEstimated += timeEstimated;
+            
+            // Tasks Completed y Total Tasks
+            const tasksCompleted = parseFloat(fila.properties?.["Tasks Completed"]?.value || 0);
+            const tasksTotal = parseFloat(fila.properties?.["Total Tasks"]?.value || 0);
+            totalTasksCompleted += tasksCompleted;
+            totalTasksTotal += tasksTotal;
+            
+            // Fechas del sprint
+            const startDate = fila.properties?.["Start Date"]?.value || "";
+            const endDate = fila.properties?.["End Date"]?.value || "";
+            if (startDate && (!fechaInicioSprint || startDate < fechaInicioSprint)) {
+              fechaInicioSprint = startDate;
+            }
+            if (endDate && (!fechaFinSprint || endDate > fechaFinSprint)) {
+              fechaFinSprint = endDate;
+            }
+          });
+          
+          // Calcular días transcurridos y faltantes
+          if (fechaInicioSprint && fechaFinSprint) {
+            const inicio = new Date(fechaInicioSprint);
+            const fin = new Date(fechaFinSprint);
+            const hoyDate = new Date(hoyStr);
+            
+            if (hoyDate >= inicio && hoyDate <= fin) {
+              diasTranscurridos = Math.floor((hoyDate - inicio) / (1000 * 60 * 60 * 24)) + 1;
+              diasFaltantes = Math.floor((fin - hoyDate) / (1000 * 60 * 60 * 24));
+            } else if (hoyDate < inicio) {
+              diasTranscurridos = 0;
+              diasFaltantes = Math.floor((fin - inicio) / (1000 * 60 * 60 * 24)) + 1;
+            } else {
+              const totalDias = Math.floor((fin - inicio) / (1000 * 60 * 60 * 24)) + 1;
+              diasTranscurridos = totalDias;
+              diasFaltantes = 0;
+            }
+          }
+          
+          // Calcular porcentajes
+          const porcentajeCumplimiento = totalObjective > 0 ? Math.round((totalProgress / totalObjective) * 100) : 0;
+          const porcentajeTareas = totalTareas > 0 ? Math.round((tareasCompletadas / totalTareas) * 100) : 0;
+          const porcentajeTiempo = totalTimeEstimated > 0 ? Math.round((totalTimeSpent / totalTimeEstimated) * 100) : 0;
+          const porcentajeSubtareas = totalTasksTotal > 0 ? Math.round((totalTasksCompleted / totalTasksTotal) * 100) : 0;
+          
+          return {
+            totalTareas,
+            tareasCompletadas,
+            tareasEnProgreso,
+            tareasPendientes,
+            porcentajeCumplimiento,
+            porcentajeTareas,
+            porcentajeTiempo,
+            porcentajeSubtareas,
+            totalProgress,
+            totalObjective,
+            totalTimeSpent,
+            totalTimeEstimated,
+            totalTasksCompleted,
+            totalTasksTotal,
+            diasTranscurridos,
+            diasFaltantes,
+            fechaInicioSprint,
+            fechaFinSprint
+          };
+        };
+        
+        const indicadores = calcularIndicadores();
+        
+        return (
+          <div className="mb-3 p-2 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200 shadow-sm">
+            <h3 className="text-sm font-bold text-gray-800 mb-2 flex items-center gap-2">
+              📊 Indicadores del Sprint
+            </h3>
+            <div className="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-8 gap-2">
+              {/* Tareas */}
+              <div className="bg-white rounded p-1.5 shadow-sm">
+                <div className="text-[10px] text-gray-500 mb-0.5">Total</div>
+                <div className="text-lg font-bold text-gray-800">{indicadores.totalTareas}</div>
+              </div>
+              <div className="bg-green-50 rounded p-1.5 shadow-sm border border-green-200">
+                <div className="text-[10px] text-green-600 mb-0.5 leading-tight">✅ Completadas</div>
+                <div className="text-lg font-bold text-green-700">{indicadores.tareasCompletadas}</div>
+              </div>
+              <div className="bg-blue-50 rounded p-1.5 shadow-sm border border-blue-200">
+                <div className="text-[10px] text-blue-600 mb-0.5 leading-tight">🔄 En Progreso</div>
+                <div className="text-lg font-bold text-blue-700">{indicadores.tareasEnProgreso}</div>
+              </div>
+              <div className="bg-orange-50 rounded p-1.5 shadow-sm border border-orange-200">
+                <div className="text-[10px] text-orange-600 mb-0.5 leading-tight">⏳ Pendientes</div>
+                <div className="text-lg font-bold text-orange-700">{indicadores.tareasPendientes}</div>
+              </div>
+              
+              {/* Porcentajes */}
+              <div className="bg-purple-50 rounded p-1.5 shadow-sm border border-purple-200">
+                <div className="text-[10px] text-purple-600 mb-0.5 leading-tight">📈 Cumplimiento</div>
+                <div className="text-lg font-bold text-purple-700">{indicadores.porcentajeCumplimiento}%</div>
+                <div className="text-[9px] text-gray-500 leading-tight">
+                  {indicadores.totalProgress}/{indicadores.totalObjective}
+                </div>
+              </div>
+              <div className="bg-indigo-50 rounded p-1.5 shadow-sm border border-indigo-200">
+                <div className="text-[10px] text-indigo-600 mb-0.5 leading-tight">✅ Tareas</div>
+                <div className="text-lg font-bold text-indigo-700">{indicadores.porcentajeTareas}%</div>
+              </div>
+              
+              {/* Tiempo */}
+              <div className="bg-cyan-50 rounded p-1.5 shadow-sm border border-cyan-200">
+                <div className="text-[10px] text-cyan-600 mb-0.5 leading-tight">⏱️ Tiempo</div>
+                <div className="text-lg font-bold text-cyan-700">{indicadores.porcentajeTiempo}%</div>
+                <div className="text-[9px] text-gray-500 leading-tight">
+                  {indicadores.totalTimeSpent}h/{indicadores.totalTimeEstimated}h
+                </div>
+              </div>
+              
+              {/* Subtareas */}
+              {indicadores.totalTasksTotal > 0 && (
+                <div className="bg-pink-50 rounded p-1.5 shadow-sm border border-pink-200">
+                  <div className="text-[10px] text-pink-600 mb-0.5 leading-tight">📋 Subtareas</div>
+                  <div className="text-lg font-bold text-pink-700">{indicadores.porcentajeSubtareas}%</div>
+                  <div className="text-[9px] text-gray-500 leading-tight">
+                    {indicadores.totalTasksCompleted}/{indicadores.totalTasksTotal}
+                  </div>
+                </div>
+              )}
+              
+              {/* Días */}
+              {indicadores.fechaInicioSprint && indicadores.fechaFinSprint && (
+                <>
+                  <div className="bg-teal-50 rounded p-1.5 shadow-sm border border-teal-200">
+                    <div className="text-[10px] text-teal-600 mb-0.5 leading-tight">📅 Transcurridos</div>
+                    <div className="text-lg font-bold text-teal-700">{indicadores.diasTranscurridos}</div>
+                  </div>
+                  <div className="bg-amber-50 rounded p-1.5 shadow-sm border border-amber-200">
+                    <div className="text-[10px] text-amber-600 mb-0.5 leading-tight">⏰ Faltantes</div>
+                    <div className="text-lg font-bold text-amber-700">{indicadores.diasFaltantes}</div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Vista Timeline */}
       {tipoVista === 'timeline' && (
         <div className="w-full overflow-x-auto">
@@ -1399,6 +1677,13 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                         minWidth: prop.type === "checkbox" ? '50px' : (prop.type === "number" || prop.type === "percent" ? '120px' : prop.type === "formula" ? '130px' : prop.type === "tags" ? '180px' : prop.type === "select" ? '140px' : '150px'),
                         maxWidth: prop.type === "checkbox" ? '50px' : (prop.type === "number" || prop.type === "percent" ? '120px' : prop.type === "formula" ? '130px' : prop.type === "tags" ? '180px' : prop.type === "select" ? '140px' : '150px')
                       }}
+                      onClick={(e) => {
+                        // Solo permitir que se abra el drawer desde la columna de nombre
+                        // Para todas las demás columnas, prevenir la propagación
+                        if (prop.name !== "Name") {
+                          e.stopPropagation();
+                        }
+                      }}
                     >
                       <div className="relative">
                         {prop.type === "formula" ? (
@@ -1433,36 +1718,87 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                             style={{ textAlign: 'right' }}
                       />
                     ) : prop.type === "select" ? (
-                          <div className="group relative inline-block w-full" onClick={(e) => {
-                            e.stopPropagation();
-                            abrirDrawer(fila);
-                          }}>
-                        <span 
-                          className="notion-pill cursor-pointer"
+                          <div className="group relative inline-block w-full" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="text"
+                          className="notion-pill cursor-text border-none outline-none bg-transparent px-2 py-0.5 rounded"
                           style={{ 
                             backgroundColor: fila.properties?.[prop.name]?.color || "rgba(206, 205, 202, 0.3)",
-                            color: fila.properties?.[prop.name]?.color ? "white" : "rgb(55, 53, 47)"
+                            color: fila.properties?.[prop.name]?.color ? "white" : "rgb(55, 53, 47)",
+                            width: '100%',
+                            minWidth: '60px'
                           }}
-                        >
-                          {fila.properties?.[prop.name]?.value || "Sin valor"}
-                        </span>
+                          value={fila.properties?.[prop.name]?.value || ""}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            actualizarValor(fi, prop.name, e.target.value);
+                          }}
+                          placeholder="Sin valor"
+                          onClick={(e) => e.stopPropagation()}
+                          onFocus={(e) => e.stopPropagation()}
+                          onMouseDown={(e) => e.stopPropagation()}
+                        />
                       </div>
                     ) : prop.type === "tags" ? (
-                          <div className="w-full" onClick={(e) => e.stopPropagation()}>
-                          <TagInputNotionLike
-                            value={fila.properties?.[prop.name]?.value || []}
-                            onChange={(val) => actualizarValor(fi, prop.name, val)}
-                          />
+                          <div 
+                            className="w-full cursor-pointer" 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setTagsEditando({
+                                filaIndex: filaIndexOriginal,
+                                propName: prop.name,
+                                tags: [...(fila.properties?.[prop.name]?.value || [])]
+                              });
+                              setShowTagsModal(true);
+                            }}
+                          >
+                            <div className="flex items-center gap-1 px-1 py-0.5 flex-wrap min-h-[18px]">
+                              {(fila.properties?.[prop.name]?.value || []).length > 0 ? (
+                                (fila.properties?.[prop.name]?.value || []).slice(0, 2).map((tag, idx) => (
+                                  <div
+                                    key={idx}
+                                    className="flex items-center gap-1 text-[0.7rem] px-1 py-0 rounded flex-shrink-0 whitespace-nowrap"
+                                    style={{
+                                      backgroundColor: tag.color || 'rgba(206, 205, 202, 0.3)',
+                                      color: tag.color ? 'white' : 'rgb(55, 53, 47)',
+                                      height: '18px',
+                                      lineHeight: '1.2',
+                                    }}
+                                  >
+                                    <span className="leading-tight">{tag.label || tag.value || tag}</span>
+                                  </div>
+                                ))
+                              ) : (
+                                <span className="text-[0.7rem] text-gray-400">Sin tags</span>
+                              )}
+                              {(fila.properties?.[prop.name]?.value || []).length > 2 && (
+                                <span className="text-[0.7rem] text-gray-400">+{(fila.properties?.[prop.name]?.value || []).length - 2}</span>
+                              )}
+                            </div>
                       </div>
                     ) : (
                       <input
                         type="text"
-                            className="group relative w-full"
+                        className="group relative w-full border-none outline-none bg-transparent"
+                        style={{
+                          backgroundColor: 'transparent',
+                          color: 'rgb(55, 53, 47)',
+                          padding: '1px 4px',
+                          fontSize: '0.8125rem'
+                        }}
                         value={fila.properties?.[prop.name]?.value || ""}
                         onChange={(e) => actualizarValor(fi, prop.name, e.target.value)}
-                            placeholder={prop.name.toLowerCase().includes('fecha') ? 'YYYY-MM-DD' : ''}
-                            onClick={(e) => e.stopPropagation()}
-                          />
+                        placeholder={prop.name.toLowerCase().includes('fecha') ? 'YYYY-MM-DD' : ''}
+                        onClick={(e) => e.stopPropagation()}
+                        onFocus={(e) => {
+                          e.target.style.backgroundColor = 'white';
+                          e.target.style.border = '1.5px solid rgb(46, 170, 220)';
+                        }}
+                        onBlur={(e) => {
+                          e.target.style.backgroundColor = 'transparent';
+                          e.target.style.border = '1px solid transparent';
+                        }}
+                      />
                         )}
                       </div>
                   </td>
@@ -2199,6 +2535,190 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
     </div>
   </div>
 )}
+
+      {/* Modal para editar Tags */}
+      {showTagsModal && tagsEditando.filaIndex !== null && tagsEditando.propName && (() => {
+        // Definir tags disponibles según el tipo de campo
+        const getAvailableTags = (propName) => {
+          if (propName === "Priority") {
+            return [
+              { label: "Critical", color: "#ef4444" },
+              { label: "Low", color: "#10b981" },
+              { label: "Medium", color: "#fbbf24" }
+            ];
+          } else if (propName === "Type") {
+            return [
+              { label: "IN PROGRESS", color: "#3b82f6" },
+              { label: "DONE", color: "#10b981" },
+              { label: "STOPPED", color: "#ef4444" },
+              { label: "REOPENED", color: "#f59e0b" },
+              { label: "UNDER REVIEW", color: "#8b5cf6" },
+              { label: "QA", color: "#06b6d4" },
+              { label: "TO DO", color: "#6b7280" }
+            ];
+          }
+          // Para otros campos de tags, no hay lista predefinida
+          return [];
+        };
+
+        const availableTags = getAvailableTags(tagsEditando.propName);
+        const selectedTagLabels = tagsEditando.tags.map(t => t.label || t.value || t);
+        
+        const toggleTag = (tag) => {
+          const isSelected = selectedTagLabels.includes(tag.label);
+          if (isSelected) {
+            // Deseleccionar
+            setTagsEditando({
+              ...tagsEditando,
+              tags: tagsEditando.tags.filter(t => (t.label || t.value || t) !== tag.label)
+            });
+          } else {
+            // Seleccionar
+            setTagsEditando({
+              ...tagsEditando,
+              tags: [...tagsEditando.tags, tag]
+            });
+          }
+        };
+
+        return (
+          <div className="fixed inset-0 z-50 bg-black/50 flex justify-center items-center p-4">
+            <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold text-gray-800">🏷️ Editar {tagsEditando.propName}</h2>
+                <button 
+                  onClick={() => {
+                    setShowTagsModal(false);
+                    setTagsEditando({ filaIndex: null, propName: null, tags: [] });
+                  }}
+                  className="text-gray-500 hover:text-gray-700 text-2xl font-bold"
+                >
+                  ×
+                </button>
+              </div>
+              
+              {availableTags.length > 0 ? (
+                <>
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Tags disponibles:
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {availableTags.map((tag, idx) => {
+                        const isSelected = selectedTagLabels.includes(tag.label);
+                        return (
+                          <button
+                            key={idx}
+                            onClick={() => toggleTag(tag)}
+                            className={`px-3 py-1.5 rounded text-sm font-medium transition-all ${
+                              isSelected 
+                                ? 'ring-2 ring-blue-500 ring-offset-2' 
+                                : 'hover:opacity-80'
+                            }`}
+                            style={{
+                              backgroundColor: tag.color,
+                              color: 'white',
+                              opacity: isSelected ? 1 : 0.7
+                            }}
+                          >
+                            {isSelected && '✓ '}
+                            {tag.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Tags seleccionados:
+                    </label>
+                    <div className="border border-gray-300 rounded p-3 min-h-[60px] bg-gray-50">
+                      {tagsEditando.tags.length > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                          {tagsEditando.tags.map((tag, idx) => (
+                            <div
+                              key={idx}
+                              className="px-2 py-1 rounded text-xs flex items-center gap-1"
+                              style={{
+                                backgroundColor: tag.color || 'rgba(206, 205, 202, 0.3)',
+                                color: tag.color ? 'white' : 'rgb(55, 53, 47)'
+                              }}
+                            >
+                              <span>{tag.label || tag.value || tag}</span>
+                              <button
+                                onClick={() => {
+                                  setTagsEditando({
+                                    ...tagsEditando,
+                                    tags: tagsEditando.tags.filter((_, i) => i !== idx)
+                                  });
+                                }}
+                                className="ml-1 hover:bg-black/20 rounded px-1"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-sm text-gray-400">Ningún tag seleccionado</span>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="mb-4 border-t pt-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Agregar tag personalizado:
+                    </label>
+                    <TagInputNotionLike
+                      value={tagsEditando.tags}
+                      onChange={(val) => setTagsEditando({ ...tagsEditando, tags: val })}
+                      showColorPicker={true}
+                    />
+                  </div>
+                </>
+              ) : (
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    {tagsEditando.propName}
+                  </label>
+                  <div className="border border-gray-300 rounded p-3 min-h-[100px]">
+                    <TagInputNotionLike
+                      value={tagsEditando.tags}
+                      onChange={(val) => setTagsEditando({ ...tagsEditando, tags: val })}
+                      showColorPicker={true}
+                    />
+                  </div>
+                </div>
+              )}
+              
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => {
+                    setShowTagsModal(false);
+                    setTagsEditando({ filaIndex: null, propName: null, tags: [] });
+                  }}
+                  className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => {
+                    if (tagsEditando.filaIndex !== null && tagsEditando.propName) {
+                      actualizarValor(tagsEditando.filaIndex, tagsEditando.propName, tagsEditando.tags);
+                    }
+                    setShowTagsModal(false);
+                    setTagsEditando({ filaIndex: null, propName: null, tags: [] });
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                >
+                  Guardar
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
     </NodeViewWrapper>
   );
