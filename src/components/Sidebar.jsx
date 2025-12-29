@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Star, ChevronDown, Settings, Plus } from 'lucide-react';
+import { Search, Star, ChevronDown, Settings, Plus, Trash2 } from 'lucide-react';
 
 export default function Sidebar({ 
   paginas = [], 
@@ -9,7 +9,8 @@ export default function Sidebar({
   onShowConfig,
   filtroPagina,
   setFiltroPagina,
-  onSidebarStateChange
+  onSidebarStateChange,
+  onEliminarPagina
 }) {
   const [favoritos, setFavoritos] = useState(() => {
     try {
@@ -150,7 +151,7 @@ export default function Sidebar({
                   <button
                     key={pagina.id}
                     onClick={() => onSeleccionarPagina(pagina.id)}
-                    className={`w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded transition-colors ${
+                    className={`w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded transition-colors group ${
                       paginaSeleccionada === pagina.id
                         ? 'bg-blue-100 text-blue-700'
                         : 'text-gray-700 hover:bg-gray-200'
@@ -158,15 +159,30 @@ export default function Sidebar({
                   >
                     <div className="w-4 h-4 rounded bg-gradient-to-br from-purple-400 to-pink-500 flex-shrink-0" />
                     <span className="flex-1 text-left truncate">{pagina.titulo || 'Sin título'}</span>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleFavorito(pagina.id);
-                      }}
-                      className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-gray-300 rounded"
-                    >
-                      <Star className={`w-3 h-3 ${favoritos.includes(pagina.id) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-400'}`} />
-                    </button>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleFavorito(pagina.id);
+                        }}
+                        className="p-0.5 hover:bg-gray-300 rounded transition-colors"
+                        title={favoritos.includes(pagina.id) ? "Quitar de favoritos" : "Agregar a favoritos"}
+                      >
+                        <Star className={`w-3 h-3 ${favoritos.includes(pagina.id) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-400'}`} />
+                      </button>
+                      {onEliminarPagina && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onEliminarPagina(pagina);
+                          }}
+                          className="p-0.5 hover:bg-red-100 rounded transition-colors"
+                          title="Eliminar página"
+                        >
+                          <Trash2 className="w-3 h-3 text-gray-400 hover:text-red-600" />
+                        </button>
+                      )}
+                    </div>
                   </button>
                 ))}
               </div>
@@ -206,15 +222,30 @@ export default function Sidebar({
                 >
                   <div className="w-4 h-4 rounded bg-gradient-to-br from-blue-400 to-cyan-500 flex-shrink-0" />
                   <span className="flex-1 text-left truncate">{pagina.titulo || 'Sin título'}</span>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleFavorito(pagina.id);
-                    }}
-                    className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-gray-300 rounded"
-                  >
-                    <Star className={`w-3 h-3 ${favoritos.includes(pagina.id) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-400'}`} />
-                  </button>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleFavorito(pagina.id);
+                      }}
+                      className="p-0.5 hover:bg-gray-300 rounded transition-colors"
+                      title={favoritos.includes(pagina.id) ? "Quitar de favoritos" : "Agregar a favoritos"}
+                    >
+                      <Star className={`w-3 h-3 ${favoritos.includes(pagina.id) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-400'}`} />
+                    </button>
+                    {onEliminarPagina && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEliminarPagina(pagina);
+                        }}
+                        className="p-0.5 hover:bg-red-100 rounded transition-colors"
+                        title="Eliminar página"
+                      >
+                        <Trash2 className="w-3 h-3 text-gray-400 hover:text-red-600" />
+                      </button>
+                    )}
+                  </div>
                 </button>
               ))}
               {paginasFiltradas.length === 0 && (

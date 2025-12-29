@@ -242,8 +242,9 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
   const [sprintInfo, setSprintInfo] = useState(null);
   const [showPropertyVisibilityModal, setShowPropertyVisibilityModal] = useState(false);
   const [esNuevoCampo, setEsNuevoCampo] = useState(false); // Para saber si es un nuevo campo o uno existente
-  const [showTagsModal, setShowTagsModal] = useState(false);
+  const [showEjemploModal, setShowEjemploModal] = useState(false);
   const [tagsEditando, setTagsEditando] = useState({ filaIndex: null, propName: null, tags: [] });
+  const [showTagsModal, setShowTagsModal] = useState(false);
   
   // Estado para controlar si la tabla usa todo el ancho
   const [usarAnchoCompleto, setUsarAnchoCompleto] = useState(() => {
@@ -585,10 +586,89 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
       setFilas(nuevasFilas);
     }
 
-    // Solo crear filas de ejemplo si no hay filas existentes
-    if (filas.length === 0) {
-      // Crear tareas de ejemplo con todos los campos
-      const tareasEjemplo = [
+    // Si hay filas existentes, solo agregar los campos nuevos (sin crear tareas)
+    if (filas.length > 0) {
+      // Solo agregar los nuevos campos a las filas existentes
+      const filasActualizadas = filas.map(fila => {
+        const nuevasProperties = { ...fila.properties };
+        nuevosCampos.forEach(campo => {
+          if (!nuevasProperties[campo.name]) {
+            let defaultValue = campo.type === "checkbox" ? false : campo.type === "tags" ? [] : campo.type === "formula" ? "" : "";
+            let defaultColor = undefined;
+            
+            // Valores por defecto para Priority
+            if (campo.name === "Priority" && campo.type === "tags") {
+              defaultValue = [{ label: "Medium", color: "#fbbf24" }]; // Amarillo por defecto
+            }
+            
+            // Valores por defecto para Type
+            if (campo.name === "Type" && campo.type === "tags") {
+              defaultValue = [{ label: "TO DO", color: "#6b7280" }]; // Gris por defecto
+            }
+            
+            nuevasProperties[campo.name] = {
+              type: campo.type,
+              value: defaultValue,
+              color: campo.type === "select" ? "#3b82f6" : defaultColor,
+              formula: campo.formula || undefined,
+            };
+          }
+        });
+        return {
+          ...fila,
+          properties: nuevasProperties
+        };
+      });
+      setFilas(filasActualizadas);
+      alert(`✅ Se agregaron ${nuevosCampos.length} campos nuevos a las filas existentes.`);
+      return;
+    }
+    
+    // Si no hay filas, preguntar cuántas tareas de ejemplo crear
+    setShowEjemploModal(true);
+  };
+
+  // Función para crear las tareas de ejemplo (llamada desde el modal)
+  const crearTareasEjemplo = (cantidad) => {
+    setShowEjemploModal(false);
+    
+    // Fechas del sprint
+    const sprintInicio = "2025-12-26";
+    const sprintFin = "2026-01-08";
+    const hoy = "2025-12-20";
+    const horasDiarias = 8;
+    
+    // Calcular días hábiles del sprint
+    const diasHabilesSprint = calcularDiasHabiles(sprintInicio, sprintFin);
+    const horasTotalesSprint = diasHabilesSprint * horasDiarias;
+    
+    // Calcular días hábiles transcurridos
+    const fechaInicio = new Date(sprintInicio);
+    const fechaHoy = new Date(hoy);
+    const diasHabilesTranscurridos = fechaHoy < fechaInicio 
+      ? 0 
+      : calcularDiasHabiles(sprintInicio, hoy);
+    
+    // Obtener los campos de la plantilla (ya agregados anteriormente)
+    const plantillaCampos = [
+      { name: "Priority", type: "tags", visible: true },
+      { name: "Type", type: "tags", visible: true },
+      { name: "Percent", type: "formula", visible: true, formula: 'if(((prop("Progress") / prop("Objective")) >= 1), "✅", if(and(empty(prop("Progress")), !empty(prop("Objective"))), "0%", substring("➖➖➖➖", 0, floor((prop("Progress") / prop("Objective")) * 10)) + " " + format(round((prop("Progress") / prop("Objective")) * 100)) + "%"))' },
+      { name: "Percent Total", type: "formula", visible: true, formula: 'if((prop("Time Estimated") > 0), format(round((prop("Time Spent") * 100) / prop("Time Estimated"))) + "%", "0%")' },
+      { name: "Progress", type: "number", visible: true, totalizar: false },
+      { name: "Time Spent", type: "number", visible: false, totalizar: true },
+      { name: "Time Estimated", type: "number", visible: false, totalizar: true },
+      { name: "Start Date", type: "text", visible: false },
+      { name: "End Date", type: "text", visible: false },
+      { name: "Current Date", type: "text", visible: false },
+      { name: "Created", type: "text", visible: false },
+      { name: "Expiration date", type: "text", visible: false },
+      { name: "Objective", type: "number", visible: false, totalizar: false },
+      { name: "missing percentage", type: "formula", visible: false, formula: 'if((prop("Type") == "DONE"), 0, if((prop("Time Estimated") > 0), format(round((prop("Time Spent") * 100) / prop("Time Estimated"))) + "%", "0%"))' },
+    ];
+    
+    // Crear tareas de ejemplo (6 tareas variadas para demostrar todas las fórmulas)
+    const todasTareasEjemplo = [
       { nombre: "Diseño de UI/UX", progress: 80, objective: 100, timeSpent: 12, timeEstimated: 16, daysWorked: 2, startDate: "2025-12-26", endDate: "2025-12-30", tasksCompleted: 4, totalTasks: 5, daysElapsed: 2, estado: "En progreso", priority: "Critical", type: "IN PROGRESS", tags: ["Frontend", "Diseño"], assign: [], done: false, created: hoy, expirationDate: "", link: "", retrospective: "", video: "", lambdas: "", nameRepo: "", property: "", to: "" },
       { nombre: "Implementación API Backend", progress: 60, objective: 100, timeSpent: 20, timeEstimated: 32, daysWorked: 3, startDate: "2025-12-26", endDate: "2026-01-02", tasksCompleted: 6, totalTasks: 10, daysElapsed: 3, estado: "En progreso", priority: "Critical", type: "IN PROGRESS", tags: ["Backend", "API"], assign: [], done: false, created: hoy, expirationDate: "", link: "", retrospective: "", video: "", lambdas: "", nameRepo: "", property: "", to: "" },
       { nombre: "Integración Base de Datos", progress: 40, objective: 100, timeSpent: 8, timeEstimated: 24, daysWorked: 1, startDate: "2025-12-27", endDate: "2026-01-03", tasksCompleted: 2, totalTasks: 5, daysElapsed: 1, estado: "En progreso", priority: "Medium", type: "IN PROGRESS", tags: ["Database", "Backend"], assign: [], done: false, created: hoy, expirationDate: "", link: "", retrospective: "", video: "", lambdas: "", nameRepo: "", property: "", to: "" },
@@ -750,41 +830,8 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
       };
     });
 
-      setFilas(nuevasFilas);
-    } else {
-      // Si ya hay filas, solo agregar los nuevos campos a las filas existentes
-      const filasActualizadas = filas.map(fila => {
-        const nuevasProperties = { ...fila.properties };
-        nuevosCampos.forEach(campo => {
-          if (!nuevasProperties[campo.name]) {
-            let defaultValue = campo.type === "checkbox" ? false : campo.type === "tags" ? [] : campo.type === "formula" ? "" : "";
-            let defaultColor = undefined;
-            
-            // Valores por defecto para Priority
-            if (campo.name === "Priority" && campo.type === "tags") {
-              defaultValue = [{ label: "Medium", color: "#fbbf24" }]; // Amarillo por defecto
-            }
-            
-            // Valores por defecto para Type
-            if (campo.name === "Type" && campo.type === "tags") {
-              defaultValue = [{ label: "TO DO", color: "#6b7280" }]; // Gris por defecto
-            }
-            
-            nuevasProperties[campo.name] = {
-              type: campo.type,
-              value: defaultValue,
-              color: campo.type === "select" ? "#3b82f6" : defaultColor,
-              formula: campo.formula || undefined,
-            };
-          }
-        });
-        return {
-          ...fila,
-          properties: nuevasProperties
-        };
-      });
-      setFilas(filasActualizadas);
-    }
+    setFilas(nuevasFilas);
+    
     // Guardar información del sprint para mostrarla después
     setSprintInfo({
       tareas: tareasEjemplo.length,
@@ -2103,83 +2150,27 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
           </div>
 
           {/* Propiedades */}
-          <div className="space-y-6">
+          <div className="space-y-3">
             {propiedades.map((prop, pi) => (
-              <div key={pi} className="border-b border-gray-100 pb-4 last:border-b-0">
-                <div className="flex items-center justify-between mb-2">
-                  <label className="block text-xs font-medium text-gray-700 uppercase tracking-wide">
-                    {prop.name}
-                    {prop.type === "formula" && " (Fórmula)"}
-                    {prop.totalizar && " (Totalizar)"}
-                    {prop.visible === false && " 👁️ Oculto"}
-                  </label>
-                  <label className="flex items-center gap-1 text-xs text-gray-500 cursor-pointer hover:text-gray-700 transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={prop.visible !== false}
-                      onChange={(e) => {
-                        const nuevas = [...propiedades];
-                        nuevas[pi].visible = e.target.checked;
-                        setPropiedades(nuevas);
-                      }}
-                      className="w-3 h-3"
-                    />
-                    <span>Visible</span>
-                  </label>
-                </div>
-                {prop.type === "formula" ? (
-                  <div>
-                    <textarea
-                      className="border w-full px-2 py-1 rounded text-xs font-mono"
-                      rows={4}
-                      placeholder='Ej: if(((prop("Progress") / prop("Objective")) >= 1), "✅", format(round((prop("Progress") / prop("Objective")) * 100)) + "%")'
-                      value={filas[filaSeleccionada]?.properties?.[prop.name]?.formula || ""}
-                      onChange={(e) => {
-                        const nuevas = [...filas];
-                        if (!nuevas[filaSeleccionada].properties) {
-                          nuevas[filaSeleccionada].properties = {};
-                        }
-                        if (!nuevas[filaSeleccionada].properties[prop.name]) {
-                          nuevas[filaSeleccionada].properties[prop.name] = { type: "formula", value: "", formula: "" };
-                        }
-                        nuevas[filaSeleccionada].properties[prop.name].formula = e.target.value;
-                        // Asegurar que el tipo esté correcto
-                        nuevas[filaSeleccionada].properties[prop.name].type = "formula";
-                        console.log('Guardando fórmula:', e.target.value, 'en propiedad:', prop.name, 'fila:', nuevas[filaSeleccionada].Name);
-                        setFilas(nuevas);
-                      }}
-                    />
-                    <div className="mt-1 text-xs text-gray-500 bg-gray-50 p-2 rounded">
-                      Resultado: <strong>{obtenerValorCelda(filas[filaSeleccionada], prop)}</strong>
-                    </div>
-                    {/* Botón para abrir modal de fórmulas sugeridas */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPropiedadFormulaEditando(prop.name);
-                        setEsNuevoCampo(false);
-                        setShowFormulaModal(true);
-                      }}
-                      className="mt-2 w-full bg-blue-600 text-white px-3 py-2 rounded text-sm hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
-                    >
-                      💡 Ver fórmulas sugeridas
-                    </button>
+              <div key={pi} className="border-b border-gray-100 pb-3 last:border-b-0">
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <label className="text-sm font-medium text-gray-900 truncate">
+                      {prop.name}
+                    </label>
+                    {prop.type === "formula" && (
+                      <span className="text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">Fórmula</span>
+                    )}
+                    {prop.totalizar && (
+                      <span className="text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded">Totalizar</span>
+                    )}
+                    {prop.visible === false && (
+                      <span className="text-xs text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">👁️ Oculto</span>
+                    )}
                   </div>
-                ) : prop.type === "tags" ? (
-                  <TagInputNotionLike
-                    value={filas[filaSeleccionada]?.properties?.[prop.name]?.value || []}
-                    onChange={(val) => actualizarValor(filaSeleccionada, prop.name, val)}
-                  />
-                ) : prop.type === "number" || prop.type === "percent" ? (
-                  <div>
-                  <input
-                    type="number"
-                    className="border w-full px-2 py-1 rounded"
-                    value={filas[filaSeleccionada]?.properties?.[prop.name]?.value || 0}
-                    onChange={(e) => actualizarValor(filaSeleccionada, prop.name, Number(e.target.value))}
-                  />
-                    <div className="flex flex-col gap-1 mt-1">
-                      <label className="flex items-center gap-2 text-xs">
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    {(prop.type === "number" || prop.type === "percent") && (
+                      <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer hover:text-gray-800">
                         <input
                           type="checkbox"
                           checked={prop.totalizar || false}
@@ -2188,132 +2179,141 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                             nuevas[pi].totalizar = e.target.checked;
                             setPropiedades(nuevas);
                           }}
+                          className="w-3.5 h-3.5"
                         />
-                        <span>Totalizar esta columna</span>
+                        <span>Totalizar</span>
                       </label>
-                      <label className="flex items-center gap-2 text-xs">
-                        <input
-                          type="checkbox"
-                          checked={prop.visible !== false}
-                          onChange={(e) => {
-                            const nuevas = [...propiedades];
-                            nuevas[pi].visible = e.target.checked;
-                            setPropiedades(nuevas);
-                          }}
-                        />
-                        <span>Visible en la tabla</span>
-                      </label>
+                    )}
+                    <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer hover:text-gray-800">
+                      <input
+                        type="checkbox"
+                        checked={prop.visible !== false}
+                        onChange={(e) => {
+                          const nuevas = [...propiedades];
+                          nuevas[pi].visible = e.target.checked;
+                          setPropiedades(nuevas);
+                        }}
+                        className="w-3.5 h-3.5"
+                      />
+                      <span>Visible</span>
+                    </label>
+                  </div>
+                </div>
+                {prop.type === "formula" ? (
+                  <div className="space-y-1.5">
+                    {/* Botón para editar fórmula */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPropiedadFormulaEditando(prop.name);
+                        setEsNuevoCampo(false);
+                        setShowFormulaModal(true);
+                      }}
+                      className="w-full text-left border border-gray-300 bg-white hover:bg-gray-50 rounded px-2.5 py-1.5 text-xs font-mono text-gray-700 transition-colors flex items-center justify-between group"
+                    >
+                      <span className="truncate flex-1">
+                        {filas[filaSeleccionada]?.properties?.[prop.name]?.formula || "Clic para editar fórmula..."}
+                      </span>
+                      <span className="ml-2 text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity text-[10px]">✏️</span>
+                    </button>
+                    {/* Resultado de la fórmula */}
+                    <div className="text-xs text-gray-600 bg-gray-50 px-2 py-1 rounded flex items-center justify-between">
+                      <span className="text-gray-500">Resultado:</span>
+                      <strong className="text-gray-900">{obtenerValorCelda(filas[filaSeleccionada], prop) || "Sin resultado"}</strong>
                     </div>
                   </div>
-                ) : prop.type === "checkbox" ? (
-                  <div>
-                  <input
-                    type="checkbox"
-                    checked={filas[filaSeleccionada]?.properties?.[prop.name]?.value || false}
-                    onChange={(e) => actualizarValor(filaSeleccionada, prop.name, e.target.checked)}
+                ) : prop.type === "tags" ? (
+                  <TagInputNotionLike
+                    value={filas[filaSeleccionada]?.properties?.[prop.name]?.value || []}
+                    onChange={(val) => actualizarValor(filaSeleccionada, prop.name, val)}
                   />
-                    <label className="flex items-center gap-2 mt-1 text-xs">
-                      <input
-                        type="checkbox"
-                        checked={prop.visible !== false}
-                        onChange={(e) => {
-                          const nuevas = [...propiedades];
-                          nuevas[pi].visible = e.target.checked;
-                          setPropiedades(nuevas);
-                        }}
-                      />
-                      <span>Visible en la tabla</span>
-                    </label>
+                ) : prop.type === "number" || prop.type === "percent" ? (
+                  <input
+                    type="number"
+                    className="border border-gray-300 w-full px-2.5 py-1.5 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    value={filas[filaSeleccionada]?.properties?.[prop.name]?.value || 0}
+                    onChange={(e) => actualizarValor(filaSeleccionada, prop.name, Number(e.target.value))}
+                  />
+                ) : prop.type === "checkbox" ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      checked={filas[filaSeleccionada]?.properties?.[prop.name]?.value || false}
+                      onChange={(e) => actualizarValor(filaSeleccionada, prop.name, e.target.checked)}
+                    />
+                    <span className="text-sm text-gray-700">
+                      {filas[filaSeleccionada]?.properties?.[prop.name]?.value ? "Marcado" : "Sin marcar"}
+                    </span>
                   </div>
                 ) : prop.type === "select" ? (
-                  <>
+                  <div className="space-y-2">
                     <input
                       type="text"
-                      className="border w-full px-2 py-1 rounded mb-1"
+                      className="border border-gray-300 w-full px-2.5 py-1.5 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       value={filas[filaSeleccionada]?.properties?.[prop.name]?.value || ""}
                       onChange={(e) => actualizarValor(filaSeleccionada, prop.name, e.target.value)}
+                      placeholder="Valor del select"
                     />
-                    <input
-                      type="color"
-                      value={filas[filaSeleccionada]?.properties?.[prop.name]?.color || "#3b82f6"}
-                      onChange={(e) => {
-                        const nuevas = [...filas];
-                        nuevas[filaSeleccionada].properties[prop.name].color = e.target.value;
-                        setFilas(nuevas);
-                      }}
-                    />
-                    <label className="flex items-center gap-2 mt-1 text-xs">
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs text-gray-600">Color:</label>
                       <input
-                        type="checkbox"
-                        checked={prop.visible !== false}
+                        type="color"
+                        className="w-8 h-8 rounded border border-gray-300 cursor-pointer"
+                        value={filas[filaSeleccionada]?.properties?.[prop.name]?.color || "#3b82f6"}
                         onChange={(e) => {
-                          const nuevas = [...propiedades];
-                          nuevas[pi].visible = e.target.checked;
-                          setPropiedades(nuevas);
+                          const nuevas = [...filas];
+                          nuevas[filaSeleccionada].properties[prop.name].color = e.target.value;
+                          setFilas(nuevas);
                         }}
                       />
-                      <span>Visible en la tabla</span>
-                    </label>
-                  </>
+                    </div>
+                  </div>
                 ) : prop.type === "tags" ? (
-                  <div>
-                    <TagInputNotionLike
-                      value={filas[filaSeleccionada]?.properties?.[prop.name]?.value || []}
-                      onChange={(val) => actualizarValor(filaSeleccionada, prop.name, val)}
-                    />
-                    <label className="flex items-center gap-2 mt-1 text-xs">
-                      <input
-                        type="checkbox"
-                        checked={prop.visible !== false}
-                        onChange={(e) => {
-                          const nuevas = [...propiedades];
-                          nuevas[pi].visible = e.target.checked;
-                          setPropiedades(nuevas);
-                        }}
-                      />
-                      <span>Visible en la tabla</span>
-                    </label>
-                  </div>
+                  <TagInputNotionLike
+                    value={filas[filaSeleccionada]?.properties?.[prop.name]?.value || []}
+                    onChange={(val) => actualizarValor(filaSeleccionada, prop.name, val)}
+                  />
                 ) : (
-                  <div>
-                    <input
-                      type="text"
-                      className="border w-full px-2 py-1 rounded"
-                      value={filas[filaSeleccionada]?.properties?.[prop.name]?.value || ""}
-                      onChange={(e) => actualizarValor(filaSeleccionada, prop.name, e.target.value)}
-                    />
-                    <label className="flex items-center gap-2 mt-1 text-xs">
-                      <input
-                        type="checkbox"
-                        checked={prop.visible !== false}
-                        onChange={(e) => {
-                          const nuevas = [...propiedades];
-                          nuevas[pi].visible = e.target.checked;
-                          setPropiedades(nuevas);
-                        }}
-                      />
-                      <span>Visible en la tabla</span>
-                    </label>
-                  </div>
+                  <input
+                    type="text"
+                    className="border border-gray-300 w-full px-2.5 py-1.5 rounded text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    value={filas[filaSeleccionada]?.properties?.[prop.name]?.value || ""}
+                    onChange={(e) => actualizarValor(filaSeleccionada, prop.name, e.target.value)}
+                    placeholder="Escribe aquí..."
+                  />
                 )}
               </div>
             ))}
           </div>
           
           {/* Sección para agregar nueva propiedad */}
-          <div className="mt-8 border-t border-gray-200 pt-6">
-                <h3 className="font-semibold text-sm mb-3 text-gray-700">➕ Agregar propiedad</h3>
+          <div className="mt-6 border-t border-gray-200 pt-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-sm text-gray-900">➕ Agregar propiedad</h3>
+              <button
+                onClick={agregarPropiedad}
+                disabled={!nuevoCampo.name}
+                className="px-4 py-1.5 bg-green-600 text-white rounded text-sm hover:bg-green-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed font-medium"
+              >
+                Agregar
+              </button>
+            </div>
+            <div className="space-y-2.5">
+              <div>
                 <input
                   type="text"
                   placeholder="Nombre de la propiedad"
-                  className="border w-full px-2 py-1 mb-2 rounded"
+                  className="border border-gray-300 w-full px-2.5 py-1.5 rounded text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
                   value={nuevoCampo.name}
                   onChange={(e) => setNuevoCampo({ ...nuevoCampo, name: e.target.value })}
                 />
+              </div>
+              <div className="flex gap-2">
                 <select
                   value={nuevoCampo.type}
                   onChange={(e) => setNuevoCampo({ ...nuevoCampo, type: e.target.value })}
-                  className="border w-full px-2 py-1 mb-2 rounded"
+                  className="flex-1 border border-gray-300 px-2.5 py-1.5 rounded text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 >
                   {tipos.map((tipo) => (
                     <option key={tipo.value} value={tipo.value}>
@@ -2321,41 +2321,33 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                     </option>
                   ))}
                 </select>
-                
-                {/* Botón para abrir modal de fórmulas sugeridas si el tipo es "formula" */}
-                {nuevoCampo.type === "formula" && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPropiedadFormulaEditando(null);
-                      setEsNuevoCampo(true);
-                      setShowFormulaModal(true);
-                    }}
-                    className="w-full bg-blue-600 text-white px-3 py-2 rounded text-sm hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 mb-2"
-                  >
-                    💡 Ver fórmulas sugeridas
-                  </button>
-                )}
-                
-                <label className="flex items-center gap-2 mt-2 text-xs">
+                <label className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded text-xs text-gray-700 cursor-pointer hover:bg-gray-50 transition-colors">
                   <input
                     type="checkbox"
                     checked={nuevoCampo.visible !== false}
                     onChange={(e) => setNuevoCampo({ ...nuevoCampo, visible: e.target.checked })}
+                    className="w-3.5 h-3.5"
                   />
-                  <span>Visible en la tabla principal</span>
+                  <span>Visible</span>
                 </label>
-                <div className="text-xs text-gray-600 mb-2 p-2 bg-blue-50 rounded">
-                  <strong>💡 Tip:</strong> Usa "Fórmula" para crear campos calculados con funciones como:
-                  <code className="block mt-1 text-xs">prop("Campo"), if(), and(), empty(), format(), round(), etc.</code>
-                </div>
-                <button
-                  onClick={agregarPropiedad}
-                  className="bg-green-600 text-white px-3 py-1 rounded w-full"
-                >
-                  Agregar propiedad
-                </button>
               </div>
+              
+              {/* Botón para abrir modal de fórmulas sugeridas si el tipo es "formula" */}
+              {nuevoCampo.type === "formula" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPropiedadFormulaEditando(null);
+                    setEsNuevoCampo(true);
+                    setShowFormulaModal(true);
+                  }}
+                  className="w-full bg-blue-50 border border-blue-300 text-blue-700 px-3 py-1.5 rounded text-xs hover:bg-blue-100 transition-colors flex items-center justify-center gap-1.5 font-medium"
+                >
+                  💡 Ver fórmulas sugeridas
+                </button>
+              )}
+            </div>
+          </div>
          <EditorDescripcion
   content={filas[filaSeleccionada]?.descripcion || ""}
   onChange={(nuevoContenido) => {
@@ -2370,6 +2362,38 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
       </div>
     </>
   )}
+
+      {/* Modal para elegir cantidad de tareas de ejemplo */}
+      {showEjemploModal && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center">
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+            <h3 className="text-xl font-semibold mb-4">Agregar Plantilla con Ejemplos</h3>
+            <p className="text-gray-600 mb-6">
+              Se agregarán todas las columnas y fórmulas. ¿Cuántas tareas de ejemplo deseas crear?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => crearTareasEjemplo(1)}
+                className="flex-1 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors"
+              >
+                1 Tarea (Solo ejemplo)
+              </button>
+              <button
+                onClick={() => crearTareasEjemplo(6)}
+                className="flex-1 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition-colors"
+              >
+                6 Tareas (Demo completo)
+              </button>
+              <button
+                onClick={() => setShowEjemploModal(false)}
+                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de fórmulas sugeridas */}
       {showFormulaModal && (
