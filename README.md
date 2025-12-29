@@ -259,37 +259,38 @@ Este proyecto está basado en el componente `EditorNotionLike` del proyecto prin
 
 Las fórmulas del sprint son **generales** y se aplican a todas las filas de la grid. Estas fórmulas calculan días hábiles, horas disponibles y sobrecarga de trabajo basándose en las fechas y horas del sprint.
 
-### Columnas Base del Sprint (Debes Crearlas Manualmente)
+### Columnas Base del Sprint (Se Agregan Automáticamente con la Plantilla)
 
-Para que las fórmulas del sprint funcionen, necesitas crear estas columnas base:
+**✅ La plantilla de ejemplo agrega automáticamente todas estas columnas base con valores por defecto:**
 
-**1. Fecha Inicial del Sprint (Texto o Fecha)**
-- **Nombres válidos**: `Sprint Start Date`, `Fecha Inicial`, `Fecha Inicio`, `Start Date`, `Inicio Sprint`
-- **Tipo**: `text` o `date`
+**1. Sprint Start Date (Texto)**
+- **Valor por defecto**: Fecha actual (se calcula automáticamente cuando cargas la plantilla)
 - **Qué es**: Fecha de inicio del sprint
-- **Ejemplo**: `2025-12-26`
 - **Importante**: Esta fecha es la misma para todas las filas (general del sprint)
+- **Puedes cambiarla**: Edita el valor en cualquier fila y se aplicará a todas
 
-**2. Fecha Final del Sprint (Texto o Fecha)**
-- **Nombres válidos**: `Sprint End Date`, `Fecha Final`, `Fecha Fin`, `End Date`, `Fin Sprint`
-- **Tipo**: `text` o `date`
-- **Qué es**: Fecha de fin del sprint
-- **Ejemplo**: `2026-01-08`
+**2. Sprint End Date (Texto)**
+- **Valor por defecto**: 15 días hábiles después de la fecha actual (se calcula automáticamente)
+- **Qué es**: Fecha de fin del sprint (los sprints duran 15 días hábiles)
 - **Importante**: Esta fecha es la misma para todas las filas (general del sprint)
+- **Puedes cambiarla**: Edita el valor en cualquier fila y se aplicará a todas
 
-**3. Horas Diarias (Número)**
-- **Nombres válidos**: `Horas Diarias`, `Horas Diarias Sprint`, `Horas por Día`, `Daily Hours`
-- **Tipo**: `number`
+**3. Horas Diarias Sprint (Número)**
+- **Valor por defecto**: `8` (horas trabajadas por día hábil)
 - **Qué es**: Horas trabajadas por día hábil
-- **Ejemplo**: `8`
 - **Importante**: Este valor es el mismo para todas las filas (general del sprint)
+- **Puedes cambiarlo**: Edita el valor en cualquier fila y se aplicará a todas
 
-**4. Fecha Actual (Texto o Fecha)**
-- **Nombres válidos**: `Current Date`, `Fecha Actual`, `Hoy`
-- **Tipo**: `text` o `date`
-- **Qué es**: Fecha actual (se actualiza automáticamente o manualmente)
-- **Ejemplo**: `2025-12-20`
+**4. Current Date (Texto)**
+- **Valor por defecto**: Fecha actual (se calcula automáticamente cuando cargas la plantilla)
+- **Qué es**: Fecha actual del sprint
 - **Importante**: Esta fecha es la misma para todas las filas (general del sprint)
+- **Puedes actualizarla**: Cambia el valor cuando necesites actualizar la fecha actual
+
+**5. Objective (Número)**
+- **Valor por defecto**: `100` (objetivo por defecto para todas las tareas)
+- **Qué es**: Meta u objetivo total de la tarea
+- **Importante**: Este valor es individual por tarea, pero viene con 100 por defecto
 
 ### Fórmulas Calculadas Automáticamente
 
@@ -348,23 +349,28 @@ La función `calcularDiasHabiles(fechaInicio, fechaFin)` calcula los días hábi
 - Fecha fin: `2026-01-08` (miércoles)
 - Días hábiles: Cuenta del 26/12 (viernes) al 08/01 (miércoles), excluyendo sábados y domingos
 
-### Cómo Configurar el Sprint
+### Cómo Usar la Plantilla del Sprint
 
-1. **Crea las columnas base**:
-   - Agrega una columna tipo `text` llamada `Sprint Start Date` (o cualquier nombre válido)
-   - Agrega una columna tipo `text` llamada `Sprint End Date` (o cualquier nombre válido)
-   - Agrega una columna tipo `number` llamada `Horas Diarias` (o cualquier nombre válido)
-   - Agrega una columna tipo `text` llamada `Current Date` (o cualquier nombre válido)
+1. **Carga la plantilla de ejemplo**:
+   - Haz clic en el botón "🎯 Plantilla con Ejemplos" en la tabla
+   - Esto agregará automáticamente todas las columnas base del sprint con valores calculados:
+     - `Sprint Start Date`: Fecha actual (hoy)
+     - `Sprint End Date`: 15 días hábiles después de hoy (los sprints duran 15 días)
+     - `Horas Diarias Sprint`: `8` horas por día
+     - `Current Date`: Fecha actual (hoy)
+     - `Objective`: `100` (para todas las tareas)
 
-2. **Asigna valores generales** (los mismos para todas las filas):
-   - En `Sprint Start Date`: Ingresa la fecha de inicio del sprint (ej: `2025-12-26`)
-   - En `Sprint End Date`: Ingresa la fecha de fin del sprint (ej: `2026-01-08`)
-   - En `Horas Diarias`: Ingresa las horas trabajadas por día (ej: `8`)
-   - En `Current Date`: Ingresa la fecha actual (ej: `2025-12-20`)
-
-3. **Las fórmulas se crean automáticamente**:
-   - El sistema detecta las columnas base y crea automáticamente las fórmulas calculadas
+2. **Las fórmulas se crean automáticamente**:
+   - El sistema detecta las columnas base y crea automáticamente todas las fórmulas calculadas
    - No necesitas crear las fórmulas manualmente
+   - Las fórmulas incluyen: Dias Transcurridos, Dias Faltantes, Dias Totales Sprint, Horas Disponibles, Horas Totales Sprint, Sobrecarga
+
+3. **Personaliza los valores del sprint** (opcional):
+   - Edita `Sprint Start Date` con la fecha real de inicio de tu sprint
+   - Edita `Sprint End Date` con la fecha real de fin de tu sprint
+   - Edita `Horas Diarias Sprint` con las horas que trabajas por día
+   - Edita `Current Date` con la fecha actual (o déjala para actualizarla manualmente)
+   - **Nota**: Estos valores son generales y se aplican a todas las filas
 
 4. **Usa las fórmulas**:
    - `Horas Disponibles`: Te dice cuántas horas tienes disponibles hasta hoy
