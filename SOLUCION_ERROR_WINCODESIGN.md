@@ -54,3 +54,4 @@ Para verificar que el ejecutable funciona:
 2. Ejecuta `Notion Local Editor.exe`
 3. La aplicación debería abrirse correctamente
 
+

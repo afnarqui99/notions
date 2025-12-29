@@ -5,6 +5,168 @@ import EditorDescripcion from './EditorDescripcion';
 import { FormulaEvaluator, calcularTotal } from './FormulaEvaluator';
 import FormulaSuggestions from './FormulaSuggestions';
 import PropertyVisibilityModal from '../components/PropertyVisibilityModal';
+import LocalStorageService from '../services/LocalStorageService';
+
+// Componente auxiliar para cargar imagen desde filename
+function ImagenDesdeFilename({ fila, className, alt }) {
+  const [imagenUrl, setImagenUrl] = useState(null);
+  
+  useEffect(() => {
+    const cargarImagen = async () => {
+      if (fila.imageFilename || fila.image) {
+        try {
+          let filename = fila.imageFilename;
+          
+          // Si no hay imageFilename pero hay image, intentar extraerlo
+          if (!filename && fila.image) {
+            if (fila.image.startsWith('./files/')) {
+              filename = fila.image.replace('./files/', '');
+            } else if (fila.image.startsWith('blob:')) {
+              // Si es una URL blob antigua, no podemos cargarla
+              console.warn('⚠️ Imagen con URL blob sin filename. No se puede cargar.');
+              setImagenUrl(null);
+              return;
+            }
+          }
+          
+          // Si tenemos filename, cargar desde el archivo
+          if (filename) {
+            const url = await LocalStorageService.getFileURL(filename, 'files');
+            if (url) {
+              setImagenUrl(url);
+            } else {
+              setImagenUrl(null);
+            }
+          } else {
+            setImagenUrl(null);
+          }
+        } catch (error) {
+          console.error('Error cargando imagen:', error);
+          setImagenUrl(null);
+        }
+      } else {
+        setImagenUrl(null);
+      }
+    };
+    cargarImagen();
+  }, [fila.image, fila.imageFilename]);
+  
+  if (!imagenUrl) return null;
+  
+  return <img src={imagenUrl} alt={alt || fila.Name || "Sin nombre"} className={className} />;
+}
+
+// Componente para la celda de nombre con imagen
+function NombreCeldaConImagen({ fila, filaIndex, onSubirImagen, onEliminarImagen, onAbrirDrawer }) {
+  const [imagenUrl, setImagenUrl] = useState(null);
+  
+  useEffect(() => {
+    const cargarImagen = async () => {
+      if (fila.imageFilename || fila.image) {
+        try {
+          // Prioridad: usar imageFilename si está disponible
+          let filename = fila.imageFilename;
+          
+          // Si no hay imageFilename pero hay image, intentar extraerlo
+          if (!filename && fila.image) {
+            if (fila.image.startsWith('./files/')) {
+              filename = fila.image.replace('./files/', '');
+            } else if (fila.image.startsWith('blob:')) {
+              // Si es una URL blob antigua, no podemos cargarla
+              // Intentar usar imageFilename si existe
+              console.warn('⚠️ Imagen con URL blob sin filename. No se puede cargar.');
+              setImagenUrl(null);
+              return;
+            }
+          }
+          
+          // Si tenemos filename, cargar desde el archivo
+          if (filename) {
+            const url = await LocalStorageService.getFileURL(filename, 'files');
+            if (url) {
+              setImagenUrl(url);
+            } else {
+              setImagenUrl(null);
+            }
+          } else {
+            setImagenUrl(null);
+          }
+        } catch (error) {
+          console.error('Error cargando imagen:', error);
+          setImagenUrl(null);
+        }
+      } else {
+        setImagenUrl(null);
+      }
+    };
+    cargarImagen();
+  }, [fila.image, fila.imageFilename]);
+
+  return (
+    <td
+      className="font-semibold cursor-pointer sticky-name-cell"
+      style={{ 
+        minWidth: '250px', 
+        width: '250px', 
+        maxWidth: '250px', 
+        padding: '2px 8px', 
+        position: 'sticky', 
+        left: 0, 
+        zIndex: 10, 
+        backgroundColor: 'white',
+        boxShadow: '2px 0 4px rgba(0, 0, 0, 0.05)'
+      }}
+      onClick={(e) => {
+        if (!e.target.closest('input') && !e.target.closest('button') && !e.target.closest('.TagInputNotionLike') && !e.target.closest('.fila-imagen-container')) {
+          onAbrirDrawer(fila);
+        }
+      }}
+    >
+      <div className="flex items-center gap-1.5">
+        {/* Contenedor de imagen */}
+        <div className="fila-imagen-container flex-shrink-0 relative">
+          {imagenUrl ? (
+            <div className="relative group/image">
+              <img 
+                src={imagenUrl} 
+                alt={fila.Name || "Sin nombre"}
+                className="w-5 h-5 rounded object-cover border border-gray-200"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSubirImagen(filaIndex);
+                }}
+                style={{ cursor: 'pointer' }}
+                title="Clic para cambiar imagen"
+              />
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEliminarImagen(filaIndex);
+                }}
+                className="absolute -top-0.5 -right-0.5 bg-red-500 text-white rounded-full w-3 h-3 flex items-center justify-center text-[10px] opacity-0 group-hover/image:opacity-100 transition-opacity leading-none"
+                title="Eliminar imagen"
+              >
+                ×
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onSubirImagen(filaIndex);
+              }}
+              className="w-5 h-5 rounded border border-dashed border-gray-300 flex items-center justify-center text-gray-400 hover:border-gray-400 hover:text-gray-500 transition-colors"
+              title="Agregar imagen"
+            >
+              <span className="text-[10px]">🖼️</span>
+            </button>
+          )}
+        </div>
+        <span className="flex-1 min-w-0 truncate text-sm">{fila.Name || "Sin nombre"}</span>
+      </div>
+    </td>
+  );
+}
 
 const tipos = [
   { value: "text", label: "📝 Texto" },
@@ -21,7 +183,25 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
   const inicializarFilas = (filasData) => {
     if (!filasData || !Array.isArray(filasData)) return [];
     return filasData.map(fila => {
-      const nuevaFila = { ...fila };
+      const nuevaFila = { 
+        ...fila,
+        image: fila.image || null,
+        imageFilename: fila.imageFilename || null
+      };
+      
+      // Migración: Si hay una URL blob pero no hay filename, limpiar la imagen
+      // (las URLs blob no persisten después de recargar)
+      if (nuevaFila.image && nuevaFila.image.startsWith('blob:') && !nuevaFila.imageFilename) {
+        console.warn('⚠️ Imagen con URL blob sin filename detectada. Se limpiará.');
+        nuevaFila.image = null;
+        nuevaFila.imageFilename = null;
+      }
+      
+      // Asegurar que si hay imageFilename, también tengamos la referencia correcta en image
+      if (nuevaFila.imageFilename && !nuevaFila.image) {
+        nuevaFila.image = `./files/${nuevaFila.imageFilename}`;
+      }
+      
       if (nuevaFila.properties) {
         nuevaFila.properties = { ...nuevaFila.properties };
         // Asegurar que las propiedades de tipo formula tengan el campo formula
@@ -112,6 +292,8 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
   const agregarFila = () => {
     const nuevaFila = {
       Name: "Nueva tarea",
+      image: null, // Imagen de la fila (URL o filename)
+      imageFilename: null, // Nombre del archivo guardado
       properties: {},
     };
 
@@ -309,33 +491,72 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
       // Campos de estado y tags (ocultos inicialmente)
       { name: "Estado", type: "select", visible: false },
       { name: "Tags", type: "tags", visible: false },
+      { name: "tag", type: "tags", visible: false }, // Alias para tag
       { name: "Assign", type: "tags", visible: false },
       { name: "Done", type: "checkbox", visible: false },
       // Campos adicionales (ocultos inicialmente)
       { name: "Link", type: "text", visible: false },
       { name: "Retrospective", type: "text", visible: false },
       { name: "Video", type: "text", visible: false },
+      { name: "video", type: "text", visible: false }, // Alias para video
       { name: "Lambdas", type: "text", visible: false },
       { name: "NameRepo", type: "text", visible: false },
       { name: "Property", type: "text", visible: false },
       { name: "to", type: "text", visible: false },
+      // Campos de gestión ágil (nuevos)
+      { name: "area", type: "select", visible: false },
+      { name: "epica", type: "select", visible: false },
+      { name: "iteracion", type: "text", visible: false },
+      { name: "puntos de historia", type: "number", visible: false, totalizar: false },
+      { name: "release", type: "text", visible: false },
       // Campo oculto para cálculos
       { name: "Objective", type: "number", visible: false, totalizar: false },
     ];
 
-    // Crear propiedades
-    const nuevasPropiedades = plantillaCampos.map(campo => ({
-      name: campo.name,
-      type: campo.type,
-      visible: campo.visible !== undefined ? campo.visible : true,
-      totalizar: campo.totalizar,
-      formula: campo.formula || undefined
-    }));
+    // Agregar solo los campos que no existen, preservando los existentes y sus fórmulas
+    const camposExistentes = propiedades.map(p => p.name);
+    const nuevosCampos = plantillaCampos.filter(campo => !camposExistentes.includes(campo.name));
+    
+    // Crear nuevas propiedades preservando las existentes
+    const nuevasPropiedades = [...propiedades];
+    
+    // Agregar solo los nuevos campos
+    nuevosCampos.forEach(campo => {
+      nuevasPropiedades.push({
+        name: campo.name,
+        type: campo.type,
+        visible: campo.visible !== undefined ? campo.visible : true,
+        totalizar: campo.totalizar,
+        formula: campo.formula || undefined
+      });
+    });
 
     setPropiedades(nuevasPropiedades);
+    
+    // Si hay nuevos campos, agregarlos también a las filas existentes
+    if (nuevosCampos.length > 0) {
+      const nuevasFilas = filas.map((fila) => {
+        const nuevasProperties = { ...fila.properties };
+        nuevosCampos.forEach(campo => {
+          nuevasProperties[campo.name] = {
+            type: campo.type,
+            value: campo.type === "checkbox" ? false : campo.type === "tags" ? [] : campo.type === "formula" ? "" : "",
+            color: campo.type === "select" ? "#3b82f6" : undefined,
+            formula: campo.formula || undefined,
+          };
+        });
+        return {
+          ...fila,
+          properties: nuevasProperties,
+        };
+      });
+      setFilas(nuevasFilas);
+    }
 
-    // Crear tareas de ejemplo con todos los campos
-    const tareasEjemplo = [
+    // Solo crear filas de ejemplo si no hay filas existentes
+    if (filas.length === 0) {
+      // Crear tareas de ejemplo con todos los campos
+      const tareasEjemplo = [
       { nombre: "Diseño de UI/UX", progress: 80, objective: 100, timeSpent: 12, timeEstimated: 16, daysWorked: 2, startDate: "2025-12-26", endDate: "2025-12-30", tasksCompleted: 4, totalTasks: 5, daysElapsed: 2, estado: "En progreso", priority: "Alta", type: "Tarea", tags: ["Frontend", "Diseño"], assign: [], done: false, created: hoy, expirationDate: "", link: "", retrospective: "", video: "", lambdas: "", nameRepo: "", property: "", to: "" },
       { nombre: "Implementación API Backend", progress: 60, objective: 100, timeSpent: 20, timeEstimated: 32, daysWorked: 3, startDate: "2025-12-26", endDate: "2026-01-02", tasksCompleted: 6, totalTasks: 10, daysElapsed: 3, estado: "En progreso", priority: "Alta", type: "Tarea", tags: ["Backend", "API"], assign: [], done: false, created: hoy, expirationDate: "", link: "", retrospective: "", video: "", lambdas: "", nameRepo: "", property: "", to: "" },
       { nombre: "Integración Base de Datos", progress: 40, objective: 100, timeSpent: 8, timeEstimated: 24, daysWorked: 1, startDate: "2025-12-27", endDate: "2026-01-03", tasksCompleted: 2, totalTasks: 5, daysElapsed: 1, estado: "En progreso", priority: "Media", type: "Tarea", tags: ["Database", "Backend"], assign: [], done: false, created: hoy, expirationDate: "", link: "", retrospective: "", video: "", lambdas: "", nameRepo: "", property: "", to: "" },
@@ -421,6 +642,22 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
           properties[campo.name] = { type: "text", value: tarea.property || "" };
         } else if (campo.name === "to") {
           properties[campo.name] = { type: "text", value: tarea.to || "" };
+        } else if (campo.name === "tag") {
+          // Alias para Tags
+          properties[campo.name] = { type: "tags", value: tarea.tags.map(tag => ({ label: tag, value: tag })) };
+        } else if (campo.name === "video") {
+          // Alias para Video
+          properties[campo.name] = { type: "text", value: tarea.video || "" };
+        } else if (campo.name === "area") {
+          properties[campo.name] = { type: "select", value: tarea.area || "", color: "#3b82f6" };
+        } else if (campo.name === "epica") {
+          properties[campo.name] = { type: "select", value: tarea.epica || "", color: "#3b82f6" };
+        } else if (campo.name === "iteracion") {
+          properties[campo.name] = { type: "text", value: tarea.iteracion || "" };
+        } else if (campo.name === "puntos de historia") {
+          properties[campo.name] = { type: "number", value: tarea.puntosHistoria || 0 };
+        } else if (campo.name === "release") {
+          properties[campo.name] = { type: "text", value: tarea.release || "" };
         } else {
           properties[campo.name] = {
             type: campo.type,
@@ -435,7 +672,28 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
       };
     });
 
-    setFilas(nuevasFilas);
+      setFilas(nuevasFilas);
+    } else {
+      // Si ya hay filas, solo agregar los nuevos campos a las filas existentes
+      const filasActualizadas = filas.map(fila => {
+        const nuevasProperties = { ...fila.properties };
+        nuevosCampos.forEach(campo => {
+          if (!nuevasProperties[campo.name]) {
+            nuevasProperties[campo.name] = {
+              type: campo.type,
+              value: campo.type === "checkbox" ? false : campo.type === "tags" ? [] : campo.type === "formula" ? "" : "",
+              color: campo.type === "select" ? "#3b82f6" : undefined,
+              formula: campo.formula || undefined,
+            };
+          }
+        });
+        return {
+          ...fila,
+          properties: nuevasProperties
+        };
+      });
+      setFilas(filasActualizadas);
+    }
     // Guardar información del sprint para mostrarla después
     setSprintInfo({
       tareas: tareasEjemplo.length,
@@ -504,6 +762,25 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
 
   // Función para eliminar una columna completa
   const eliminarColumna = (nombreColumna) => {
+    // Verificar si el campo es usado en alguna fórmula
+    const camposUsadosEnFormulas = [];
+    propiedades.forEach(prop => {
+      if (prop.type === "formula" && prop.formula) {
+        // Buscar referencias a la columna en las fórmulas
+        const regex = new RegExp(`prop\\(["']${nombreColumna}["']\\)`, 'gi');
+        if (regex.test(prop.formula)) {
+          camposUsadosEnFormulas.push(prop.name);
+        }
+      }
+    });
+    
+    if (camposUsadosEnFormulas.length > 0) {
+      alert(`⚠️ No se puede eliminar "${nombreColumna}" porque es usado en las siguientes fórmulas:\n${camposUsadosEnFormulas.join(', ')}\n\nPor favor, elimina o modifica estas fórmulas primero.`);
+      setShowDeleteColumnModal(false);
+      setColumnaAEliminar(null);
+      return;
+    }
+    
     const nuevasPropiedades = propiedades.filter(p => p.name !== nombreColumna);
     setPropiedades(nuevasPropiedades);
     
@@ -532,6 +809,42 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
       cerrarDrawer();
     }
   };
+
+  // Función para subir imagen de fila
+  const subirImagenFila = async (filaIndex) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = async () => {
+      if (!input.files?.[0]) return;
+      
+      try {
+        const file = input.files[0];
+        const filename = `${Date.now()}-${file.name}`;
+        await LocalStorageService.saveBinaryFile(filename, file, 'files');
+        
+        // Guardar solo la referencia del archivo, no la URL blob
+        // Similar a como se hace en LocalEditor.jsx
+        const nuevas = [...filas];
+        nuevas[filaIndex].image = `./files/${filename}`;  // Guardar como referencia de archivo
+        nuevas[filaIndex].imageFilename = filename;        // Guardar el nombre del archivo
+        setFilas(nuevas);
+      } catch (error) {
+        console.error("Error subiendo imagen:", error);
+        alert("No se pudo subir la imagen. Verifica que tengas una carpeta configurada.");
+      }
+    };
+    input.click();
+  };
+
+  // Función para eliminar imagen de fila
+  const eliminarImagenFila = (filaIndex) => {
+    const nuevas = [...filas];
+    nuevas[filaIndex].image = null;
+    nuevas[filaIndex].imageFilename = null;
+    setFilas(nuevas);
+  };
+
 
   // Función para toggle de visibilidad de propiedad
   const togglePropertyVisibility = (nombrePropiedad) => {
@@ -820,30 +1133,6 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                   <span>Estadísticas del Sprint</span>
                 </button>
               )}
-              {filasOrdenadas.length > 0 && (
-                <div className="border-t my-1">
-                  <div className="px-4 py-2 text-xs text-gray-500 font-semibold">
-                    Eliminar Filas
-                  </div>
-                  {filasOrdenadas.map((fila, index) => {
-                    const filaIndexOriginal = filas.findIndex(f => f === fila);
-                    return (
-                      <button
-                        key={filaIndexOriginal}
-                        onClick={() => {
-                          setFilaAEliminar(filaIndexOriginal);
-                          setShowDeleteRowModal(true);
-                          setShowMenuConfig(false);
-                        }}
-                        className="w-full text-left px-4 py-2 hover:bg-red-50 hover:text-red-600 flex items-center gap-2 text-sm"
-                      >
-                        <span>🗑️</span>
-                        <span className="truncate">{fila.Name || "Sin nombre"}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
               {propiedadesVisibles.length > 0 && (
                 <div className="border-t my-1">
                   <div className="px-4 py-2 text-xs text-gray-500 font-semibold">
@@ -962,12 +1251,15 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
         <table className={usarAnchoCompleto ? 'w-full' : ''}>
           <thead>
             <tr>
-              <th className="cursor-pointer" onClick={() => toggleSort("Name")} style={{ minWidth: '120px', maxWidth: '200px' }}>
+              <th className="cursor-pointer sticky left-0 z-20 bg-inherit" onClick={() => toggleSort("Name")} style={{ minWidth: '250px', width: '250px', maxWidth: '250px' }}>
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs opacity-60">Aa</span>
                   <span>Nombre</span>
                   {sortBy === "Name" && <span className="text-[10px] opacity-60">{sortAsc ? "↑" : "↓"}</span>}
                 </div>
+              </th>
+              <th style={{ minWidth: '40px', maxWidth: '40px', width: '40px' }} className="text-center">
+                <span className="text-xs opacity-60">⋯</span>
               </th>
               {propiedadesVisibles.map((p, idx) => {
                 // Dividir el nombre en palabras
@@ -975,24 +1267,42 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                 const tieneDosPalabras = palabras.length === 2;
                 const tieneMasPalabras = palabras.length > 2;
                 
-                // Calcular ancho mínimo basado en el tipo y número de palabras
-                let minWidth = '70px';
-                if (p.type === "number" || p.type === "percent") minWidth = '65px';
-                else if (p.type === "formula") minWidth = '75px';
-                else if (p.type === "tags") minWidth = '120px';
-                else if (tieneDosPalabras) minWidth = '70px';
-                else if (tieneMasPalabras) minWidth = '80px';
-                else if (p.type === "checkbox") minWidth = '50px';
-                else if (p.type === "select") minWidth = '80px';
+                // Anchos fijos por tipo de campo para asegurar visibilidad
+                let minWidth = '150px'; // Ancho fijo por defecto
+                let width = '150px';
                 
-                // Determinar cómo dividir el texto
+                if (p.type === "checkbox") {
+                  minWidth = '50px';
+                  width = '50px';
+                } else if (p.type === "number" || p.type === "percent") {
+                  minWidth = '120px';
+                  width = '120px';
+                } else if (p.type === "formula") {
+                  minWidth = '130px';
+                  width = '130px';
+                } else if (p.type === "tags") {
+                  minWidth = '180px';
+                  width = '180px';
+                } else if (p.type === "select") {
+                  minWidth = '140px';
+                  width = '140px';
+                } else {
+                  // Para texto, ancho fijo generoso
+                  minWidth = '150px';
+                  width = '150px';
+                }
+                
+                // Mostrar el texto completo en una sola línea si el nombre es corto
+                // Solo dividir si el nombre es muy largo (más de 15 caracteres)
+                const nombreLargo = p.name.length > 15;
                 let textoSuperior = p.name;
                 let textoInferior = '';
-                if (tieneDosPalabras) {
+                
+                if (nombreLargo && tieneDosPalabras) {
                   textoSuperior = palabras[0];
                   textoInferior = palabras[1];
-                } else if (tieneMasPalabras) {
-                  // Dividir por la mitad aproximada
+                } else if (nombreLargo && tieneMasPalabras) {
+                  // Dividir por la mitad aproximada solo si es muy largo
                   const mitad = Math.ceil(palabras.length / 2);
                   textoSuperior = palabras.slice(0, mitad).join(' ');
                   textoInferior = palabras.slice(mitad).join(' ');
@@ -1003,12 +1313,12 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                   key={idx}
                   className="cursor-pointer"
                   onClick={() => toggleSort(p.name)}
-                  style={{ minWidth }}
+                  style={{ minWidth, width, maxWidth: width, whiteSpace: 'nowrap', padding: '2px 10px', overflow: 'visible' }}
                   title={p.name}
                 >
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5" style={{ minWidth: 'fit-content' }}>
                     {/* Icono según el tipo */}
-                    <span className="text-xs opacity-60">
+                    <span className="text-xs opacity-60 flex-shrink-0">
                       {p.type === "text" && "Aa"}
                       {p.type === "number" && "#"}
                       {p.type === "percent" && "%"}
@@ -1017,15 +1327,15 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                       {p.type === "tags" && "🏷"}
                       {p.type === "formula" && "="}
                     </span>
-                    {tieneDosPalabras || tieneMasPalabras ? (
+                    {nombreLargo && (tieneDosPalabras || tieneMasPalabras) ? (
                       <div className="flex flex-col items-start gap-0.5">
-                        <span className="text-xs leading-tight">{textoSuperior}</span>
-                        <span className="text-xs leading-tight">{textoInferior}</span>
+                        <span className="text-xs leading-tight whitespace-nowrap">{textoSuperior}</span>
+                        <span className="text-xs leading-tight whitespace-nowrap">{textoInferior}</span>
                       </div>
                     ) : (
-                      <span className="text-xs leading-tight">{p.name}</span>
+                      <span className="text-xs leading-tight whitespace-nowrap">{p.name}</span>
                     )}
-                    {sortBy === p.name && <span className="text-[10px] opacity-60">{sortAsc ? "↑" : "↓"}</span>}
+                    {sortBy === p.name && <span className="text-[10px] opacity-60 flex-shrink-0">{sortAsc ? "↑" : "↓"}</span>}
                   </div>
                 </th>
                 );
@@ -1033,21 +1343,37 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
             </tr>
           </thead>
           <tbody>
-            {!tablaColapsada && filasOrdenadas.map((fila, fi) => (
+            {!tablaColapsada && filasOrdenadas.map((fila, fi) => {
+              const filaIndexOriginal = filas.findIndex(f => f === fila);
+              
+              return (
               <tr 
                 key={fi} 
-                className="hover:bg-gray-50"
+                className="hover:bg-gray-50 group"
               >
-                <td
-                  className="font-semibold cursor-pointer"
-                  style={{ minWidth: '120px', maxWidth: '200px', padding: '2px 6px' }}
-                  onClick={(e) => {
-                    if (!e.target.closest('input') && !e.target.closest('button') && !e.target.closest('.TagInputNotionLike')) {
-                      abrirDrawer(fila);
-                    }
-                  }}
+                <NombreCeldaConImagen
+                  fila={fila}
+                  filaIndex={filaIndexOriginal}
+                  onSubirImagen={subirImagenFila}
+                  onEliminarImagen={eliminarImagenFila}
+                  onAbrirDrawer={abrirDrawer}
+                />
+                {/* Columna de acciones (eliminar) */}
+                <td 
+                  style={{ padding: '2px 4px', width: '40px' }}
+                  className="text-center"
                 >
-                  {fila.Name || "Sin nombre"}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setFilaAEliminar(filaIndexOriginal);
+                      setShowDeleteRowModal(true);
+                    }}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-red-500 p-1 rounded hover:bg-red-50"
+                    title="Eliminar fila"
+                  >
+                    🗑️
+                  </button>
                 </td>
 
                 {propiedadesVisibles.map((prop, pi) => {
@@ -1062,7 +1388,18 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                       : String(fila.properties?.[prop.name]?.value || "");
                     
                     return (
-                    <td key={pi} style={{ padding: '2px 6px', maxWidth: '150px', overflow: 'hidden' }}>
+                    <td 
+                      key={pi} 
+                      className={prop.type === "tags" ? "tags-cell" : ""}
+                      style={{ 
+                        padding: '2px 8px', 
+                        overflow: prop.type === "tags" ? 'visible' : 'hidden',
+                        whiteSpace: prop.type === "checkbox" ? 'nowrap' : (prop.type === "tags" ? 'normal' : 'nowrap'),
+                        width: prop.type === "checkbox" ? '50px' : (prop.type === "number" || prop.type === "percent" ? '120px' : prop.type === "formula" ? '130px' : prop.type === "tags" ? '180px' : prop.type === "select" ? '140px' : '150px'),
+                        minWidth: prop.type === "checkbox" ? '50px' : (prop.type === "number" || prop.type === "percent" ? '120px' : prop.type === "formula" ? '130px' : prop.type === "tags" ? '180px' : prop.type === "select" ? '140px' : '150px'),
+                        maxWidth: prop.type === "checkbox" ? '50px' : (prop.type === "number" || prop.type === "percent" ? '120px' : prop.type === "formula" ? '130px' : prop.type === "tags" ? '180px' : prop.type === "select" ? '140px' : '150px')
+                      }}
+                    >
                       <div className="relative">
                         {prop.type === "formula" ? (
                           <div 
@@ -1111,25 +1448,11 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                         </span>
                       </div>
                     ) : prop.type === "tags" ? (
-                          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                            <div className="flex-1 min-w-0">
+                          <div className="w-full" onClick={(e) => e.stopPropagation()}>
                           <TagInputNotionLike
                             value={fila.properties?.[prop.name]?.value || []}
                             onChange={(val) => actualizarValor(fi, prop.name, val)}
                           />
-                        </div>
-                        <button
-                          title="Copiar tags"
-                              className="p-1 rounded hover:bg-gray-200 flex-shrink-0 transition-colors opacity-0 group-hover:opacity-100"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                            const tagsArr = fila.properties?.[prop.name]?.value || [];
-                            const tags = tagsArr.map(tag => tag.label || tag.value || tag).join(", ");
-                            navigator.clipboard.writeText(tags);
-                          }}
-                        >
-                              <span role="img" aria-label="copiar" className="text-xs">📋</span>
-                        </button>
                       </div>
                     ) : (
                       <input
@@ -1146,11 +1469,12 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                     );
                   })}
               </tr>
-            ))}
+            );
+            })}
             {/* Mensaje cuando la tabla está colapsada */}
             {tablaColapsada && (
               <tr>
-                <td colSpan={propiedadesVisibles.length + 1} className="text-center py-8 text-gray-500">
+                <td colSpan={propiedadesVisibles.length + 2} className="text-center py-8 text-gray-500">
                   <div className="flex flex-col items-center gap-2">
                     <span>Tabla colapsada - Haz clic en "🔽 Expandir Tabla" para ver las filas</span>
                   </div>
@@ -1160,7 +1484,7 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
             {/* Mensaje si no hay filas */}
             {filasOrdenadas.length === 0 && (
               <tr>
-                <td colSpan={propiedadesVisibles.length + 1} className="text-center py-8 text-gray-500">
+                <td colSpan={propiedadesVisibles.length + 2} className="text-center py-8 text-gray-500">
                   <div className="flex flex-col items-center gap-2">
                     <span>No hay filas en la tabla</span>
                     <button 
@@ -1176,11 +1500,12 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
             {/* Fila de totales - Siempre visible */}
             {filasOrdenadas.length > 0 && propiedadesVisibles.some(p => p.totalizar && (p.type === "number" || p.type === "percent")) && (
               <tr className="bg-gray-200 font-bold border-t-2 border-gray-400">
-                <td style={{ minWidth: '120px', maxWidth: '200px', padding: '8px' }} className="font-bold">
+                <td style={{ minWidth: '250px', width: '250px', maxWidth: '250px', padding: '2px 8px', position: 'sticky', left: 0, zIndex: 10, backgroundColor: '#e5e7eb' }} className="font-bold">
                   📊 Total
                 </td>
+                <td style={{ padding: '2px 4px', width: '40px' }}></td>
                 {propiedadesVisibles.map((prop, pi) => (
-                  <td key={pi} className="text-right" style={{ padding: '8px' }}>
+                  <td key={pi} className="text-right" style={{ padding: '2px 4px' }}>
                     {prop.totalizar && (prop.type === "number" || prop.type === "percent") ? (
                       prop.type === "percent" ? (
                         `${calcularTotal(filasOrdenadas, prop.name).toFixed(2)}%`
@@ -1202,12 +1527,20 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
       {/* Vista móvil - Tarjetas */}
       {tipoVista === 'table' && (
         <div className="md:hidden space-y-3 notion-table-mobile">
-        {filasOrdenadas.map((fila, fi) => (
+        {filasOrdenadas.map((fila, fi) => {
+          const filaIndexOriginal = filas.findIndex(f => f === fila);
+          return (
           <div key={fi} className="notion-table-card">
             <div 
-              className="notion-table-card-title"
+              className="notion-table-card-title flex items-center gap-2"
               onClick={() => abrirDrawer(fila)}
             >
+              {fila.imageFilename && (
+                <ImagenDesdeFilename 
+                  fila={fila} 
+                  className="w-6 h-6 rounded object-cover border border-gray-200"
+                />
+              )}
               {fila.Name}
             </div>
             
@@ -1306,16 +1639,26 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
               ))}
             </div>
             
-            <div className="mt-3 pt-3 border-t border-gray-200">
+            <div className="mt-3 pt-3 border-t border-gray-200 flex gap-2">
               <button
                 onClick={() => abrirDrawer(fila)}
-                className="notion-table-card-edit-button"
+                className="notion-table-card-edit-button flex-1"
               >
                 ✏️ Editar detalles
               </button>
+              <button
+                onClick={() => {
+                  setFilaAEliminar(filaIndexOriginal);
+                  setShowDeleteRowModal(true);
+                }}
+                className="px-3 py-1 bg-red-50 text-red-600 rounded hover:bg-red-100 transition-colors"
+              >
+                🗑️ Eliminar
+              </button>
             </div>
           </div>
-        ))}
+        );
+        })}
       </div>
       )}
 
@@ -1341,6 +1684,41 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                 setFilas(nuevas);
               }}
             />
+          </div>
+          
+          <div className="mb-4">
+            <label className="block text-xs text-gray-600 mb-1">Imagen</label>
+            <div className="flex items-center gap-3">
+              {filas[filaSeleccionada].imageFilename || filas[filaSeleccionada].image ? (
+                <div className="relative">
+                  <ImagenDesdeFilename 
+                    fila={filas[filaSeleccionada]} 
+                    className="w-16 h-16 rounded object-cover border border-gray-200"
+                  />
+                  <button
+                    onClick={() => eliminarImagenFila(filaSeleccionada)}
+                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm hover:bg-red-600"
+                    title="Eliminar imagen"
+                  >
+                    ×
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => subirImagenFila(filaSeleccionada)}
+                  className="w-16 h-16 rounded border border-dashed border-gray-300 flex items-center justify-center text-gray-400 hover:border-gray-400 hover:text-gray-500 transition-colors"
+                  title="Agregar imagen"
+                >
+                  <span className="text-xl">🖼️</span>
+                </button>
+              )}
+              <button
+                onClick={() => subirImagenFila(filaSeleccionada)}
+                className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm"
+              >
+                {filas[filaSeleccionada].image ? 'Cambiar imagen' : 'Agregar imagen'}
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">

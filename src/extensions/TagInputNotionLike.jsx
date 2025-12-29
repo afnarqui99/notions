@@ -1,7 +1,7 @@
 // TagInputNotionLike.jsx
 import { useState } from 'react';
 
-export default function TagInputNotionLike({ value = [], onChange }) {
+export default function TagInputNotionLike({ value = [], onChange, compact = false }) {
   const [inputValue, setInputValue] = useState('');
 
   const handleKeyDown = (e) => {
@@ -28,44 +28,75 @@ export default function TagInputNotionLike({ value = [], onChange }) {
     onChange(updated);
   };
 
-  return (
-    <div 
-      className="flex items-center gap-1 px-0 py-0 overflow-x-auto overflow-y-hidden flex-nowrap" 
-      style={{ 
-        maxHeight: '20px',
-        minHeight: '18px',
-        height: 'auto'
-      }}
-    >
-      <div className="flex items-center gap-1 flex-nowrap flex-shrink-0 h-full">
-        {value.map((tag, idx) => (
+  // Si está en modo compacto (solo mostrar, no editar), mostrar solo los primeros tags
+  if (compact && value.length > 0) {
+    const tagsToShow = value.slice(0, 2);
+    const remainingCount = value.length - tagsToShow.length;
+    
+    return (
+      <div className="flex items-center gap-1 flex-wrap">
+        {tagsToShow.map((tag, idx) => (
           <div
             key={idx}
-            className="flex items-center gap-1 text-xs px-1.5 py-0 rounded flex-shrink-0 whitespace-nowrap"
+            className="flex items-center text-xs px-1.5 py-0.5 rounded flex-shrink-0 whitespace-nowrap"
             style={{ 
               backgroundColor: tag.color || 'rgba(206, 205, 202, 0.3)',
               color: tag.color ? 'white' : 'rgb(55, 53, 47)',
-              height: '16px',
+              height: '18px',
               lineHeight: '1.2',
-              fontSize: '0.75rem'
+              fontSize: '0.7rem',
+              fontWeight: 400
             }}
           >
             <span className="leading-tight">{tag.label || tag.value || tag}</span>
           </div>
         ))}
+        {remainingCount > 0 && (
+          <span className="text-xs text-gray-500" style={{ fontSize: '0.7rem' }}>
+            +{remainingCount}
+          </span>
+        )}
       </div>
+    );
+  }
+
+  return (
+    <div 
+      className="flex items-center gap-1 flex-wrap" 
+      style={{ 
+        minHeight: '18px',
+        maxHeight: 'none'
+      }}
+    >
+      {value.map((tag, idx) => (
+        <div
+          key={idx}
+          className="flex items-center text-xs px-1.5 py-0.5 rounded flex-shrink-0 whitespace-nowrap"
+          style={{ 
+            backgroundColor: tag.color || 'rgba(206, 205, 202, 0.3)',
+            color: tag.color ? 'white' : 'rgb(55, 53, 47)',
+            height: '18px',
+            lineHeight: '1.2',
+            fontSize: '0.7rem',
+            fontWeight: 400
+          }}
+        >
+          <span className="leading-tight">{tag.label || tag.value || tag}</span>
+        </div>
+      ))}
       <input
         type="text"
         value={inputValue}
         onChange={(e) => setInputValue(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="+"
-        className="min-w-[16px] max-w-[60px] border-none outline-none text-xs flex-shrink-0 bg-transparent"
+        placeholder={value.length === 0 ? "+" : ""}
+        className="min-w-[16px] max-w-[80px] border-none outline-none text-xs flex-shrink-0 bg-transparent"
         onClick={(e) => e.stopPropagation()}
         style={{ 
-          padding: '1px 3px',
-          height: '16px',
-          color: 'rgba(55, 53, 47, 0.5)'
+          padding: '2px 4px',
+          height: '18px',
+          color: 'rgba(55, 53, 47, 0.4)',
+          fontSize: '0.7rem'
         }}
       />
     </div>
