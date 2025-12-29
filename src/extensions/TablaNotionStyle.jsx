@@ -10,9 +10,17 @@ import LocalStorageService from '../services/LocalStorageService';
 // Componente auxiliar para cargar imagen desde filename
 function ImagenDesdeFilename({ fila, className, alt }) {
   const [imagenUrl, setImagenUrl] = useState(null);
+  const [esIconoPredefinido, setEsIconoPredefinido] = useState(false);
   
   useEffect(() => {
     const cargarImagen = async () => {
+      // Si es un icono predefinido (empezando con icon-), mostrar el emoji directamente
+      if (fila.imageFilename && fila.imageFilename.startsWith('icon-')) {
+        setEsIconoPredefinido(true);
+        setImagenUrl(fila.image); // El emoji está en fila.image
+        return;
+      }
+      
       if (fila.imageFilename || fila.image) {
         try {
           let filename = fila.imageFilename;
@@ -34,6 +42,7 @@ function ImagenDesdeFilename({ fila, className, alt }) {
             const url = await LocalStorageService.getFileURL(filename, 'files');
             if (url) {
               setImagenUrl(url);
+              setEsIconoPredefinido(false);
             } else {
               setImagenUrl(null);
             }
@@ -46,12 +55,21 @@ function ImagenDesdeFilename({ fila, className, alt }) {
         }
       } else {
         setImagenUrl(null);
+        setEsIconoPredefinido(false);
       }
     };
     cargarImagen();
   }, [fila.image, fila.imageFilename]);
   
-  if (!imagenUrl) return null;
+  if (!imagenUrl && !esIconoPredefinido) return null;
+  
+  if (esIconoPredefinido) {
+    return (
+      <div className={className} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <span className="text-lg">{imagenUrl}</span>
+      </div>
+    );
+  }
   
   return <img src={imagenUrl} alt={alt || fila.Name || "Sin nombre"} className={className} />;
 }
@@ -59,9 +77,17 @@ function ImagenDesdeFilename({ fila, className, alt }) {
 // Componente para la celda de nombre con imagen
 function NombreCeldaConImagen({ fila, filaIndex, onSubirImagen, onEliminarImagen, onAbrirDrawer }) {
   const [imagenUrl, setImagenUrl] = useState(null);
+  const [esIconoPredefinido, setEsIconoPredefinido] = useState(false);
   
   useEffect(() => {
     const cargarImagen = async () => {
+      // Si es un icono predefinido (empezando con icon-), mostrar el emoji directamente
+      if (fila.imageFilename && fila.imageFilename.startsWith('icon-')) {
+        setEsIconoPredefinido(true);
+        setImagenUrl(fila.image); // El emoji o SVG está en fila.image
+        return;
+      }
+      
       if (fila.imageFilename || fila.image) {
         try {
           // Prioridad: usar imageFilename si está disponible
@@ -85,6 +111,7 @@ function NombreCeldaConImagen({ fila, filaIndex, onSubirImagen, onEliminarImagen
             const url = await LocalStorageService.getFileURL(filename, 'files');
             if (url) {
               setImagenUrl(url);
+              setEsIconoPredefinido(false);
             } else {
               setImagenUrl(null);
             }
@@ -97,6 +124,7 @@ function NombreCeldaConImagen({ fila, filaIndex, onSubirImagen, onEliminarImagen
         }
       } else {
         setImagenUrl(null);
+        setEsIconoPredefinido(false);
       }
     };
     cargarImagen();
@@ -127,17 +155,31 @@ function NombreCeldaConImagen({ fila, filaIndex, onSubirImagen, onEliminarImagen
         <div className="fila-imagen-container flex-shrink-0 relative">
           {imagenUrl ? (
             <div className="relative group/image">
-              <img 
-                src={imagenUrl} 
-                alt={fila.Name || "Sin nombre"}
-                className="w-5 h-5 rounded object-cover border border-gray-200"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSubirImagen(filaIndex);
-                }}
-                style={{ cursor: 'pointer' }}
-                title="Clic para cambiar imagen"
-              />
+              {esIconoPredefinido ? (
+                <div
+                  className="w-5 h-5 rounded flex items-center justify-center text-xs border border-gray-200 bg-white"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSubirImagen(filaIndex);
+                  }}
+                  style={{ cursor: 'pointer' }}
+                  title="Clic para cambiar icono"
+                >
+                  {imagenUrl}
+                </div>
+              ) : (
+                <img 
+                  src={imagenUrl} 
+                  alt={fila.Name || "Sin nombre"}
+                  className="w-5 h-5 rounded object-cover border border-gray-200"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSubirImagen(filaIndex);
+                  }}
+                  style={{ cursor: 'pointer' }}
+                  title="Clic para cambiar imagen"
+                />
+              )}
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -156,7 +198,7 @@ function NombreCeldaConImagen({ fila, filaIndex, onSubirImagen, onEliminarImagen
                 onSubirImagen(filaIndex);
               }}
               className="w-5 h-5 rounded border border-dashed border-gray-300 flex items-center justify-center text-gray-400 hover:border-gray-400 hover:text-gray-500 transition-colors"
-              title="Agregar imagen"
+              title="Agregar imagen o icono"
             >
               <span className="text-[10px]">🖼️</span>
             </button>
@@ -246,6 +288,10 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
   const [showEjemploModal, setShowEjemploModal] = useState(false);
   const [tagsEditando, setTagsEditando] = useState({ filaIndex: null, propName: null, tags: [] });
   const [showTagsModal, setShowTagsModal] = useState(false);
+  const [showIconPickerModal, setShowIconPickerModal] = useState(false);
+  const [filaIndexParaIcono, setFilaIndexParaIcono] = useState(null);
+  const [showColumnasSugeridasModal, setShowColumnasSugeridasModal] = useState(false);
+  const [columnasSeleccionadas, setColumnasSeleccionadas] = useState([]);
   
   // Estado para controlar si la tabla usa todo el ancho
   const [usarAnchoCompleto, setUsarAnchoCompleto] = useState(() => {
@@ -352,6 +398,145 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
     setShowDrawer(false);
     setFilaSeleccionada(null);
     setDrawerExpandido(false); // Resetear el estado de expansión al cerrar
+  };
+
+  // Función para obtener las columnas sugeridas de la plantilla de ejemplo
+  const obtenerColumnasSugeridas = () => {
+    return [
+      // Campos principales visibles
+      { name: "Priority", type: "tags", visible: true, descripcion: "Prioridad de la tarea (Critical, Medium, Low)" },
+      { name: "Type", type: "tags", visible: true, descripcion: "Estado de la tarea (TO DO, IN PROGRESS, DONE, etc.)" },
+      { name: "Percent", type: "formula", visible: true, formula: 'if(((prop("Progress") / prop("Objective")) >= 1), "✅", if(and(empty(prop("Progress")), !empty(prop("Objective"))), "0%", substring("➖➖➖➖", 0, floor((prop("Progress") / prop("Objective")) * 10)) + " " + format(round((prop("Progress") / prop("Objective")) * 100)) + "%"))', descripcion: "Porcentaje de progreso visual" },
+      { name: "Percent Total", type: "formula", visible: true, formula: 'if((prop("Time Estimated") > 0), format(round((prop("Time Spent") * 100) / prop("Time Estimated"))) + "%", "0%")', descripcion: "Porcentaje de tiempo usado vs estimado" },
+      { name: "Progress", type: "number", visible: true, descripcion: "Progreso actual de la tarea (0-100)" },
+      { name: "Objective", type: "number", visible: false, descripcion: "Meta u objetivo total (normalmente 100)" },
+      // Campos de tiempo
+      { name: "Time Spent", type: "number", visible: false, descripcion: "Tiempo gastado en horas" },
+      { name: "Time Estimated", type: "number", visible: false, descripcion: "Tiempo estimado en horas" },
+      // Campos de fechas
+      { name: "Start Date", type: "date", visible: false, descripcion: "Fecha de inicio" },
+      { name: "End Date", type: "date", visible: false, descripcion: "Fecha de fin" },
+      { name: "Current Date", type: "date", visible: false, descripcion: "Fecha actual" },
+      { name: "Created", type: "date", visible: false, descripcion: "Fecha de creación" },
+      { name: "Expiration date", type: "date", visible: false, descripcion: "Fecha de expiración" },
+      // Campos calculados y fórmulas
+      { name: "Progreso", type: "formula", visible: false, formula: 'if(((prop("Progress") / prop("Objective")) >= 1), "✅", (if(and(empty(prop("Progress")), !empty(prop("Objective"))), "0%", format(round((prop("Progress") / prop("Objective")) * 100)) + "%")))', descripcion: "Porcentaje de progreso (alternativa)" },
+      { name: "missing percentage", type: "formula", visible: false, formula: 'if((prop("Type") == "DONE"), 0, if((prop("Time Estimated") > 0), format(round((prop("Time Spent") * 100) / prop("Time Estimated"))) + "%", "0%"))', descripcion: "Porcentaje faltante (solo si no está DONE)" },
+      { name: "Tiempo Restante", type: "formula", visible: false, formula: 'if((prop("Time Spent") >= prop("Time Estimated")), "0", prop("Time Estimated") - prop("Time Spent"))', descripcion: "Tiempo restante en horas" },
+      { name: "Porcentaje Tiempo", type: "formula", visible: false, formula: 'if((prop("Time Estimated") > 0), format(round((prop("Time Spent") / prop("Time Estimated")) * 100)) + "%", "0%")', descripcion: "Porcentaje de tiempo usado" },
+      // Campos de días y horas
+      { name: "Days Worked", type: "number", visible: false, descripcion: "Días trabajados" },
+      { name: "Days Elapsed", type: "number", visible: false, descripcion: "Días transcurridos" },
+      { name: "Sprint Days", type: "number", visible: false, descripcion: "Días del sprint" },
+      { name: "Horas Diarias", type: "number", visible: false, descripcion: "Horas trabajadas por día" },
+      { name: "Horas Totales Sprint", type: "number", visible: false, descripcion: "Horas totales del sprint" },
+      { name: "Dias Habiles Transcurridos", type: "number", visible: false, descripcion: "Días hábiles transcurridos" },
+      { name: "Horas Disponibles", type: "formula", visible: false, formula: 'prop("Dias Habiles Transcurridos") * prop("Horas Diarias")', descripcion: "Horas disponibles calculadas" },
+      { name: "Sobrecarga", type: "formula", visible: false, formula: 'if((prop("Time Estimated") > prop("Horas Disponibles")), "⚠️ Sobrecarga", "✅ OK")', descripcion: "Indicador de sobrecarga de trabajo" },
+      { name: "Dias Transcurridos Sprint", type: "formula", visible: false, formula: 'if(and(!empty(prop("Start Date")), !empty(prop("Current Date"))), if((date(prop("Current Date")) >= date(prop("Start Date"))), floor((date(prop("Current Date")) - date(prop("Start Date"))) / 86400000) + 1, 0), 0)', descripcion: "Días transcurridos desde inicio del sprint" },
+      { name: "Dias Faltantes Sprint", type: "formula", visible: false, formula: 'if(and(!empty(prop("End Date")), !empty(prop("Current Date"))), if((date(prop("Current Date")) <= date(prop("End Date"))), floor((date(prop("End Date")) - date(prop("Current Date"))) / 86400000), 0), 0)', descripcion: "Días faltantes hasta fin del sprint" },
+      // Campos de tareas
+      { name: "Tasks Completed", type: "number", visible: false, descripcion: "Número de subtareas completadas" },
+      { name: "Total Tasks", type: "number", visible: false, descripcion: "Número total de subtareas" },
+      { name: "Tasa Completitud", type: "formula", visible: false, formula: 'if((prop("Total Tasks") > 0), format(round((prop("Tasks Completed") / prop("Total Tasks")) * 100)) + "%", "0%")', descripcion: "Porcentaje de subtareas completadas" },
+      // Campos de estado y tags
+      { name: "Estado", type: "select", visible: false, descripcion: "Estado de la tarea (select)" },
+      { name: "Tags", type: "tags", visible: false, descripcion: "Etiquetas adicionales" },
+      { name: "tag", type: "tags", visible: false, descripcion: "Etiquetas (alias)" },
+      { name: "Assign", type: "tags", visible: false, descripcion: "Personas asignadas" },
+      { name: "Done", type: "checkbox", visible: false, descripcion: "Tarea completada" },
+      // Campos adicionales
+      { name: "Link", type: "text", visible: false, descripcion: "Enlace relacionado" },
+      { name: "Retrospective", type: "text", visible: false, descripcion: "Notas de retrospectiva" },
+      { name: "Video", type: "text", visible: false, descripcion: "Enlace o referencia a video" },
+      { name: "video", type: "text", visible: false, descripcion: "Video (alias)" },
+      { name: "Lambdas", type: "text", visible: false, descripcion: "Referencias a lambdas" },
+      { name: "NameRepo", type: "text", visible: false, descripcion: "Nombre del repositorio" },
+      { name: "Property", type: "text", visible: false, descripcion: "Propiedad adicional" },
+      { name: "to", type: "text", visible: false, descripcion: "Campo 'to' adicional" },
+      // Campos de gestión ágil
+      { name: "area", type: "select", visible: false, descripcion: "Área de trabajo" },
+      { name: "epica", type: "select", visible: false, descripcion: "Épica relacionada" },
+      { name: "iteracion", type: "text", visible: false, descripcion: "Iteración o sprint" },
+      { name: "puntos de historia", type: "number", visible: false, descripcion: "Puntos de historia (story points)" },
+      { name: "release", type: "text", visible: false, descripcion: "Release o versión" },
+    ];
+  };
+
+  // Función para agregar columnas seleccionadas
+  const agregarColumnasSeleccionadas = () => {
+    const columnasSugeridas = obtenerColumnasSugeridas();
+    const columnasAAgregar = columnasSugeridas.filter((_, index) => columnasSeleccionadas.includes(index));
+    
+    if (columnasAAgregar.length === 0) {
+      alert('Por favor selecciona al menos una columna para agregar.');
+      return;
+    }
+
+    const camposExistentes = propiedades.map(p => p.name);
+    const nuevasColumnas = columnasAAgregar.filter(col => !camposExistentes.includes(col.name));
+    
+    if (nuevasColumnas.length === 0) {
+      alert('Todas las columnas seleccionadas ya existen en la tabla.');
+      setShowColumnasSugeridasModal(false);
+      setColumnasSeleccionadas([]);
+      return;
+    }
+
+    // Agregar las nuevas columnas a las propiedades
+    const nuevasPropiedades = [...propiedades];
+    nuevasColumnas.forEach(columna => {
+      nuevasPropiedades.push({
+        name: columna.name,
+        type: columna.type,
+        visible: columna.visible !== undefined ? columna.visible : true,
+        totalizar: columna.type === "number" && (columna.name === "Time Spent" || columna.name === "Tasks Completed") ? true : false,
+        formula: columna.formula || undefined
+      });
+    });
+
+    setPropiedades(nuevasPropiedades);
+
+    // Agregar las nuevas columnas a todas las filas existentes
+    const nuevasFilas = filas.map((fila) => {
+      const nuevasProperties = { ...fila.properties };
+      nuevasColumnas.forEach(columna => {
+        let defaultValue = columna.type === "checkbox" ? false : columna.type === "tags" ? [] : columna.type === "formula" ? "" : columna.type === "date" ? "" : "";
+        let defaultColor = undefined;
+        
+        // Valores por defecto para Priority
+        if (columna.name === "Priority" && columna.type === "tags") {
+          defaultValue = [{ label: "Medium", color: "#fbbf24" }];
+        }
+        
+        // Valores por defecto para Type
+        if (columna.name === "Type" && columna.type === "tags") {
+          defaultValue = [{ label: "TO DO", color: "#6b7280" }];
+        }
+
+        // Valor por defecto para Objective
+        if (columna.name === "Objective" && columna.type === "number") {
+          defaultValue = 100;
+        }
+        
+        nuevasProperties[columna.name] = {
+          type: columna.type,
+          value: defaultValue,
+          color: columna.type === "select" ? "#3b82f6" : defaultColor,
+          formula: columna.formula || undefined,
+        };
+      });
+      return {
+        ...fila,
+        properties: nuevasProperties,
+      };
+    });
+
+    setFilas(nuevasFilas);
+    
+    alert(`✅ Se agregaron ${nuevasColumnas.length} columnas nuevas.`);
+    setShowColumnasSugeridasModal(false);
+    setColumnasSeleccionadas([]);
   };
 
   // Función para obtener la fórmula por defecto según el nombre de la columna
@@ -1229,7 +1414,25 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
   };
 
   // Función para subir imagen de fila
-  const subirImagenFila = async (filaIndex) => {
+  const subirImagenFila = async (filaIndex, iconoPredefinido = null) => {
+    // Si se pasa un icono predefinido, usarlo directamente
+    if (iconoPredefinido) {
+      const nuevas = [...filas];
+      nuevas[filaIndex].image = iconoPredefinido.emoji;
+      nuevas[filaIndex].imageFilename = `icon-${iconoPredefinido.id}`;
+      nuevas[filaIndex].iconType = iconoPredefinido.id;
+      setFilas(nuevas);
+      return;
+    }
+    
+    // Si no hay imagen, mostrar el selector de iconos primero
+    if (!filas[filaIndex].image && !filas[filaIndex].imageFilename) {
+      setFilaIndexParaIcono(filaIndex);
+      setShowIconPickerModal(true);
+      return;
+    }
+    
+    // Si ya hay imagen, permitir cambiar por archivo
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/*";
@@ -1241,11 +1444,10 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
         const filename = `${Date.now()}-${file.name}`;
         await LocalStorageService.saveBinaryFile(filename, file, 'files');
         
-        // Guardar solo la referencia del archivo, no la URL blob
-        // Similar a como se hace en LocalEditor.jsx
         const nuevas = [...filas];
-        nuevas[filaIndex].image = `./files/${filename}`;  // Guardar como referencia de archivo
-        nuevas[filaIndex].imageFilename = filename;        // Guardar el nombre del archivo
+        nuevas[filaIndex].image = `./files/${filename}`;
+        nuevas[filaIndex].imageFilename = filename;
+        nuevas[filaIndex].iconType = undefined; // Limpiar tipo de icono si se sube archivo
         setFilas(nuevas);
       } catch (error) {
         console.error("Error subiendo imagen:", error);
@@ -1260,6 +1462,7 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
     const nuevas = [...filas];
     nuevas[filaIndex].image = null;
     nuevas[filaIndex].imageFilename = null;
+    nuevas[filaIndex].iconType = undefined;
     setFilas(nuevas);
   };
 
@@ -2410,6 +2613,18 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
           </h2>
           <div className="flex items-center gap-2">
             <button 
+              onClick={() => {
+                setShowColumnasSugeridasModal(true);
+                setColumnasSeleccionadas([]);
+              }}
+              className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded hover:bg-gray-100"
+              title="Columnas sugeridas para metodologías ágiles"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+              </svg>
+            </button>
+            <button 
               onClick={() => setDrawerExpandido(!drawerExpandido)} 
               className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded hover:bg-gray-100"
               title={drawerExpandido ? "Reducir" : "Expandir al 100%"}
@@ -2457,10 +2672,16 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
             <div className="flex items-center gap-3">
               {filas[filaSeleccionada].imageFilename || filas[filaSeleccionada].image ? (
                 <div className="relative">
-                  <ImagenDesdeFilename 
-                    fila={filas[filaSeleccionada]} 
-                    className="w-16 h-16 rounded object-cover border border-gray-200"
-                  />
+                  {filas[filaSeleccionada].imageFilename?.startsWith('icon-') ? (
+                    <div className="w-16 h-16 rounded flex items-center justify-center text-3xl border border-gray-200 bg-white">
+                      {filas[filaSeleccionada].image}
+                    </div>
+                  ) : (
+                    <ImagenDesdeFilename 
+                      fila={filas[filaSeleccionada]} 
+                      className="w-16 h-16 rounded object-cover border border-gray-200"
+                    />
+                  )}
                   <button
                     onClick={() => eliminarImagenFila(filaSeleccionada)}
                     className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm hover:bg-red-600"
@@ -2471,18 +2692,24 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                 </div>
               ) : (
                 <button
-                  onClick={() => subirImagenFila(filaSeleccionada)}
+                  onClick={() => {
+                    setFilaIndexParaIcono(filaSeleccionada);
+                    setShowIconPickerModal(true);
+                  }}
                   className="w-16 h-16 rounded border border-dashed border-gray-300 flex items-center justify-center text-gray-400 hover:border-gray-400 hover:text-gray-500 transition-colors"
-                  title="Agregar imagen"
+                  title="Agregar imagen o icono"
                 >
                   <span className="text-xl">🖼️</span>
                 </button>
               )}
               <button
-                onClick={() => subirImagenFila(filaSeleccionada)}
+                onClick={() => {
+                  setFilaIndexParaIcono(filaSeleccionada);
+                  setShowIconPickerModal(true);
+                }}
                 className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm"
               >
-                {filas[filaSeleccionada].image ? 'Cambiar imagen' : 'Agregar imagen'}
+                {filas[filaSeleccionada].image ? 'Cambiar imagen' : 'Agregar imagen/icono'}
               </button>
             </div>
           </div>
@@ -2864,6 +3091,215 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
         onHideAll={hideAllProperties}
         onReorder={reordenarPropiedades}
       />
+
+      {/* Modal de selección de iconos predefinidos */}
+      {showIconPickerModal && (
+        <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
+          <div 
+            className="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-4 border-b bg-gray-50">
+              <h2 className="text-lg font-semibold text-gray-900">Seleccionar Icono</h2>
+              <button
+                onClick={() => {
+                  setShowIconPickerModal(false);
+                  setFilaIndexParaIcono(null);
+                }}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <span className="text-xl">×</span>
+              </button>
+            </div>
+            <div className="p-4">
+              <p className="text-sm text-gray-600 mb-4">Selecciona un icono predefinido o sube una imagen personalizada:</p>
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                {[
+                  { id: 'hu', label: 'Historia de Usuario', emoji: '📋', color: '#3b82f6' },
+                  { id: 'tarea', label: 'Tarea', emoji: '✅', color: '#10b981' },
+                  { id: 'bug', label: 'Bug', emoji: '🐛', color: '#ef4444' },
+                  { id: 'epica', label: 'Épica', emoji: '🎯', color: '#8b5cf6' },
+                ].map((icono) => (
+                  <button
+                    key={icono.id}
+                    onClick={() => {
+                      if (filaIndexParaIcono !== null) {
+                        subirImagenFila(filaIndexParaIcono, icono);
+                      }
+                      setShowIconPickerModal(false);
+                      setFilaIndexParaIcono(null);
+                    }}
+                    className="flex flex-col items-center gap-2 p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all"
+                  >
+                    <span className="text-3xl">{icono.emoji}</span>
+                    <span className="text-sm font-medium text-gray-700">{icono.label}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="border-t pt-4">
+                <button
+                  onClick={async () => {
+                    if (filaIndexParaIcono !== null) {
+                      // Abrir selector de archivos directamente
+                      const input = document.createElement("input");
+                      input.type = "file";
+                      input.accept = "image/*";
+                      input.onchange = async () => {
+                        if (!input.files?.[0]) return;
+                        
+                        try {
+                          const file = input.files[0];
+                          const filename = `${Date.now()}-${file.name}`;
+                          await LocalStorageService.saveBinaryFile(filename, file, 'files');
+                          
+                          const nuevas = [...filas];
+                          nuevas[filaIndexParaIcono].image = `./files/${filename}`;
+                          nuevas[filaIndexParaIcono].imageFilename = filename;
+                          nuevas[filaIndexParaIcono].iconType = undefined;
+                          setFilas(nuevas);
+                        } catch (error) {
+                          console.error("Error subiendo imagen:", error);
+                          alert("No se pudo subir la imagen. Verifica que tengas una carpeta configurada.");
+                        }
+                      };
+                      input.click();
+                    }
+                    setShowIconPickerModal(false);
+                    setFilaIndexParaIcono(null);
+                  }}
+                  className="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
+                >
+                  <span>📁</span>
+                  <span>Subir imagen personalizada</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Columnas Sugeridas para Metodologías Ágiles */}
+      {showColumnasSugeridasModal && (
+        <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
+          <div 
+            className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+            style={{ overflowX: 'hidden' }}
+          >
+            <div className="flex items-start justify-between p-4 border-b bg-gray-50 flex-shrink-0 gap-3">
+              <div className="flex-1 min-w-0">
+                <h2 className="text-lg font-semibold text-gray-900 break-words">📋 Columnas Sugeridas para Metodologías Ágiles</h2>
+                <p className="text-sm text-gray-600 mt-1 break-words">
+                  Selecciona las columnas que deseas agregar ({obtenerColumnasSugeridas().length} disponibles)
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowColumnasSugeridasModal(false);
+                  setColumnasSeleccionadas([]);
+                }}
+                className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
+              >
+                <span className="text-xl">×</span>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 min-h-0" style={{ maxHeight: 'calc(90vh - 180px)' }}>
+              <div className="space-y-2">
+                {obtenerColumnasSugeridas().map((columna, index) => {
+                  const existe = propiedades.some(p => p.name === columna.name);
+                  return (
+                    <label
+                      key={index}
+                      className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all w-full ${
+                        existe 
+                          ? 'border-gray-200 bg-gray-50 opacity-60' 
+                          : columnasSeleccionadas.includes(index)
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={columnasSeleccionadas.includes(index)}
+                        onChange={(e) => {
+                          if (existe) return;
+                          if (e.target.checked) {
+                            setColumnasSeleccionadas([...columnasSeleccionadas, index]);
+                          } else {
+                            setColumnasSeleccionadas(columnasSeleccionadas.filter(i => i !== index));
+                          }
+                        }}
+                        disabled={existe}
+                        className="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 flex-shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium text-gray-900 break-words">{columna.name}</span>
+                          <span className={`text-xs px-2 py-0.5 rounded whitespace-nowrap flex-shrink-0 ${
+                            columna.type === 'formula' ? 'bg-purple-100 text-purple-700' :
+                            columna.type === 'number' ? 'bg-blue-100 text-blue-700' :
+                            columna.type === 'tags' ? 'bg-green-100 text-green-700' :
+                            columna.type === 'date' ? 'bg-orange-100 text-orange-700' :
+                            columna.type === 'checkbox' ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-gray-100 text-gray-700'
+                          }`}>
+                            {columna.type}
+                          </span>
+                          {columna.visible && (
+                            <span className="text-xs px-2 py-0.5 rounded bg-indigo-100 text-indigo-700 whitespace-nowrap flex-shrink-0">
+                              Visible
+                            </span>
+                          )}
+                          {existe && (
+                            <span className="text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-600 whitespace-nowrap flex-shrink-0">
+                              Ya existe
+                            </span>
+                          )}
+                        </div>
+                        {columna.descripcion && (
+                          <p className="text-sm text-gray-600 mt-1 break-words">{columna.descripcion}</p>
+                        )}
+                        {columna.formula && (
+                          <div className="text-xs text-gray-500 mt-1 font-mono bg-gray-100 p-1.5 rounded break-all overflow-wrap-anywhere" title={columna.formula}>
+                            {columna.formula}
+                          </div>
+                        )}
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="flex items-center justify-between p-4 border-t bg-gray-50 flex-shrink-0 gap-3 overflow-x-hidden">
+              <div className="text-sm text-gray-600 min-w-0 flex-1">
+                {columnasSeleccionadas.length > 0 ? (
+                  <span className="font-medium text-blue-600 break-words">{columnasSeleccionadas.length} columna(s) seleccionada(s)</span>
+                ) : (
+                  <span className="text-gray-500 break-words">Ninguna columna seleccionada</span>
+                )}
+              </div>
+              <div className="flex gap-2 flex-shrink-0">
+                <button
+                  onClick={() => {
+                    setShowColumnasSugeridasModal(false);
+                    setColumnasSeleccionadas([]);
+                  }}
+                  className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors whitespace-nowrap"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={agregarColumnasSeleccionadas}
+                  disabled={columnasSeleccionadas.length === 0}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                >
+                  Agregar ({columnasSeleccionadas.length})
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de confirmación para eliminar fila */}
       {showDeleteRowModal && filaAEliminar !== null && (

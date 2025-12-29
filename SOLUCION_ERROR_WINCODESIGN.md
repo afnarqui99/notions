@@ -55,3 +55,4 @@ Para verificar que el ejecutable funciona:
 3. La aplicación debería abrirse correctamente
 
 
+
