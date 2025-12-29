@@ -2715,24 +2715,98 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
           </div>
 
           {/* Propiedades */}
-          <div className="space-y-3">
-            {propiedades.map((prop, pi) => (
-              <div key={pi} className="border-b border-gray-100 pb-3 last:border-b-0">
-                <div className="flex items-center justify-between mb-1.5">
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <label className="text-sm font-medium text-gray-900 truncate">
+          <div className="space-y-2">
+            {propiedades.map((prop, pi) => {
+              const formula = filas[filaSeleccionada]?.properties?.[prop.name]?.formula || prop.formula || "";
+              const formulaPreview = formula.length > 30 ? formula.substring(0, 30) + "..." : formula;
+              
+              return (
+              <div key={pi} className="border-b border-gray-100 pb-2 last:border-b-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Nombre y badges */}
+                  <div className="flex items-center gap-1.5 flex-shrink-0 w-[120px]">
+                    <label className="text-sm font-medium text-gray-900">
                       {prop.name}
                     </label>
                     {prop.type === "formula" && (
-                      <span className="text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">Fórmula</span>
+                      <span className="text-[10px] text-blue-600 bg-blue-50 px-1 py-0.5 rounded flex-shrink-0">Σ</span>
                     )}
                     {prop.totalizar && (
-                      <span className="text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded">Totalizar</span>
+                      <span className="text-[10px] text-green-600 bg-green-50 px-1 py-0.5 rounded flex-shrink-0">Σ</span>
                     )}
                     {prop.visible === false && (
-                      <span className="text-xs text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">👁️ Oculto</span>
+                      <span className="text-[10px] text-gray-500 bg-gray-100 px-1 py-0.5 rounded flex-shrink-0">👁️</span>
                     )}
                   </div>
+                  
+                  {/* Input/Control al lado derecho */}
+                  <div className="flex-1 min-w-0" style={{ maxWidth: prop.type === "number" || prop.type === "percent" ? "100px" : prop.type === "checkbox" ? "auto" : "180px" }}>
+                    {prop.type === "formula" ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPropiedadFormulaEditando(prop.name);
+                          setEsNuevoCampo(false);
+                          setShowFormulaModal(true);
+                        }}
+                        className="w-full text-left border border-gray-300 bg-white hover:bg-gray-50 rounded px-2 py-1 text-xs font-mono text-gray-700 transition-colors truncate"
+                        title={formula || "Clic para editar fórmula"}
+                      >
+                        {formulaPreview || "Clic para editar fórmula..."}
+                      </button>
+                    ) : prop.type === "tags" ? (
+                      <TagInputNotionLike
+                        value={filas[filaSeleccionada]?.properties?.[prop.name]?.value || []}
+                        onChange={(val) => actualizarValor(filaSeleccionada, prop.name, val)}
+                      />
+                    ) : prop.type === "number" || prop.type === "percent" ? (
+                      <input
+                        type="number"
+                        className="border border-gray-300 w-full px-2 py-1 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent"
+                        value={filas[filaSeleccionada]?.properties?.[prop.name]?.value || 0}
+                        onChange={(e) => actualizarValor(filaSeleccionada, prop.name, Number(e.target.value))}
+                      />
+                    ) : prop.type === "checkbox" ? (
+                      <div className="flex items-center">
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          checked={filas[filaSeleccionada]?.properties?.[prop.name]?.value || false}
+                          onChange={(e) => actualizarValor(filaSeleccionada, prop.name, e.target.checked)}
+                        />
+                      </div>
+                    ) : prop.type === "select" ? (
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="text"
+                          className="flex-1 border border-gray-300 px-2 py-1 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent min-w-0"
+                          value={filas[filaSeleccionada]?.properties?.[prop.name]?.value || ""}
+                          onChange={(e) => actualizarValor(filaSeleccionada, prop.name, e.target.value)}
+                          placeholder="Valor"
+                        />
+                        <input
+                          type="color"
+                          className="w-7 h-7 rounded border border-gray-300 cursor-pointer flex-shrink-0"
+                          value={filas[filaSeleccionada]?.properties?.[prop.name]?.color || "#3b82f6"}
+                          onChange={(e) => {
+                            const nuevas = [...filas];
+                            nuevas[filaSeleccionada].properties[prop.name].color = e.target.value;
+                            setFilas(nuevas);
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <input
+                        type="text"
+                        className="border border-gray-300 w-full px-2 py-1 rounded text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent"
+                        value={filas[filaSeleccionada]?.properties?.[prop.name]?.value || ""}
+                        onChange={(e) => actualizarValor(filaSeleccionada, prop.name, e.target.value)}
+                        placeholder="Escribe aquí..."
+                      />
+                    )}
+                  </div>
+                  
+                  {/* Controles de totalizar y visible */}
                   <div className="flex items-center gap-3 flex-shrink-0">
                     {(prop.type === "number" || prop.type === "percent") && (
                       <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer hover:text-gray-800">
@@ -2764,92 +2838,15 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                     </label>
                   </div>
                 </div>
-                {prop.type === "formula" ? (
-                  <div className="space-y-1.5">
-                    {/* Botón para editar fórmula */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPropiedadFormulaEditando(prop.name);
-                        setEsNuevoCampo(false);
-                        setShowFormulaModal(true);
-                      }}
-                      className="w-full text-left border border-gray-300 bg-white hover:bg-gray-50 rounded px-2.5 py-1.5 text-xs font-mono text-gray-700 transition-colors flex items-center justify-between group"
-                    >
-                      <span className="truncate flex-1">
-                        {filas[filaSeleccionada]?.properties?.[prop.name]?.formula || "Clic para editar fórmula..."}
-                      </span>
-                      <span className="ml-2 text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity text-[10px]">✏️</span>
-                    </button>
-                    {/* Resultado de la fórmula */}
-                    <div className="text-xs text-gray-600 bg-gray-50 px-2 py-1 rounded flex items-center justify-between">
-                      <span className="text-gray-500">Resultado:</span>
-                      <strong className="text-gray-900">{obtenerValorCelda(filas[filaSeleccionada], prop) || "Sin resultado"}</strong>
-                    </div>
+                
+                {/* Resultado de fórmula (solo para fórmulas) */}
+                {prop.type === "formula" && (
+                  <div className="text-[10px] text-gray-500 mt-1 ml-[130px]">
+                    Resultado: <strong className="text-gray-700">{obtenerValorCelda(filas[filaSeleccionada], prop) || "Sin resultado"}</strong>
                   </div>
-                ) : prop.type === "tags" ? (
-                  <TagInputNotionLike
-                    value={filas[filaSeleccionada]?.properties?.[prop.name]?.value || []}
-                    onChange={(val) => actualizarValor(filaSeleccionada, prop.name, val)}
-                  />
-                ) : prop.type === "number" || prop.type === "percent" ? (
-                  <input
-                    type="number"
-                    className="border border-gray-300 w-full px-2.5 py-1.5 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    value={filas[filaSeleccionada]?.properties?.[prop.name]?.value || 0}
-                    onChange={(e) => actualizarValor(filaSeleccionada, prop.name, Number(e.target.value))}
-                  />
-                ) : prop.type === "checkbox" ? (
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                      checked={filas[filaSeleccionada]?.properties?.[prop.name]?.value || false}
-                      onChange={(e) => actualizarValor(filaSeleccionada, prop.name, e.target.checked)}
-                    />
-                    <span className="text-sm text-gray-700">
-                      {filas[filaSeleccionada]?.properties?.[prop.name]?.value ? "Marcado" : "Sin marcar"}
-                    </span>
-                  </div>
-                ) : prop.type === "select" ? (
-                  <div className="space-y-2">
-                    <input
-                      type="text"
-                      className="border border-gray-300 w-full px-2.5 py-1.5 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      value={filas[filaSeleccionada]?.properties?.[prop.name]?.value || ""}
-                      onChange={(e) => actualizarValor(filaSeleccionada, prop.name, e.target.value)}
-                      placeholder="Valor del select"
-                    />
-                    <div className="flex items-center gap-2">
-                      <label className="text-xs text-gray-600">Color:</label>
-                      <input
-                        type="color"
-                        className="w-8 h-8 rounded border border-gray-300 cursor-pointer"
-                        value={filas[filaSeleccionada]?.properties?.[prop.name]?.color || "#3b82f6"}
-                        onChange={(e) => {
-                          const nuevas = [...filas];
-                          nuevas[filaSeleccionada].properties[prop.name].color = e.target.value;
-                          setFilas(nuevas);
-                        }}
-                      />
-                    </div>
-                  </div>
-                ) : prop.type === "tags" ? (
-                  <TagInputNotionLike
-                    value={filas[filaSeleccionada]?.properties?.[prop.name]?.value || []}
-                    onChange={(val) => actualizarValor(filaSeleccionada, prop.name, val)}
-                  />
-                ) : (
-                  <input
-                    type="text"
-                    className="border border-gray-300 w-full px-2.5 py-1.5 rounded text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    value={filas[filaSeleccionada]?.properties?.[prop.name]?.value || ""}
-                    onChange={(e) => actualizarValor(filaSeleccionada, prop.name, e.target.value)}
-                    placeholder="Escribe aquí..."
-                  />
                 )}
               </div>
-            ))}
+            )})}
           </div>
           
           {/* Sección para agregar nueva propiedad */}
