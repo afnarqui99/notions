@@ -143,6 +143,11 @@ export class FormulaEvaluator {
       if (campoLower === 'horas diarias' || campoLower === 'horas diarias sprint' || campoLower === 'horas por dia') {
         return this.sprintConfig.horasDiarias || 8;
       }
+      
+      // Puntos Totales Sprint
+      if (campoLower === 'puntos totales sprint' || campoLower === 'puntos totales' || campoLower === 'story points total') {
+        return this.sprintConfig.puntosTotalesSprint || null;
+      }
     }
     
     // Current Date siempre devuelve la fecha actual
@@ -621,7 +626,7 @@ export class FormulaEvaluator {
       }
 
       // Evaluar calcularDiasHabiles() - calcularDiasHabiles(fechaInicio, fechaFin)
-      // Calcula días hábiles (excluyendo sábados y domingos) entre dos fechas
+      // Calcula días hábiles (excluyendo sábados, domingos y días no trabajados configurados)
       const calcularDiasHabilesRegex = /calcularDiasHabiles\s*\(/g;
       let calcularMatch;
       const calcularMatches = [];
@@ -657,16 +662,101 @@ export class FormulaEvaluator {
           let dias = 0;
           const fechaActual = new Date(inicio);
           
+          // Obtener días no trabajados del sprintConfig
+          const diasNoTrabajados = this.sprintConfig?.diasNoTrabajados || [];
+          // Convertir a formato YYYY-MM-DD para comparación
+          const diasNoTrabajadosSet = new Set(diasNoTrabajados.map(fecha => {
+            if (typeof fecha === 'string') {
+              // Si ya está en formato YYYY-MM-DD, usarlo directamente
+              if (/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+                return fecha;
+              }
+              // Si no, convertir a Date y luego a YYYY-MM-DD
+              const d = new Date(fecha);
+              const año = d.getFullYear();
+              const mes = String(d.getMonth() + 1).padStart(2, '0');
+              const dia = String(d.getDate()).padStart(2, '0');
+              return `${año}-${mes}-${dia}`;
+            }
+            return fecha;
+          }));
+          
           while (fechaActual <= fin) {
             const diaSemana = fechaActual.getDay();
             // 0 = domingo, 6 = sábado
-            if (diaSemana !== 0 && diaSemana !== 6) {
+            const esFinDeSemana = diaSemana === 0 || diaSemana === 6;
+            
+            // Formatear fecha actual para comparar
+            const añoActual = fechaActual.getFullYear();
+            const mesActual = String(fechaActual.getMonth() + 1).padStart(2, '0');
+            const diaActual = String(fechaActual.getDate()).padStart(2, '0');
+            const fechaActualStr = `${añoActual}-${mesActual}-${diaActual}`;
+            const esDiaNoTrabajado = diasNoTrabajadosSet.has(fechaActualStr);
+            
+            // Contar solo si NO es fin de semana y NO está en días no trabajados
+            if (!esFinDeSemana && !esDiaNoTrabajado) {
               dias++;
             }
             fechaActual.setDate(fechaActual.getDate() + 1);
           }
           
           result = result.substring(0, startPos) + dias.toString() + result.substring(closeParenPos + 1);
+        }
+      }
+
+      // Evaluar suma() - suma("NombrePropiedad") suma todos los valores de una propiedad en todas las filas
+      // También soporta suma(prop("NombrePropiedad")) extrayendo el nombre de la propiedad
+      const sumaRegex = /suma\s*\(/g;
+      let sumaMatch;
+      const sumaMatches = [];
+      while ((sumaMatch = sumaRegex.exec(result)) !== null) {
+        sumaMatches.push(sumaMatch.index);
+      }
+      for (let i = sumaMatches.length - 1; i >= 0; i--) {
+        const startPos = sumaMatches[i];
+        const openParenPos = result.indexOf('(', startPos);
+        const closeParenPos = this.findMatchingParen(result, openParenPos);
+        if (closeParenPos === -1) continue;
+        const innerContent = result.substring(openParenPos + 1, closeParenPos).trim();
+        
+        let nombrePropiedad = null;
+        
+        // Si es prop("Nombre"), extraer el nombre de la propiedad
+        const propMatch = innerContent.match(/prop\s*\(\s*"([^"]+)"\s*\)/);
+        if (propMatch) {
+          nombrePropiedad = propMatch[1];
+        } else {
+          // Si es un string literal directo, extraerlo
+          if (innerContent.startsWith('"') && innerContent.endsWith('"')) {
+            nombrePropiedad = innerContent.slice(1, -1);
+          } else {
+            // Intentar evaluar como expresión para obtener el nombre
+            const evalContent = this.evaluateFunctions(innerContent);
+            const evalExpr = this.evaluateExpression(evalContent);
+            if (typeof evalExpr === 'string') {
+              nombrePropiedad = evalExpr.startsWith('"') && evalExpr.endsWith('"') 
+                ? evalExpr.slice(1, -1) 
+                : evalExpr;
+            }
+          }
+        }
+        
+        if (nombrePropiedad && this.todasLasFilas) {
+          // Usar calcularTotal para sumar todos los valores
+          const total = this.todasLasFilas.reduce((suma, fila) => {
+            const valor = fila.properties?.[nombrePropiedad]?.value;
+            if (typeof valor === 'number') {
+              return suma + valor;
+            }
+            const num = parseFloat(valor);
+            if (!isNaN(num)) {
+              return suma + num;
+            }
+            return suma;
+          }, 0);
+          result = result.substring(0, startPos) + total.toString() + result.substring(closeParenPos + 1);
+        } else {
+          result = result.substring(0, startPos) + '0' + result.substring(closeParenPos + 1);
         }
       }
 

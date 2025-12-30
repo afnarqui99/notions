@@ -5,6 +5,7 @@ import EditorDescripcion from './EditorDescripcion';
 import { FormulaEvaluator, calcularTotal } from './FormulaEvaluator';
 import FormulaSuggestions from './FormulaSuggestions';
 import PropertyVisibilityModal from '../components/PropertyVisibilityModal';
+import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import LocalStorageService from '../services/LocalStorageService';
 
 // Componente auxiliar para cargar imagen desde filename
@@ -295,6 +296,7 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
       sprintStartDate: hoyStr,
       sprintEndDate: sprintEndDate,
       horasDiarias: 8,
+      puntosTotalesSprint: null, // Puntos totales objetivo del sprint (Fibonacci: 1, 2, 3, 5, 8, 13, 21, etc.)
       diasNoTrabajados: [] // Array de fechas que no se trabajan (además de sábados y domingos)
     };
   });
@@ -325,6 +327,8 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
   const [columnasSeleccionadas, setColumnasSeleccionadas] = useState([]);
   const [showTextModal, setShowTextModal] = useState(false);
   const [textEditing, setTextEditing] = useState({ filaIndex: null, propName: null, value: "" });
+  const [showDiasNoTrabajadosModal, setShowDiasNoTrabajadosModal] = useState(false);
+  const [showDeleteTableModal, setShowDeleteTableModal] = useState(false);
   
   // Estado para controlar si la tabla usa todo el ancho
   const [usarAnchoCompleto, setUsarAnchoCompleto] = useState(() => {
@@ -532,6 +536,10 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
       { name: "Tasks Completed", type: "number", visible: false, descripcion: "Número de subtareas completadas" },
       { name: "Total Tasks", type: "number", visible: false, descripcion: "Número total de subtareas" },
       { name: "Tasa Completitud", type: "formula", visible: false, formula: 'if((prop("Total Tasks") > 0), format(round((prop("Tasks Completed") / prop("Total Tasks")) * 100)) + "%", "0%")', descripcion: "Porcentaje de subtareas completadas" },
+      // Campos de puntos de historia
+      { name: "Total Puntos Sprint", type: "formula", visible: false, formula: 'suma(prop("Puntos de Historia"))', descripcion: "Suma total de puntos de historia de todas las tareas" },
+      { name: "Porcentaje Puntos Completados", type: "formula", visible: false, formula: 'if(and(!empty(prop("Puntos Totales Sprint")), prop("Puntos Totales Sprint") > 0), format(round((suma(prop("Puntos de Historia")) / prop("Puntos Totales Sprint")) * 100)) + "%", "N/A")', descripcion: "Porcentaje de puntos completados vs objetivo" },
+      { name: "Validación Puntos Sprint", type: "formula", visible: true, formula: 'if(empty(prop("Puntos Totales Sprint")), "⚪ Sin objetivo", if(and(prop("Puntos Totales Sprint") >= 3, prop("Puntos Totales Sprint") <= 8), "✅ Bien definido (3-8)", if(prop("Puntos Totales Sprint") > 8, "⚠️ Considerar dividir (>8)", "📊 Muy pequeño (<3)")))', descripcion: "Validación de puntos del sprint (Fibonacci recomendado 3-8)" },
       // Campos de estado y tags
       { name: "Estado", type: "select", visible: false, descripcion: "Estado de la tarea (select)" },
       { name: "Tags", type: "tags", visible: false, descripcion: "Etiquetas adicionales" },
@@ -551,7 +559,9 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
       { name: "area", type: "select", visible: false, descripcion: "Área de trabajo" },
       { name: "epica", type: "select", visible: false, descripcion: "Épica relacionada" },
       { name: "iteracion", type: "text", visible: false, descripcion: "Iteración o sprint" },
-      { name: "puntos de historia", type: "number", visible: false, descripcion: "Puntos de historia (story points)" },
+      { name: "Puntos de Historia", type: "number", visible: true, descripcion: "Puntos de historia (Fibonacci: 1, 2, 3, 5, 8, 13, 21...)" },
+      { name: "puntos de historia", type: "number", visible: false, descripcion: "Puntos de historia (alias)" },
+      { name: "Story Points", type: "number", visible: false, descripcion: "Puntos de historia (alias en inglés)" },
       { name: "release", type: "text", visible: false, descripcion: "Release o versión" },
     ];
   };
@@ -926,17 +936,44 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
     setNuevoCampo({ name: "", type: "text", formula: "", visible: true });
   };
 
-  // Función auxiliar para calcular días hábiles entre dos fechas (excluyendo sábados y domingos)
+  // Función auxiliar para calcular días hábiles entre dos fechas (excluyendo sábados, domingos y días no trabajados)
   const calcularDiasHabiles = (fechaInicio, fechaFin) => {
+    if (!fechaInicio || !fechaFin) return 0;
+    
     const inicio = new Date(fechaInicio);
     const fin = new Date(fechaFin);
     let dias = 0;
     const fechaActual = new Date(inicio);
     
+    // Obtener días no trabajados del sprintConfig
+    const diasNoTrabajados = sprintConfig?.diasNoTrabajados || [];
+    const diasNoTrabajadosSet = new Set(diasNoTrabajados.map(fecha => {
+      if (typeof fecha === 'string') {
+        if (/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+          return fecha;
+        }
+        const d = new Date(fecha);
+        const año = d.getFullYear();
+        const mes = String(d.getMonth() + 1).padStart(2, '0');
+        const dia = String(d.getDate()).padStart(2, '0');
+        return `${año}-${mes}-${dia}`;
+      }
+      return fecha;
+    }));
+    
     while (fechaActual <= fin) {
       const diaSemana = fechaActual.getDay();
-      // 0 = domingo, 6 = sábado
-      if (diaSemana !== 0 && diaSemana !== 6) {
+      const esFinDeSemana = diaSemana === 0 || diaSemana === 6;
+      
+      // Formatear fecha actual para comparar
+      const añoActual = fechaActual.getFullYear();
+      const mesActual = String(fechaActual.getMonth() + 1).padStart(2, '0');
+      const diaActual = String(fechaActual.getDate()).padStart(2, '0');
+      const fechaActualStr = `${añoActual}-${mesActual}-${diaActual}`;
+      const esDiaNoTrabajado = diasNoTrabajadosSet.has(fechaActualStr);
+      
+      // Contar solo si NO es fin de semana y NO está en días no trabajados
+      if (!esFinDeSemana && !esDiaNoTrabajado) {
         dias++;
       }
       fechaActual.setDate(fechaActual.getDate() + 1);
@@ -1485,6 +1522,23 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
 
     setFilas(filasConFormulasEvaluadas);
     
+    // Calcular información de puntos
+    const puntosTotalesObjetivo = sprintConfig.puntosTotalesSprint;
+    const puntosTotalesActuales = calcularTotal(filasConFormulasEvaluadas, "Puntos de Historia");
+    const porcentajePuntos = puntosTotalesObjetivo && puntosTotalesObjetivo > 0 
+      ? Math.round((puntosTotalesActuales / puntosTotalesObjetivo) * 100) 
+      : null;
+    let validacionPuntos = null;
+    if (puntosTotalesObjetivo !== null && puntosTotalesObjetivo !== undefined) {
+      if (puntosTotalesObjetivo >= 3 && puntosTotalesObjetivo <= 8) {
+        validacionPuntos = "✅ Bien definido (3-8)";
+      } else if (puntosTotalesObjetivo > 8) {
+        validacionPuntos = "⚠️ Considerar dividir (>8)";
+      } else if (puntosTotalesObjetivo > 0) {
+        validacionPuntos = "📊 Muy pequeño (<3)";
+      }
+    }
+    
     // Guardar información del sprint para mostrarla después
     setSprintInfo({
       tareas: tareasEjemplo.length,
@@ -1492,7 +1546,11 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
       fin: sprintFin,
       diasHabiles: diasHabilesSprint,
       horasTotales: horasTotalesSprint,
-      horasDiarias: horasDiarias
+      horasDiarias: horasDiarias,
+      puntosTotalesObjetivo: puntosTotalesObjetivo,
+      puntosTotalesActuales: puntosTotalesActuales,
+      porcentajePuntos: porcentajePuntos,
+      validacionPuntos: validacionPuntos
     });
   };
 
@@ -1702,48 +1760,117 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
 
   // Función para renderizar la vista Timeline
   const renderTimelineView = () => {
-    // Obtener todas las fechas de inicio y fin para calcular el rango
-    const fechas = filasOrdenadas
-      .map(fila => ({
-        inicio: fila.properties?.["Start Date"]?.value || fila.properties?.["startDate"]?.value,
-        fin: fila.properties?.["End Date"]?.value || fila.properties?.["endDate"]?.value,
-      }))
-      .filter(f => f.inicio && f.fin);
+    // Usar fechas globales del sprint
+    const sprintInicio = sprintConfig?.sprintStartDate;
+    const sprintFin = sprintConfig?.sprintEndDate;
+    const horasDiarias = sprintConfig?.horasDiarias || 8;
 
-    if (fechas.length === 0) {
+    if (!sprintInicio || !sprintFin) {
       return (
         <div className="text-center py-12 text-gray-500">
-          <p className="mb-2">No hay tareas con fechas de inicio y fin para mostrar en la timeline</p>
-          <p className="text-sm">Asegúrate de tener campos "Start Date" y "End Date" con valores</p>
+          <p className="mb-2">No hay fechas de sprint configuradas para mostrar en la timeline</p>
+          <p className="text-sm">Configura las fechas de inicio y fin del sprint en la configuración</p>
         </div>
       );
     }
 
-    // Calcular el rango de fechas
-    const todasLasFechas = [...fechas.map(f => f.inicio), ...fechas.map(f => f.fin)];
-    const fechaMin = new Date(Math.min(...todasLasFechas.map(d => new Date(d).getTime())));
-    const fechaMax = new Date(Math.max(...todasLasFechas.map(d => new Date(d).getTime())));
+    // Calcular días hábiles totales del sprint
+    const diasHabilesTotales = calcularDiasHabiles(sprintInicio, sprintFin);
+    
+    if (diasHabilesTotales === 0) {
+      return (
+        <div className="text-center py-12 text-gray-500">
+          <p className="mb-2">No hay días hábiles en el rango del sprint</p>
+        </div>
+      );
+    }
+
+    // Obtener tareas con horas estimadas
+    const tareasConHoras = filasOrdenadas
+      .map(fila => {
+        const timeEstimated = fila.properties?.["Time Estimated"]?.value;
+        const horas = typeof timeEstimated === 'number' ? timeEstimated : parseFloat(timeEstimated) || 0;
+        return { fila, horas };
+      })
+      .filter(t => t.horas > 0);
+
+    if (tareasConHoras.length === 0) {
+      return (
+        <div className="text-center py-12 text-gray-500">
+          <p className="mb-2">No hay tareas con horas estimadas para mostrar en la timeline</p>
+          <p className="text-sm">Agrega horas estimadas en el campo "Time Estimated" para cada tarea</p>
+        </div>
+      );
+    }
+
+    // Calcular el rango de fechas del sprint
+    const fechaMin = new Date(sprintInicio);
+    const fechaMax = new Date(sprintFin);
     
     // Agregar algunos días de margen
-    fechaMin.setDate(fechaMin.getDate() - 2);
-    fechaMax.setDate(fechaMax.getDate() + 2);
+    fechaMin.setDate(fechaMin.getDate() - 1);
+    fechaMax.setDate(fechaMax.getDate() + 1);
     
     const rangoTotal = fechaMax.getTime() - fechaMin.getTime();
-    const diasTotal = Math.ceil(rangoTotal / (1000 * 60 * 60 * 24));
 
     // Función para calcular posición porcentual de una fecha
     const calcularPosicion = (fecha) => {
       const fechaObj = new Date(fecha);
       const diferencia = fechaObj.getTime() - fechaMin.getTime();
-      return (diferencia / rangoTotal) * 100;
+      return Math.max(0, Math.min(100, (diferencia / rangoTotal) * 100));
     };
 
-    // Función para calcular ancho porcentual de una tarea
-    const calcularAncho = (inicio, fin) => {
-      const inicioPos = calcularPosicion(inicio);
-      const finPos = calcularPosicion(fin);
-      return Math.max(2, finPos - inicioPos); // Mínimo 2% de ancho
+    // Función para calcular fecha a partir de días hábiles desde el inicio
+    const calcularFechaDesdeDiasHabiles = (diasHabilesDesdeInicio) => {
+      const fecha = new Date(sprintInicio);
+      let diasAgregados = 0;
+      let diasHabilesAgregados = 0;
+      
+      while (diasHabilesAgregados < diasHabilesDesdeInicio && fecha <= fechaMax) {
+        const diaSemana = fecha.getDay();
+        const esFinDeSemana = diaSemana === 0 || diaSemana === 6;
+        
+        // Verificar si es día no trabajado
+        const año = fecha.getFullYear();
+        const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+        const dia = String(fecha.getDate()).padStart(2, '0');
+        const fechaStr = `${año}-${mes}-${dia}`;
+        const diasNoTrabajados = sprintConfig?.diasNoTrabajados || [];
+        const esDiaNoTrabajado = diasNoTrabajados.includes(fechaStr);
+        
+        if (!esFinDeSemana && !esDiaNoTrabajado) {
+          diasHabilesAgregados++;
+        }
+        fecha.setDate(fecha.getDate() + 1);
+        diasAgregados++;
+      }
+      
+      return fecha;
     };
+
+    // Distribuir tareas secuencialmente a lo largo del sprint
+    let diasHabilesAcumulados = 0;
+    const tareasDistribuidas = tareasConHoras.map(({ fila, horas }) => {
+      // Calcular días hábiles necesarios para esta tarea
+      const diasHabilesNecesarios = Math.ceil(horas / horasDiarias);
+      
+      // Calcular fecha de inicio (días hábiles acumulados desde el inicio)
+      const fechaInicio = calcularFechaDesdeDiasHabiles(diasHabilesAcumulados);
+      const fechaFin = calcularFechaDesdeDiasHabiles(diasHabilesAcumulados + diasHabilesNecesarios);
+      
+      // Actualizar acumulador
+      diasHabilesAcumulados += diasHabilesNecesarios;
+      
+      return {
+        fila,
+        horas,
+        diasHabilesNecesarios,
+        fechaInicio,
+        fechaFin,
+        posicion: calcularPosicion(fechaInicio.toISOString().split('T')[0]),
+        ancho: Math.max(2, (diasHabilesNecesarios / diasHabilesTotales) * 100) // Mínimo 2% de ancho
+      };
+    });
 
     // Generar días para el eje X
     const dias = [];
@@ -1793,77 +1920,72 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
 
         {/* Tareas en la timeline */}
         <div className="space-y-2">
-          {filasOrdenadas
-            .filter(fila => {
-              const inicio = fila.properties?.["Start Date"]?.value || fila.properties?.["startDate"]?.value;
-              const fin = fila.properties?.["End Date"]?.value || fila.properties?.["endDate"]?.value;
-              return inicio && fin;
-            })
-            .map((fila, idx) => {
-              const inicio = fila.properties?.["Start Date"]?.value || fila.properties?.["startDate"]?.value;
-              const fin = fila.properties?.["End Date"]?.value || fila.properties?.["endDate"]?.value;
-              const posicion = calcularPosicion(inicio);
-              const ancho = calcularAncho(inicio, fin);
-              
-              // Obtener información adicional
-              const progreso = campoProgreso ? obtenerValorCelda(fila, campoProgreso) : null;
-              const estado = fila.properties?.["Estado"]?.value || fila.properties?.["Priority"]?.value;
-              const estadoColor = fila.properties?.["Estado"]?.color || fila.properties?.["Priority"]?.color || "#3b82f6";
-              
-              return (
+          {tareasDistribuidas.map((tarea, idx) => {
+            const { fila, horas, diasHabilesNecesarios, fechaInicio, fechaFin, posicion, ancho } = tarea;
+            
+            // Obtener información adicional
+            const progreso = campoProgreso ? obtenerValorCelda(fila, campoProgreso) : null;
+            const estado = fila.properties?.["Estado"]?.value || fila.properties?.["Priority"]?.value;
+            const estadoColor = fila.properties?.["Estado"]?.color || fila.properties?.["Priority"]?.color || "#3b82f6";
+            
+            return (
+              <div
+                key={idx}
+                className="relative h-10 flex items-center cursor-pointer hover:opacity-80 transition-opacity group"
+                onClick={() => abrirDrawer(fila)}
+                style={{ paddingLeft: `${posicion}%` }}
+              >
                 <div
-                  key={idx}
-                  className="relative h-10 flex items-center cursor-pointer hover:opacity-80 transition-opacity group"
-                  onClick={() => abrirDrawer(fila)}
-                  style={{ paddingLeft: `${posicion}%` }}
+                  className="h-8 rounded px-2 flex items-center text-xs font-medium text-white shadow-sm relative"
+                  style={{
+                    width: `${ancho}%`,
+                    backgroundColor: estadoColor,
+                    minWidth: '80px'
+                  }}
+                  title={`${fila.Name} - ${horas}h (${diasHabilesNecesarios} días hábiles) - ${fechaInicio.toLocaleDateString('es-ES')} a ${fechaFin.toLocaleDateString('es-ES')}${progreso ? ` - ${progreso}` : ''}`}
                 >
-                  <div
-                    className="h-8 rounded px-2 flex items-center text-xs font-medium text-white shadow-sm relative"
-                    style={{
-                      width: `${ancho}%`,
-                      backgroundColor: estadoColor,
-                      minWidth: '80px'
-                    }}
-                    title={`${fila.Name} - ${inicio} a ${fin}${progreso ? ` - ${progreso}` : ''}`}
-                  >
-                    <span className="truncate flex-1">{fila.Name}</span>
-                    {progreso && (
-                      <span className="ml-2 text-xs opacity-90 bg-black/20 px-1 rounded">
-                        {progreso}
-                      </span>
-                    )}
-                    {/* Indicador de progreso visual */}
-                    {campoProgreso && typeof fila.properties?.[campoProgreso.name]?.value === 'number' && (
-                      <div
-                        className="absolute bottom-0 left-0 bg-black/30 h-1 rounded-b"
-                        style={{
-                          width: `${Math.min(100, (fila.properties[campoProgreso.name]?.value || 0))}%`
-                        }}
-                      />
-                    )}
-                  </div>
+                  <span className="truncate flex-1">{fila.Name}</span>
+                  <span className="ml-2 text-xs opacity-90 bg-black/20 px-1 rounded whitespace-nowrap">
+                    {horas}h
+                  </span>
+                  {progreso && (
+                    <span className="ml-2 text-xs opacity-90 bg-black/20 px-1 rounded">
+                      {progreso}
+                    </span>
+                  )}
+                  {/* Indicador de progreso visual */}
+                  {campoProgreso && typeof fila.properties?.[campoProgreso.name]?.value === 'number' && (
+                    <div
+                      className="absolute bottom-0 left-0 bg-black/30 h-1 rounded-b"
+                      style={{
+                        width: `${Math.min(100, (fila.properties[campoProgreso.name]?.value || 0))}%`
+                      }}
+                    />
+                  )}
                 </div>
-              );
-            })}
+              </div>
+            );
+          })}
           
+          {/* Tareas sin horas estimadas */}
           {filasOrdenadas.filter(fila => {
-            const inicio = fila.properties?.["Start Date"]?.value || fila.properties?.["startDate"]?.value;
-            const fin = fila.properties?.["End Date"]?.value || fila.properties?.["endDate"]?.value;
-            return !inicio || !fin;
+            const timeEstimated = fila.properties?.["Time Estimated"]?.value;
+            const horas = typeof timeEstimated === 'number' ? timeEstimated : parseFloat(timeEstimated) || 0;
+            return horas <= 0;
           }).length > 0 && (
             <div className="mt-4 pt-4 border-t">
               <div className="text-sm text-gray-500 mb-2">
-                Tareas sin fechas ({filasOrdenadas.filter(fila => {
-                  const inicio = fila.properties?.["Start Date"]?.value || fila.properties?.["startDate"]?.value;
-                  const fin = fila.properties?.["End Date"]?.value || fila.properties?.["endDate"]?.value;
-                  return !inicio || !fin;
+                Tareas sin horas estimadas ({filasOrdenadas.filter(fila => {
+                  const timeEstimated = fila.properties?.["Time Estimated"]?.value;
+                  const horas = typeof timeEstimated === 'number' ? timeEstimated : parseFloat(timeEstimated) || 0;
+                  return horas <= 0;
                 }).length})
               </div>
               {filasOrdenadas
                 .filter(fila => {
-                  const inicio = fila.properties?.["Start Date"]?.value || fila.properties?.["startDate"]?.value;
-                  const fin = fila.properties?.["End Date"]?.value || fila.properties?.["endDate"]?.value;
-                  return !inicio || !fin;
+                  const timeEstimated = fila.properties?.["Time Estimated"]?.value;
+                  const horas = typeof timeEstimated === 'number' ? timeEstimated : parseFloat(timeEstimated) || 0;
+                  return horas <= 0;
                 })
                 .map((fila, idx) => (
                   <div
@@ -1872,6 +1994,7 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                     onClick={() => abrirDrawer(fila)}
                   >
                     {fila.Name || "Sin nombre"}
+                    <span className="text-xs text-gray-400 ml-2">(Sin horas estimadas)</span>
                   </div>
                 ))}
             </div>
@@ -1952,14 +2075,10 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
       <div className="absolute left-0 top-1/2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
         <button
           onClick={() => {
-            const pos = getPos?.();
-            const view = editor?.view;
-
-            if (view && typeof pos === "number") {
-              view.dispatch(view.state.tr.delete(pos, pos + node.nodeSize));
-            }
+            setShowDeleteTableModal(true);
           }}
           className="bg-white border rounded px-2 py-1 text-xs shadow hover:bg-red-100"
+          title="Eliminar tabla"
         >
           🗑️
         </button>
@@ -2041,59 +2160,59 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
         )}
       </div>
 
-      {/* Selector de tipo de vista (Table/Timeline) y Configuración del Sprint */}
-      <div className="flex items-center justify-between gap-4 mb-3 flex-wrap">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setTipoVista('table')}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm transition-colors ${
-              tipoVista === 'table'
-                ? 'bg-gray-200 text-gray-900 font-medium'
-                : 'bg-transparent text-gray-600 hover:bg-gray-100'
-            }`}
-          >
-            <span className="text-base">⊞</span>
-            <span>Table</span>
-          </button>
-          <button
-            onClick={() => setTipoVista('timeline')}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm transition-colors ${
-              tipoVista === 'timeline'
-                ? 'bg-gray-200 text-gray-900 font-medium'
-                : 'bg-transparent text-gray-600 hover:bg-gray-100'
-            }`}
-          >
-            <span className="text-base">📄</span>
-            <span>Timeline</span>
-          </button>
-        </div>
-        
-        {/* Configuración del Sprint */}
-        <div className="flex items-center gap-3 text-xs">
+      {/* Selector de tipo de vista (Table/Timeline) */}
+      <div className="flex items-center gap-2 mb-2">
+        <button
+          onClick={() => setTipoVista('table')}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm transition-colors ${
+            tipoVista === 'table'
+              ? 'bg-gray-200 text-gray-900 font-medium'
+              : 'bg-transparent text-gray-600 hover:bg-gray-100'
+          }`}
+        >
+          <span className="text-base">⊞</span>
+          <span>Table</span>
+        </button>
+        <button
+          onClick={() => setTipoVista('timeline')}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm transition-colors ${
+            tipoVista === 'timeline'
+              ? 'bg-gray-200 text-gray-900 font-medium'
+              : 'bg-transparent text-gray-600 hover:bg-gray-100'
+          }`}
+        >
+          <span className="text-base">📄</span>
+          <span>Timeline</span>
+        </button>
+      </div>
+
+      {/* Configuración del Sprint - Compacta */}
+      <div className="mb-3">
+        <div className="flex items-center gap-2 text-xs flex-wrap">
           <div className="flex items-center gap-1">
-            <label className="text-gray-600 whitespace-nowrap">Fecha Inicio:</label>
+            <span className="text-gray-600">📅 Inicio:</span>
             <input
               type="date"
               value={sprintConfig.sprintStartDate || ''}
               onChange={(e) => {
                 setSprintConfig({ ...sprintConfig, sprintStartDate: e.target.value });
               }}
-              className="border rounded px-2 py-1 text-xs"
+              className="border rounded px-1.5 py-0.5 text-xs w-32"
             />
           </div>
           <div className="flex items-center gap-1">
-            <label className="text-gray-600 whitespace-nowrap">Fecha Fin:</label>
+            <span className="text-gray-600">📅 Fin:</span>
             <input
               type="date"
               value={sprintConfig.sprintEndDate || ''}
               onChange={(e) => {
                 setSprintConfig({ ...sprintConfig, sprintEndDate: e.target.value });
               }}
-              className="border rounded px-2 py-1 text-xs"
+              className="border rounded px-1.5 py-0.5 text-xs w-32"
             />
           </div>
           <div className="flex items-center gap-1">
-            <label className="text-gray-600 whitespace-nowrap">Horas Diarias:</label>
+            <span className="text-gray-600">⏰ Horas/día:</span>
             <input
               type="number"
               min="1"
@@ -2103,10 +2222,185 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                 const horas = parseInt(e.target.value) || 8;
                 setSprintConfig({ ...sprintConfig, horasDiarias: horas });
               }}
-              className="border rounded px-2 py-1 text-xs w-16"
+              className="border rounded px-1.5 py-0.5 text-xs w-14"
             />
           </div>
+          <div className="flex items-center gap-1">
+            <span className="text-gray-600">📊 Puntos:</span>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              value={sprintConfig.puntosTotalesSprint || ''}
+              onChange={(e) => {
+                const valor = e.target.value === '' ? null : Number(e.target.value);
+                setSprintConfig({ ...sprintConfig, puntosTotalesSprint: valor });
+              }}
+              className="border rounded px-1.5 py-0.5 text-xs w-14"
+              placeholder="8"
+              title="Puntos objetivo del sprint (Fibonacci: 1, 2, 3, 5, 8, 13, 21...)"
+            />
+          </div>
+          <button
+            onClick={() => setShowDiasNoTrabajadosModal(true)}
+            className="flex items-center gap-1 px-2 py-0.5 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded text-xs text-gray-700 transition-colors"
+            title="Configurar días no trabajados"
+          >
+            <span>🚫</span>
+            <span>Días no trabajados</span>
+            {sprintConfig.diasNoTrabajados && sprintConfig.diasNoTrabajados.length > 0 && (
+              <span className="bg-blue-500 text-white rounded-full px-1.5 py-0 text-xs font-semibold min-w-[18px] text-center">
+                {sprintConfig.diasNoTrabajados.length}
+              </span>
+            )}
+          </button>
         </div>
+        
+        {/* Visualización de Indicadores del Sprint */}
+        {(() => {
+          // Calcular fecha actual
+          const hoy = new Date();
+          const año = hoy.getFullYear();
+          const mes = String(hoy.getMonth() + 1).padStart(2, '0');
+          const dia = String(hoy.getDate()).padStart(2, '0');
+          const fechaActual = `${año}-${mes}-${dia}`;
+          
+          // Calcular días hábiles
+          const diasHabilesTranscurridos = sprintConfig.sprintStartDate && fechaActual 
+            ? calcularDiasHabiles(sprintConfig.sprintStartDate, fechaActual)
+            : 0;
+          const diasHabilesTotales = sprintConfig.sprintStartDate && sprintConfig.sprintEndDate
+            ? calcularDiasHabiles(sprintConfig.sprintStartDate, sprintConfig.sprintEndDate)
+            : 0;
+          const diasHabilesFaltantes = sprintConfig.sprintEndDate && fechaActual
+            ? calcularDiasHabiles(fechaActual, sprintConfig.sprintEndDate)
+            : 0;
+          
+          // Calcular horas
+          const horasDiarias = sprintConfig.horasDiarias || 8;
+          const horasDisponibles = diasHabilesTranscurridos * horasDiarias;
+          const horasTotalesSprint = diasHabilesTotales * horasDiarias;
+          
+          // Calcular puntos
+          const puntosTotalesObjetivo = sprintConfig.puntosTotalesSprint;
+          const puntosTotalesActuales = calcularTotal(filas, "Puntos de Historia");
+          const porcentajePuntos = puntosTotalesObjetivo && puntosTotalesObjetivo > 0 
+            ? Math.round((puntosTotalesActuales / puntosTotalesObjetivo) * 100) 
+            : null;
+          const esValidoPuntos = puntosTotalesObjetivo && puntosTotalesObjetivo >= 3 && puntosTotalesObjetivo <= 8;
+          const esMuyAltoPuntos = puntosTotalesObjetivo && puntosTotalesObjetivo > 8;
+          const esMuyBajoPuntos = puntosTotalesObjetivo && puntosTotalesObjetivo > 0 && puntosTotalesObjetivo < 3;
+          
+          // Solo mostrar si hay configuración mínima
+          if (!sprintConfig.sprintStartDate || !sprintConfig.sprintEndDate) return null;
+          
+          return (
+            <div className="mt-1.5 flex gap-2 flex-wrap">
+              {/* Días Hábiles */}
+              <div className="flex-1 min-w-[200px] p-2 bg-blue-50 rounded border border-blue-200 text-xs">
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-blue-700 font-semibold">📅 Días Hábiles:</span>
+                    <span className="text-blue-900 font-medium">{diasHabilesTranscurridos}</span>
+                    <span className="text-blue-500">/</span>
+                    <span className="text-blue-900 font-medium">{diasHabilesTotales}</span>
+                    {diasHabilesFaltantes > 0 && (
+                      <span className="text-blue-700 text-xs">({diasHabilesFaltantes} faltantes)</span>
+                    )}
+                  </div>
+                  <div className="text-blue-600 text-xs whitespace-nowrap">
+                    {diasHabilesTotales > 0 
+                      ? `${Math.round((diasHabilesTranscurridos / diasHabilesTotales) * 100)}%`
+                      : '0%'}
+                  </div>
+                </div>
+                {diasHabilesTotales > 0 && (
+                  <div className="mt-1">
+                    <div className="w-full bg-blue-200 rounded-full h-1.5">
+                      <div 
+                        className="h-1.5 rounded-full bg-blue-500 transition-all"
+                        style={{ width: `${Math.min((diasHabilesTranscurridos / diasHabilesTotales) * 100, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              {/* Horas */}
+              <div className="flex-1 min-w-[200px] p-2 bg-purple-50 rounded border border-purple-200 text-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-purple-700 font-semibold">⏰ Horas:</span>
+                    <span className="text-purple-900 font-medium">{horasDisponibles}h</span>
+                    <span className="text-purple-500">/</span>
+                    <span className="text-purple-900 font-medium">{horasTotalesSprint}h</span>
+                  </div>
+                  <div className="text-purple-600 text-xs whitespace-nowrap">
+                    {horasTotalesSprint > 0 
+                      ? `${Math.round((horasDisponibles / horasTotalesSprint) * 100)}%`
+                      : '0%'}
+                  </div>
+                </div>
+                {horasTotalesSprint > 0 && (
+                  <div className="mt-1">
+                    <div className="w-full bg-purple-200 rounded-full h-1.5">
+                      <div 
+                        className="h-1.5 rounded-full bg-purple-500 transition-all"
+                        style={{ width: `${Math.min((horasDisponibles / horasTotalesSprint) * 100, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              {/* Puntos (solo si hay objetivo definido) */}
+              {puntosTotalesObjetivo !== null && puntosTotalesObjetivo !== undefined && (
+                <div className="flex-1 min-w-[200px] p-2 bg-green-50 rounded border border-green-200 text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-green-700 font-semibold">📊 Puntos:</span>
+                      <span className="text-green-900 font-medium">{puntosTotalesActuales}</span>
+                      <span className="text-green-500">/</span>
+                      <span className="text-green-900 font-medium">{puntosTotalesObjetivo}</span>
+                      {porcentajePuntos !== null && (
+                        <span className="text-green-600">({porcentajePuntos}%)</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {esValidoPuntos && (
+                        <span className="px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-xs whitespace-nowrap">
+                          ✅ OK
+                        </span>
+                      )}
+                      {esMuyAltoPuntos && (
+                        <span className="px-1.5 py-0.5 bg-yellow-100 text-yellow-700 rounded text-xs whitespace-nowrap">
+                          ⚠️ Dividir
+                        </span>
+                      )}
+                      {esMuyBajoPuntos && (
+                        <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-xs whitespace-nowrap">
+                          📊 Pequeño
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {porcentajePuntos !== null && (
+                    <div className="mt-1">
+                      <div className="w-full bg-green-200 rounded-full h-1.5">
+                        <div 
+                          className={`h-1.5 rounded-full transition-all ${
+                            porcentajePuntos <= 100 ? 'bg-green-500' : 'bg-red-500'
+                          }`}
+                          style={{ width: `${Math.min(porcentajePuntos, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       <div className="flex justify-between items-center mb-2 gap-2">
@@ -3388,6 +3682,250 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
   </div>
 )}
 
+      {/* Modal de Días No Trabajados */}
+      {/* Modal de Días No Trabajados */}
+      {showDiasNoTrabajadosModal && (() => {
+        // Función para obtener días festivos sugeridos en un rango de fechas
+        const obtenerFestivosSugeridos = (fechaInicio, fechaFin) => {
+          if (!fechaInicio || !fechaFin) return [];
+          
+          const inicio = new Date(fechaInicio);
+          const fin = new Date(fechaFin);
+          const año = inicio.getFullYear();
+          const festivos = [];
+          
+          // Días festivos fijos
+          const festivosFijos = [
+            { fecha: `${año}-01-01`, nombre: 'Año Nuevo' },
+            { fecha: `${año}-01-06`, nombre: 'Día de Reyes' },
+            { fecha: `${año}-05-01`, nombre: 'Día del Trabajo' },
+            { fecha: `${año}-07-20`, nombre: 'Independencia' },
+            { fecha: `${año}-08-07`, nombre: 'Batalla de Boyacá' },
+            { fecha: `${año}-12-25`, nombre: 'Navidad' },
+          ];
+          
+          // Agregar año siguiente si el sprint cruza año
+          const añoSiguiente = año + 1;
+          festivosFijos.push(
+            { fecha: `${añoSiguiente}-01-01`, nombre: 'Año Nuevo' },
+            { fecha: `${añoSiguiente}-01-06`, nombre: 'Día de Reyes' }
+          );
+          
+          festivosFijos.forEach(festivo => {
+            const fechaFestivo = new Date(festivo.fecha);
+            if (fechaFestivo >= inicio && fechaFestivo <= fin) {
+              festivos.push({ fecha: festivo.fecha, nombre: festivo.nombre });
+            }
+          });
+          
+          return festivos.sort((a, b) => a.fecha.localeCompare(b.fecha));
+        };
+        
+        const festivosSugeridos = obtenerFestivosSugeridos(
+          sprintConfig.sprintStartDate,
+          sprintConfig.sprintEndDate
+        );
+        const diasNoTrabajados = sprintConfig.diasNoTrabajados || [];
+        const diasAprobados = diasNoTrabajados.filter(fecha => 
+          festivosSugeridos.some(f => f.fecha === fecha)
+        );
+        const diasManuales = diasNoTrabajados.filter(fecha => 
+          !festivosSugeridos.some(f => f.fecha === fecha)
+        );
+        
+        return (
+          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[85vh] overflow-hidden flex flex-col">
+              <div className="flex items-center justify-between p-5 border-b bg-gradient-to-r from-gray-50 to-white">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">🚫 Días No Trabajados</h2>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Selecciona los festivos y agrega días adicionales que no se trabajarán en este sprint
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowDiasNoTrabajadosModal(false)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors text-3xl leading-none font-light"
+                  title="Cerrar"
+                >
+                  ×
+                </button>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto p-5 space-y-5">
+                {/* Festivos sugeridos */}
+                {festivosSugeridos.length > 0 ? (
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <div className="text-sm font-semibold text-gray-700">
+                          📅 Festivos Sugeridos
+                        </div>
+                        <div className="text-xs text-gray-500 mt-0.5">
+                          Haz clic para aprobar o rechazar ({festivosSugeridos.length} disponibles)
+                        </div>
+                      </div>
+                      <div className="text-xs text-gray-600 bg-blue-50 px-2 py-1 rounded">
+                        {diasAprobados.length} de {festivosSugeridos.length} seleccionados
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      {festivosSugeridos.map((festivo) => {
+                        const estaSeleccionado = diasNoTrabajados.includes(festivo.fecha);
+                        return (
+                          <button
+                            key={festivo.fecha}
+                            onClick={() => {
+                              const nuevos = [...diasNoTrabajados];
+                              if (estaSeleccionado) {
+                                const index = nuevos.indexOf(festivo.fecha);
+                                if (index > -1) nuevos.splice(index, 1);
+                              } else {
+                                nuevos.push(festivo.fecha);
+                              }
+                              setSprintConfig({ 
+                                ...sprintConfig, 
+                                diasNoTrabajados: nuevos.sort()
+                              });
+                            }}
+                            className={`flex items-center gap-3 px-4 py-3 rounded-lg border-2 text-sm transition-all ${
+                              estaSeleccionado
+                                ? 'bg-blue-50 border-blue-400 text-blue-700 font-medium shadow-md'
+                                : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400'
+                            }`}
+                          >
+                            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold ${
+                              estaSeleccionado ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-400'
+                            }`}>
+                              {estaSeleccionado ? '✓' : ''}
+                            </div>
+                            <div className="flex-1 text-left">
+                              <div className="font-semibold">{festivo.nombre}</div>
+                              <div className="text-xs text-gray-500 mt-0.5">{festivo.fecha}</div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-sm text-gray-500 italic bg-gray-50 p-3 rounded border border-gray-200">
+                    No hay festivos sugeridos en el rango de fechas del sprint ({sprintConfig.sprintStartDate} a {sprintConfig.sprintEndDate}).
+                  </div>
+                )}
+                
+                {/* Días agregados manualmente */}
+                <div className="border-t pt-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <div className="text-sm font-semibold text-gray-700">
+                        ➕ Días Adicionales
+                      </div>
+                      <div className="text-xs text-gray-500 mt-0.5">
+                        Agrega días específicos que no se trabajarán (vacaciones, días puente, etc.)
+                      </div>
+                    </div>
+                    {diasManuales.length > 0 && (
+                      <div className="text-xs text-gray-600 bg-yellow-50 px-2 py-1 rounded">
+                        {diasManuales.length} día{diasManuales.length !== 1 ? 's' : ''} agregado{diasManuales.length !== 1 ? 's' : ''}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Input para agregar día manualmente */}
+                  <div className="mb-3">
+                    <input
+                      type="date"
+                      className="w-full border-2 border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+                      placeholder="Selecciona una fecha"
+                      min={sprintConfig.sprintStartDate}
+                      max={sprintConfig.sprintEndDate}
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          const nuevaFecha = e.target.value;
+                          const diasNoTrabajados = sprintConfig.diasNoTrabajados || [];
+                          if (!diasNoTrabajados.includes(nuevaFecha)) {
+                            setSprintConfig({ 
+                              ...sprintConfig, 
+                              diasNoTrabajados: [...diasNoTrabajados, nuevaFecha].sort()
+                            });
+                            e.target.value = '';
+                          } else {
+                            alert('Esta fecha ya está agregada');
+                          }
+                        }
+                      }}
+                    />
+                    <div className="text-xs text-gray-500 mt-1.5">
+                      Selecciona una fecha y se agregará automáticamente a la lista
+                    </div>
+                  </div>
+                  
+                  {/* Lista de días manuales */}
+                  {diasManuales.length > 0 ? (
+                    <div className="space-y-2">
+                      {diasManuales.map((fecha, index) => (
+                        <div key={index} className="flex items-center justify-between bg-yellow-50 border-2 border-yellow-200 px-4 py-2.5 rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <span className="text-yellow-600">📅</span>
+                            <span className="text-sm text-gray-700 font-medium">{fecha}</span>
+                          </div>
+                          <button
+                            onClick={() => {
+                              const nuevos = [...diasNoTrabajados];
+                              nuevos.splice(diasNoTrabajados.indexOf(fecha), 1);
+                              setSprintConfig({ ...sprintConfig, diasNoTrabajados: nuevos });
+                            }}
+                            className="text-red-600 hover:text-red-800 text-xl font-bold leading-none w-6 h-6 flex items-center justify-center hover:bg-red-50 rounded transition-colors"
+                            title="Eliminar fecha"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-gray-400 italic bg-gray-50 p-3 rounded border border-gray-200 text-center">
+                      No hay días adicionales agregados. Selecciona una fecha arriba para agregar.
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              {/* Resumen y total */}
+              <div className="border-t bg-gradient-to-r from-gray-50 to-white p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <div className="text-sm font-semibold text-gray-700">
+                      📊 Resumen
+                    </div>
+                    <div className="text-xs text-gray-500 mt-0.5">
+                      Total de días que se excluirán del cálculo de días hábiles
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-3xl font-bold text-gray-900">
+                      {diasNoTrabajados.length}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      día{diasNoTrabajados.length !== 1 ? 's' : ''} no trabajado{diasNoTrabajados.length !== 1 ? 's' : ''}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() => setShowDiasNoTrabajadosModal(false)}
+                    className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium shadow-sm"
+                  >
+                    ✅ Guardar y Cerrar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Modal de estadísticas del Sprint */}
       {showSprintStatsModal && sprintInfo && (
         <div className="fixed inset-0 z-50 bg-black/50 flex justify-center items-center p-4">
@@ -3437,6 +3975,27 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                   </div>
                 </div>
               </div>
+              {sprintInfo.puntosTotalesObjetivo !== null && sprintInfo.puntosTotalesObjetivo !== undefined && (
+                <div className="flex items-start gap-3">
+                  <span className="text-2xl">📊</span>
+                  <div>
+                    <div className="font-semibold text-gray-900">Puntos de Historia</div>
+                    <div className="text-sm text-gray-600">
+                      {sprintInfo.puntosTotalesActuales} / {sprintInfo.puntosTotalesObjetivo}
+                      {sprintInfo.porcentajePuntos !== null && ` (${sprintInfo.porcentajePuntos}%)`}
+                    </div>
+                    {sprintInfo.validacionPuntos && (
+                      <div className={`text-xs mt-1 px-2 py-0.5 rounded inline-block ${
+                        sprintInfo.validacionPuntos.includes('✅') ? 'bg-green-100 text-green-700' :
+                        sprintInfo.validacionPuntos.includes('⚠️') ? 'bg-yellow-100 text-yellow-700' :
+                        'bg-blue-100 text-blue-700'
+                      }`}>
+                        {sprintInfo.validacionPuntos}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
             <div className="mt-6 flex justify-end">
               <button
@@ -4073,6 +4632,23 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
           </div>
         </div>
       )}
+
+      {/* Modal de confirmación para eliminar tabla */}
+      <ConfirmDeleteModal
+        isOpen={showDeleteTableModal}
+        onClose={() => setShowDeleteTableModal(false)}
+        onConfirm={() => {
+          const pos = getPos?.();
+          const view = editor?.view;
+
+          if (view && typeof pos === "number") {
+            view.dispatch(view.state.tr.delete(pos, pos + node.nodeSize));
+          }
+          setShowDeleteTableModal(false);
+        }}
+        title="Eliminar Tabla"
+        message="¿Estás seguro de que deseas eliminar esta tabla completa? Esta acción no se puede deshacer y se perderán todos los datos, columnas, filas y configuraciones del sprint."
+      />
 
     </NodeViewWrapper>
   );
