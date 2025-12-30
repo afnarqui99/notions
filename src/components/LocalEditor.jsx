@@ -76,6 +76,7 @@ export default function LocalEditor({ onShowConfig }) {
   const [modalError, setModalError] = useState({ isOpen: false, message: '', title: '' });
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [showNewPageModal, setShowNewPageModal] = useState(false);
+  const [paginaPadreParaNueva, setPaginaPadreParaNueva] = useState(null);
   const [showPageLinkModal, setShowPageLinkModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [paginaAEliminar, setPaginaAEliminar] = useState(null);
@@ -440,6 +441,7 @@ export default function LocalEditor({ onShowConfig }) {
               const data = await LocalStorageService.readJSONFile(file, 'data');
               return { 
                 id: file.replace('.json', ''), 
+                parentId: data.parentId || null, // Asegurar que parentId existe (null para páginas raíz)
                 ...data 
               };
             })
@@ -460,9 +462,18 @@ export default function LocalEditor({ onShowConfig }) {
 
     cargarPaginas();
     
+    // Escuchar evento de reordenamiento para recargar páginas
+    const handleReordenar = () => {
+      cargarPaginas();
+    };
+    window.addEventListener('paginasReordenadas', handleReordenar);
+    
     // Recargar cada 5 segundos para detectar cambios
     const interval = setInterval(cargarPaginas, 5000);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('paginasReordenadas', handleReordenar);
+    };
   }, [handleVersion]); // Recargar cuando cambia handleVersion
 
   // Escuchar cambios en el handle del directorio
@@ -582,7 +593,7 @@ export default function LocalEditor({ onShowConfig }) {
     };
   }, [hayCambiosSinGuardar, guardando, editor, paginaSeleccionada, guardarContenido]);
 
-  const crearPagina = async (titulo, emoji = null) => {
+  const crearPagina = async (titulo, emoji = null, parentId = null) => {
     if (!titulo || !titulo.trim()) return;
 
     // Extraer emoji si no se pasó explícitamente
@@ -599,6 +610,7 @@ export default function LocalEditor({ onShowConfig }) {
       id,
       titulo: tituloSinEmoji,
       emoji: emojiFinal || null,
+      parentId: parentId || null, // ID de la página padre (null para páginas raíz)
       contenido: {
         type: "doc",
         content: [{ type: "paragraph" }],
@@ -780,31 +792,46 @@ export default function LocalEditor({ onShowConfig }) {
     
     setEliminando(true);
     try {
-      // Cargar el contenido de la página para extraer archivos asociados
-      const data = await LocalStorageService.readJSONFile(`${paginaAEliminar.id}.json`, 'data');
+      // Obtener todas las páginas hijas (recursivamente)
+      const paginasHijas = obtenerPaginasHijas(paginaAEliminar.id, paginas);
+      const todasLasPaginasAEliminar = [paginaAEliminar, ...paginasHijas];
       
-      // Extraer archivos asociados
-      const archivos = data?.contenido ? extraerArchivosDelContenido(data.contenido) : [];
-      
-      // Eliminar todos los archivos asociados
       let archivosEliminados = 0;
-      for (const filename of archivos) {
+      let paginasEliminadas = 0;
+      
+      // Eliminar todas las páginas (padre e hijas)
+      for (const pagina of todasLasPaginasAEliminar) {
         try {
-          const eliminado = await LocalStorageService.deleteBinaryFile(filename, 'files');
-          if (eliminado) archivosEliminados++;
+          // Cargar el contenido de la página para extraer archivos asociados
+          const data = await LocalStorageService.readJSONFile(`${pagina.id}.json`, 'data');
+          
+          // Extraer archivos asociados
+          const archivos = data?.contenido ? extraerArchivosDelContenido(data.contenido) : [];
+          
+          // Eliminar todos los archivos asociados
+          for (const filename of archivos) {
+            try {
+              const eliminado = await LocalStorageService.deleteBinaryFile(filename, 'files');
+              if (eliminado) archivosEliminados++;
+            } catch (error) {
+              console.warn(`No se pudo eliminar el archivo ${filename}:`, error);
+            }
+          }
+          
+          // Eliminar el archivo JSON de la página
+          await LocalStorageService.deleteJSONFile(`${pagina.id}.json`, 'data');
+          paginasEliminadas++;
         } catch (error) {
-          console.warn(`No se pudo eliminar el archivo ${filename}:`, error);
+          console.error(`Error eliminando página ${pagina.id}:`, error);
         }
       }
       
-      // Eliminar el archivo JSON de la página
-      await LocalStorageService.deleteJSONFile(`${paginaAEliminar.id}.json`, 'data');
+      // Actualizar la lista de páginas (eliminar todas las páginas eliminadas)
+      const idsAEliminar = todasLasPaginasAEliminar.map(p => p.id);
+      setPaginas(paginas.filter(p => !idsAEliminar.includes(p.id)));
       
-      // Actualizar la lista de páginas
-      setPaginas(paginas.filter(p => p.id !== paginaAEliminar.id));
-      
-      // Si la página eliminada era la seleccionada, limpiar la selección
-      if (paginaSeleccionada === paginaAEliminar.id) {
+      // Si la página eliminada (o alguna hija) era la seleccionada, limpiar la selección
+      if (idsAEliminar.includes(paginaSeleccionada)) {
         setPaginaSeleccionada(null);
         setTituloPaginaActual('');
         editor?.commands.setContent({ type: "doc", content: [{ type: "paragraph" }] });
@@ -815,8 +842,10 @@ export default function LocalEditor({ onShowConfig }) {
       setPaginaAEliminar(null);
       
       // Mostrar mensaje de éxito
+      const mensajeHijas = paginasHijas.length > 0 ? ` junto con ${paginasHijas.length} página(s) hija(s)` : '';
+      const mensajeArchivos = archivosEliminados > 0 ? ` y ${archivosEliminados} archivo(s) asociado(s)` : '';
       setToast({
-        message: `Página "${paginaAEliminar.titulo}" eliminada${archivosEliminados > 0 ? ` junto con ${archivosEliminados} archivo(s) asociado(s)` : ''}`,
+        message: `Página "${paginaAEliminar.titulo}" eliminada${mensajeHijas}${mensajeArchivos}`,
         type: 'success'
       });
     } catch (error) {
@@ -829,6 +858,16 @@ export default function LocalEditor({ onShowConfig }) {
     } finally {
       setEliminando(false);
     }
+  };
+
+  // Función helper para obtener todas las páginas hijas de forma recursiva
+  const obtenerPaginasHijas = (parentId, todasLasPaginas) => {
+    const hijosDirectos = todasLasPaginas.filter(p => p.parentId === parentId);
+    let todosLosHijos = [...hijosDirectos];
+    hijosDirectos.forEach(hijo => {
+      todosLosHijos = todosLosHijos.concat(obtenerPaginasHijas(hijo.id, todasLasPaginas));
+    });
+    return todosLosHijos;
   };
 
   const abrirModalEliminar = (pagina) => {
@@ -1009,12 +1048,16 @@ export default function LocalEditor({ onShowConfig }) {
         paginas={paginas}
         paginaSeleccionada={paginaSeleccionada}
         onSeleccionarPagina={seleccionarPagina}
-        onNuevaPagina={() => setShowNewPageModal(true)}
+        onNuevaPagina={(parentId) => {
+          setPaginaPadreParaNueva(parentId);
+          setShowNewPageModal(true);
+        }}
         onShowConfig={() => setShowConfigModal(true)}
         filtroPagina={filtroPagina}
         setFiltroPagina={setFiltroPagina}
         onSidebarStateChange={setSidebarColapsado}
         onEliminarPagina={abrirModalEliminar}
+        onReordenarPaginas={setPaginas}
       />
 
       {/* Modal de selección */}
@@ -1244,8 +1287,14 @@ export default function LocalEditor({ onShowConfig }) {
       {/* Modal de Nueva Página */}
       <NewPageModal
         isOpen={showNewPageModal}
-        onClose={() => setShowNewPageModal(false)}
-        onCreate={crearPagina}
+        onClose={() => {
+          setShowNewPageModal(false);
+          setPaginaPadreParaNueva(null);
+        }}
+        onCreate={(titulo, emoji) => {
+          crearPagina(titulo, emoji, paginaPadreParaNueva);
+          setPaginaPadreParaNueva(null);
+        }}
       />
 
       {/* Modal de Enlace a Página */}
@@ -1321,21 +1370,29 @@ export default function LocalEditor({ onShowConfig }) {
                 </div>
               </div>
 
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                <div className="flex items-start gap-2">
-                  <svg className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <div className="text-sm text-yellow-800">
-                    <p className="font-medium mb-1">Se eliminará permanentemente:</p>
-                    <ul className="list-disc list-inside space-y-0.5 text-yellow-700">
-                      <li>La página y todo su contenido</li>
-                      <li>Imágenes y archivos asociados</li>
-                      <li>Todas las tablas y datos incluidos</li>
-                    </ul>
+              {(() => {
+                const paginasHijas = paginaAEliminar ? obtenerPaginasHijas(paginaAEliminar.id, paginas) : [];
+                return (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                    <div className="flex items-start gap-2">
+                      <svg className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <div className="text-sm text-yellow-800">
+                        <p className="font-medium mb-1">Se eliminará permanentemente:</p>
+                        <ul className="list-disc list-inside space-y-0.5 text-yellow-700">
+                          <li>La página y todo su contenido</li>
+                          {paginasHijas.length > 0 && (
+                            <li className="font-semibold">{paginasHijas.length} página(s) hija(s) y su contenido</li>
+                          )}
+                          <li>Imágenes y archivos asociados</li>
+                          <li>Todas las tablas y datos incluidos</li>
+                        </ul>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
+                );
+              })()}
             </div>
 
             {/* Footer con botones */}
