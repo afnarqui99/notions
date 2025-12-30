@@ -28,6 +28,42 @@ import Toast from "./Toast";
 import Sidebar from "./Sidebar";
 
 export default function LocalEditor({ onShowConfig }) {
+  // Función helper para extraer emoji del título
+  const extraerEmojiDelTitulo = (tituloTexto) => {
+    if (!tituloTexto || typeof tituloTexto !== 'string') return null;
+    const trimmed = tituloTexto.trim();
+    if (!trimmed) return null;
+    const firstChar = trimmed[0];
+    const code = firstChar.codePointAt(0);
+    // Rangos Unicode comunes de emojis
+    if (
+      (code >= 0x1F300 && code <= 0x1F9FF) ||
+      (code >= 0x2600 && code <= 0x26FF) ||
+      (code >= 0x2700 && code <= 0x27BF) ||
+      (code >= 0x1F600 && code <= 0x1F64F) ||
+      (code >= 0x1F680 && code <= 0x1F6FF) ||
+      (code >= 0x2190 && code <= 0x21FF) ||
+      (code >= 0x2300 && code <= 0x23FF) ||
+      (code >= 0x2B50 && code <= 0x2B55) ||
+      code === 0x3030 || code === 0x3299 ||
+      (code >= 0x1F900 && code <= 0x1F9FF)
+    ) {
+      return firstChar;
+    }
+    return null;
+  };
+
+  // Función helper para quitar el emoji del título
+  const quitarEmojiDelTitulo = (tituloTexto) => {
+    if (!tituloTexto || typeof tituloTexto !== 'string') return tituloTexto;
+    const emoji = extraerEmojiDelTitulo(tituloTexto);
+    if (emoji) {
+      const tituloSinEmoji = tituloTexto.trim().substring(emoji.length).trim();
+      return tituloSinEmoji || 'Sin título';
+    }
+    return tituloTexto.trim();
+  };
+
   const [titulo, setTitulo] = useState("");
   const editorRef = useRef(null);
   const intervaloRef = useRef(null);
@@ -289,12 +325,18 @@ export default function LocalEditor({ onShowConfig }) {
       // Convertir URLs blob a referencias de archivo antes de guardar
       const contenidoParaGuardar = convertirBlobsAReferencias(contenido);
       
+      // Asegurarse de que el título no tenga emoji (debe estar en el campo emoji)
+      const tituloLimpio = tituloPaginaActual 
+        ? quitarEmojiDelTitulo(tituloPaginaActual) 
+        : (data.titulo || 'Sin título');
+      
       await LocalStorageService.saveJSONFile(
         `${paginaSeleccionada}.json`,
         {
           ...data,
           contenido: contenidoParaGuardar,
-          titulo: tituloPaginaActual || data.titulo || 'Sin título',
+          titulo: tituloLimpio,
+          emoji: data.emoji || null, // Preservar el emoji existente
           actualizadoEn: new Date().toISOString(),
           creadoEn: data.creadoEn || new Date().toISOString()
         },
@@ -535,13 +577,19 @@ export default function LocalEditor({ onShowConfig }) {
     };
   }, [hayCambiosSinGuardar, guardando, editor, paginaSeleccionada, guardarContenido]);
 
-  const crearPagina = async (titulo) => {
+  const crearPagina = async (titulo, emoji = null) => {
     if (!titulo || !titulo.trim()) return;
+
+    // Extraer emoji si no se pasó explícitamente
+    const emojiFinal = emoji || extraerEmojiDelTitulo(titulo);
+    // Quitar el emoji del título para guardarlo limpio
+    const tituloSinEmoji = quitarEmojiDelTitulo(titulo);
 
     const id = `pagina-${Date.now()}`;
     const nuevaPagina = {
       id,
-      titulo: titulo.trim(),
+      titulo: tituloSinEmoji,
+      emoji: emojiFinal || null,
       contenido: {
         type: "doc",
         content: [{ type: "paragraph" }],
@@ -551,7 +599,11 @@ export default function LocalEditor({ onShowConfig }) {
     };
 
     try {
-      console.log('📝 Creando nueva página:', titulo.trim());
+      console.log('📝 Creando nueva página:', {
+        titulo: tituloSinEmoji,
+        emoji: emojiFinal,
+        estructura: nuevaPagina
+      });
       console.log('📁 baseDirectoryHandle:', LocalStorageService.baseDirectoryHandle ? '✅ Existe' : '❌ No existe');
       
       const resultado = await LocalStorageService.saveJSONFile(`${id}.json`, nuevaPagina, 'data');
@@ -559,8 +611,8 @@ export default function LocalEditor({ onShowConfig }) {
       
       setPaginas([nuevaPagina, ...paginas]);
       setPaginaSeleccionada(id);
-      setTitulo(titulo.trim());
-      setTituloPaginaActual(titulo.trim());
+      setTitulo(tituloSinEmoji);
+      setTituloPaginaActual(tituloSinEmoji);
       editor?.commands.setContent({ type: "doc", content: [{ type: "paragraph" }] });
     } catch (error) {
       console.error("❌ Error creando página:", error);
@@ -823,14 +875,30 @@ export default function LocalEditor({ onShowConfig }) {
     
     try {
       const data = await LocalStorageService.readJSONFile(`${paginaSeleccionada}.json`, 'data') || {};
+      // Extraer emoji del nuevo título
+      const nuevoEmoji = extraerEmojiDelTitulo(tituloPaginaActual);
+      // Quitar el emoji del título para guardarlo limpio
+      const tituloSinEmoji = quitarEmojiDelTitulo(tituloPaginaActual);
+      
       await LocalStorageService.saveJSONFile(
         `${paginaSeleccionada}.json`,
         {
           ...data,
-          titulo: tituloPaginaActual,
+          titulo: tituloSinEmoji,
+          emoji: nuevoEmoji || null,
           actualizadoEn: new Date().toISOString()
         },
         'data'
+      );
+      // Actualizar el título en el estado para que se muestre sin emoji
+      setTituloPaginaActual(tituloSinEmoji);
+      // Actualizar la lista de páginas para reflejar el cambio
+      setPaginas(prevPaginas => 
+        prevPaginas.map(p => 
+          p.id === paginaSeleccionada 
+            ? { ...p, titulo: tituloSinEmoji, emoji: nuevoEmoji || null }
+            : p
+        )
       );
     } catch (error) {
       console.error("Error actualizando título:", error);
