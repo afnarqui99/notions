@@ -69,6 +69,50 @@ export default function Sidebar({
   const paginasFavoritas = paginasFiltradas.filter(p => favoritos.includes(p.id));
   const paginasNormales = paginasFiltradas.filter(p => !favoritos.includes(p.id));
 
+  // Función para extraer el emoji del título si existe
+  const extraerEmoji = (titulo) => {
+    if (!titulo || typeof titulo !== 'string') return null;
+    
+    // Detectar si el primer carácter es un emoji
+    // Usamos una regex simple que captura el primer carácter si parece ser un emoji
+    const trimmed = titulo.trim();
+    if (!trimmed) return null;
+    
+    // Intentar detectar emojis usando código Unicode del primer carácter
+    const firstChar = trimmed[0];
+    const code = firstChar.codePointAt(0);
+    
+    // Rangos Unicode comunes de emojis
+    if (
+      (code >= 0x1F300 && code <= 0x1F9FF) || // Misc Symbols and Pictographs (emojis modernos)
+      (code >= 0x2600 && code <= 0x26FF) ||   // Misc symbols (sol, luna, etc.)
+      (code >= 0x2700 && code <= 0x27BF) ||   // Dingbats
+      (code >= 0x1F600 && code <= 0x1F64F) || // Emoticons
+      (code >= 0x1F680 && code <= 0x1F6FF) || // Transport and Map
+      (code >= 0x2190 && code <= 0x21FF) ||   // Arrows
+      (code >= 0x2300 && code <= 0x23FF) ||   // Misc Technical
+      (code >= 0x2B50 && code <= 0x2B55) ||   // Misc Symbols (estrellas)
+      code === 0x3030 || code === 0x3299 ||   // Misc
+      (code >= 0x1F900 && code <= 0x1F9FF)    // Supplemental Symbols and Pictographs
+    ) {
+      // Devolver el primer carácter (emoji)
+      return firstChar;
+    }
+    
+    return null;
+  };
+
+  // Función para obtener el título sin el emoji
+  const obtenerTituloSinEmoji = (titulo) => {
+    if (!titulo) return 'Sin título';
+    const emoji = extraerEmoji(titulo);
+    if (emoji) {
+      const tituloSinEmoji = titulo.substring(emoji.length).trim();
+      return tituloSinEmoji || 'Sin título';
+    }
+    return titulo;
+  };
+
   if (sidebarColapsado) {
     return (
       <div className="w-16 bg-gray-50 border-r border-gray-200 flex flex-col items-center py-2 gap-2">
@@ -157,8 +201,14 @@ export default function Sidebar({
                         : 'text-gray-700 hover:bg-gray-200'
                     }`}
                   >
-                    <div className="w-4 h-4 rounded bg-gradient-to-br from-purple-400 to-pink-500 flex-shrink-0" />
-                    <span className="flex-1 text-left truncate">{pagina.titulo || 'Sin título'}</span>
+                    {extraerEmoji(pagina.titulo) ? (
+                      <span className="w-4 h-4 flex-shrink-0 text-base leading-none flex items-center justify-center">
+                        {extraerEmoji(pagina.titulo)}
+                      </span>
+                    ) : (
+                      <div className="w-4 h-4 rounded bg-gradient-to-br from-purple-400 to-pink-500 flex-shrink-0" />
+                    )}
+                    <span className="flex-1 text-left truncate">{obtenerTituloSinEmoji(pagina.titulo)}</span>
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
                       <button
                         onClick={(e) => {
@@ -220,8 +270,14 @@ export default function Sidebar({
                       : 'text-gray-700 hover:bg-gray-200'
                   }`}
                 >
-                  <div className="w-4 h-4 rounded bg-gradient-to-br from-blue-400 to-cyan-500 flex-shrink-0" />
-                  <span className="flex-1 text-left truncate">{pagina.titulo || 'Sin título'}</span>
+                  {extraerEmoji(pagina.titulo) ? (
+                    <span className="w-4 h-4 flex-shrink-0 text-base leading-none flex items-center justify-center">
+                      {extraerEmoji(pagina.titulo)}
+                    </span>
+                  ) : (
+                    <div className="w-4 h-4 rounded bg-gradient-to-br from-blue-400 to-cyan-500 flex-shrink-0" />
+                  )}
+                  <span className="flex-1 text-left truncate">{obtenerTituloSinEmoji(pagina.titulo)}</span>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
                     <button
                       onClick={(e) => {
