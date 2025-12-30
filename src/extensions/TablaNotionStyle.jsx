@@ -267,6 +267,37 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
     const props = node.attrs.propiedades || [];
     return props.map(p => ({ ...p, visible: p.visible !== undefined ? p.visible : true }));
   });
+  // Estado para configuración global del sprint
+  const [sprintConfig, setSprintConfig] = useState(() => {
+    const config = node.attrs.sprintConfig;
+    if (config) return config;
+    // Valores por defecto
+    const hoy = new Date();
+    const año = hoy.getFullYear();
+    const mes = String(hoy.getMonth() + 1).padStart(2, '0');
+    const dia = String(hoy.getDate()).padStart(2, '0');
+    const hoyStr = `${año}-${mes}-${dia}`;
+    // Por defecto, sprint de 15 días hábiles
+    const fecha = new Date(hoyStr);
+    let diasAgregados = 0;
+    while (diasAgregados < 15) {
+      fecha.setDate(fecha.getDate() + 1);
+      const diaSemana = fecha.getDay();
+      if (diaSemana !== 0 && diaSemana !== 6) { // Excluir domingo (0) y sábado (6)
+        diasAgregados++;
+      }
+    }
+    const añoFin = fecha.getFullYear();
+    const mesFin = String(fecha.getMonth() + 1).padStart(2, '0');
+    const diaFin = String(fecha.getDate()).padStart(2, '0');
+    const sprintEndDate = `${añoFin}-${mesFin}-${diaFin}`;
+    return {
+      sprintStartDate: hoyStr,
+      sprintEndDate: sprintEndDate,
+      horasDiarias: 8,
+      diasNoTrabajados: [] // Array de fechas que no se trabajan (además de sábados y domingos)
+    };
+  });
   const [filaSeleccionada, setFilaSeleccionada] = useState(null);
   const [showDrawer, setShowDrawer] = useState(false);
   const [drawerExpandido, setDrawerExpandido] = useState(false);
@@ -478,9 +509,6 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
       // Campos de tiempo
       { name: "Time Spent", type: "number", visible: false, descripcion: "Tiempo gastado en horas" },
       { name: "Time Estimated", type: "number", visible: false, descripcion: "Tiempo estimado en horas" },
-      // Campos de fechas
-      { name: "Start Date", type: "date", visible: false, descripcion: "Fecha de inicio" },
-      { name: "End Date", type: "date", visible: false, descripcion: "Fecha de fin" },
       { name: "Current Date", type: "date", visible: false, descripcion: "Fecha actual" },
       { name: "Created", type: "date", visible: false, descripcion: "Fecha de creación" },
       { name: "Expiration date", type: "date", visible: false, descripcion: "Fecha de expiración" },
@@ -498,8 +526,8 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
       { name: "Dias Habiles Transcurridos", type: "number", visible: false, descripcion: "Días hábiles transcurridos" },
       { name: "Horas Disponibles", type: "formula", visible: false, formula: 'prop("Dias Habiles Transcurridos") * prop("Horas Diarias")', descripcion: "Horas disponibles calculadas" },
       { name: "Sobrecarga", type: "formula", visible: false, formula: 'if((prop("Time Estimated") > prop("Horas Disponibles")), "⚠️ Sobrecarga", "✅ OK")', descripcion: "Indicador de sobrecarga de trabajo" },
-      { name: "Dias Transcurridos Sprint", type: "formula", visible: false, formula: 'if(and(!empty(prop("Start Date")), !empty(prop("Current Date"))), if((date(prop("Current Date")) >= date(prop("Start Date"))), floor((date(prop("Current Date")) - date(prop("Start Date"))) / 86400000) + 1, 0), 0)', descripcion: "Días transcurridos desde inicio del sprint" },
-      { name: "Dias Faltantes Sprint", type: "formula", visible: false, formula: 'if(and(!empty(prop("End Date")), !empty(prop("Current Date"))), if((date(prop("Current Date")) <= date(prop("End Date"))), floor((date(prop("End Date")) - date(prop("Current Date"))) / 86400000), 0), 0)', descripcion: "Días faltantes hasta fin del sprint" },
+      { name: "Dias Transcurridos Sprint", type: "formula", visible: false, formula: 'if(and(!empty(prop("Sprint Start Date")), !empty(prop("Current Date"))), if((date(prop("Current Date")) >= date(prop("Sprint Start Date"))), floor((date(prop("Current Date")) - date(prop("Sprint Start Date"))) / 86400000) + 1, 0), 0)', descripcion: "Días transcurridos desde inicio del sprint" },
+      { name: "Dias Faltantes Sprint", type: "formula", visible: false, formula: 'if(and(!empty(prop("Sprint End Date")), !empty(prop("Current Date"))), if((date(prop("Current Date")) <= date(prop("Sprint End Date"))), floor((date(prop("Sprint End Date")) - date(prop("Current Date"))) / 86400000), 0), 0)', descripcion: "Días faltantes hasta fin del sprint" },
       // Campos de tareas
       { name: "Tasks Completed", type: "number", visible: false, descripcion: "Número de subtareas completadas" },
       { name: "Total Tasks", type: "number", visible: false, descripcion: "Número total de subtareas" },
@@ -1002,7 +1030,7 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
     alert(`✅ Plantilla cargada: Se agregaron ${nuevosCampos.length} campos nuevos.`);
   };
 
-  // Función para cargar plantilla con ejemplos completos de sprint
+  // Función para cargar plantilla Scrum completa con ejemplos
   const cargarPlantillaEjemplo = () => {
     // Calcular fechas del sprint automáticamente
     // Fecha actual (hoy)
@@ -1039,12 +1067,6 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
       { name: "Estado", type: "select", visible: true },
       { name: "Time Spent", type: "number", visible: true, totalizar: true },
       { name: "Time Estimated", type: "number", visible: true, totalizar: true },
-      { name: "Start Date", type: "date", visible: true },
-      { name: "End Date", type: "date", visible: true },
-      // Campos base del sprint (ocultos, valores generales para todas las filas)
-      { name: "Sprint Start Date", type: "text", visible: false },
-      { name: "Sprint End Date", type: "text", visible: false },
-      { name: "Horas Diarias Sprint", type: "number", visible: false, totalizar: false },
       // Campos de soporte OCULTOS (necesarios para fórmulas pero no visibles por defecto)
       { name: "Objective", type: "number", visible: false, totalizar: false },
       { name: "Current Date", type: "date", visible: false },
@@ -1063,13 +1085,12 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
       { name: "Porcentaje Tiempo", type: "formula", visible: false, formula: 'if((prop("Time Estimated") > 0), format(round((prop("Time Spent") / prop("Time Estimated")) * 100)) + "%", "0%")' },
       { name: "Tasa Completitud", type: "formula", visible: false, formula: 'if((prop("Total Tasks") > 0), format(round((prop("Tasks Completed") / prop("Total Tasks")) * 100)) + "%", "0%")' },
       { name: "Sprint Days", type: "number", visible: false, totalizar: false },
-      { name: "Horas Diarias", type: "number", visible: false, totalizar: false },
       { name: "Horas Totales Sprint", type: "number", visible: false, totalizar: false },
       { name: "Dias Habiles Transcurridos", type: "number", visible: false, totalizar: false },
       { name: "Horas Disponibles", type: "formula", visible: false, formula: 'prop("Dias Habiles Transcurridos") * prop("Horas Diarias")' },
       { name: "Sobrecarga", type: "formula", visible: false, formula: 'if((prop("Time Estimated") > prop("Horas Disponibles")), "⚠️ Sobrecarga", "✅ OK")' },
-      { name: "Dias Transcurridos Sprint", type: "formula", visible: false, formula: 'if(and(!empty(prop("Start Date")), !empty(prop("Current Date"))), if((date(prop("Current Date")) >= date(prop("Start Date"))), floor((date(prop("Current Date")) - date(prop("Start Date"))) / 86400000) + 1, 0), 0)' },
-      { name: "Dias Faltantes Sprint", type: "formula", visible: false, formula: 'if(and(!empty(prop("End Date")), !empty(prop("Current Date"))), if((date(prop("Current Date")) <= date(prop("End Date"))), floor((date(prop("End Date")) - date(prop("Current Date"))) / 86400000), 0), 0)' },
+      { name: "Dias Transcurridos Sprint", type: "formula", visible: false, formula: 'if(and(!empty(prop("Sprint Start Date")), !empty(prop("Current Date"))), if((date(prop("Current Date")) >= date(prop("Sprint Start Date"))), floor((date(prop("Current Date")) - date(prop("Sprint Start Date"))) / 86400000) + 1, 0), 0)' },
+      { name: "Dias Faltantes Sprint", type: "formula", visible: false, formula: 'if(and(!empty(prop("Sprint End Date")), !empty(prop("Current Date"))), if((date(prop("Current Date")) <= date(prop("Sprint End Date"))), floor((date(prop("Sprint End Date")) - date(prop("Current Date"))) / 86400000), 0), 0)' },
       // Campos adicionales OCULTOS (se pueden agregar manualmente si se necesitan)
       { name: "Tags", type: "tags", visible: false },
       { name: "tag", type: "tags", visible: false }, // Alias para tag
@@ -1137,19 +1158,6 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
             defaultValue = 100; // 100 por defecto
           }
           
-          // Valores por defecto para campos base del sprint (generales para todas las filas)
-          if (campo.name === "Sprint Start Date" && campo.type === "text") {
-            defaultValue = sprintInicio; // Fecha de inicio del sprint
-          }
-          
-          if (campo.name === "Sprint End Date" && campo.type === "text") {
-            defaultValue = sprintFin; // Fecha de fin del sprint
-          }
-          
-          if (campo.name === "Horas Diarias Sprint" && campo.type === "number") {
-            defaultValue = horasDiarias; // Horas diarias del sprint
-          }
-          
           // Manejar Current Date tanto para tipo date como text
           if (campo.name === "Current Date" && (campo.type === "date" || campo.type === "text")) {
             defaultValue = hoy; // Fecha actual
@@ -1193,19 +1201,6 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
             // Valores por defecto para Objective
             if (campo.name === "Objective" && campo.type === "number") {
               defaultValue = 100; // 100 por defecto
-            }
-            
-            // Valores por defecto para campos base del sprint (generales para todas las filas)
-            if (campo.name === "Sprint Start Date" && campo.type === "text") {
-              defaultValue = sprintInicio; // Fecha de inicio del sprint
-            }
-            
-            if (campo.name === "Sprint End Date" && campo.type === "text") {
-              defaultValue = sprintFin; // Fecha de fin del sprint
-            }
-            
-            if (campo.name === "Horas Diarias Sprint" && campo.type === "number") {
-              defaultValue = horasDiarias; // Horas diarias del sprint
             }
             
             // Manejar Current Date tanto para tipo date como text
@@ -1272,12 +1267,6 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
       { name: "Progress", type: "number", visible: true, totalizar: false },
       { name: "Time Spent", type: "number", visible: false, totalizar: true },
       { name: "Time Estimated", type: "number", visible: false, totalizar: true },
-      // Campos base del sprint (ocultos inicialmente, valores generales para todas las filas)
-      { name: "Sprint Start Date", type: "text", visible: false },
-      { name: "Sprint End Date", type: "text", visible: false },
-      { name: "Horas Diarias Sprint", type: "number", visible: false, totalizar: false },
-      { name: "Start Date", type: "text", visible: false },
-      { name: "End Date", type: "text", visible: false },
       { name: "Current Date", type: "text", visible: false },
       { name: "Created", type: "text", visible: false },
       { name: "Expiration date", type: "text", visible: false },
@@ -1362,10 +1351,6 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
           properties[campo.name] = { type: "number", value: tarea.timeEstimated };
         } else if (campo.name === "Days Worked") {
           properties[campo.name] = { type: "number", value: tarea.daysWorked };
-        } else if (campo.name === "Start Date") {
-          properties[campo.name] = { type: "text", value: tarea.startDate };
-        } else if (campo.name === "End Date") {
-          properties[campo.name] = { type: "text", value: tarea.endDate };
         } else if (campo.name === "Current Date") {
           properties[campo.name] = { type: "text", value: hoy };
         } else if (campo.name === "Created") {
@@ -1374,18 +1359,10 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
           properties[campo.name] = { type: "text", value: tarea.expirationDate || "" };
         } else if (campo.name === "Sprint Days") {
           properties[campo.name] = { type: "number", value: diasHabilesSprint };
-        } else if (campo.name === "Horas Diarias") {
-          properties[campo.name] = { type: "number", value: horasDiarias };
         } else if (campo.name === "Horas Totales Sprint") {
           properties[campo.name] = { type: "number", value: horasTotalesSprint };
         } else if (campo.name === "Dias Habiles Transcurridos") {
           properties[campo.name] = { type: "number", value: diasHabilesTranscurridos };
-        } else if (campo.name === "Sprint Start Date") {
-          properties[campo.name] = { type: "text", value: sprintInicio };
-        } else if (campo.name === "Sprint End Date") {
-          properties[campo.name] = { type: "text", value: sprintFin };
-        } else if (campo.name === "Horas Diarias Sprint") {
-          properties[campo.name] = { type: "number", value: horasDiarias };
         } else if (campo.name === "Objective") {
           properties[campo.name] = { type: "number", value: 100 };
         } else if (campo.name === "Tasks Completed") {
@@ -1451,11 +1428,11 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
           }
           
           // Valores por defecto para campos base del sprint (generales para todas las filas)
-          if (campo.name === "Sprint Start Date" && campo.type === "text") {
+          if (campo.name === "Sprint Start Date" && (campo.type === "date" || campo.type === "text")) {
             defaultValue = sprintInicio; // Fecha de inicio del sprint
           }
           
-          if (campo.name === "Sprint End Date" && campo.type === "text") {
+          if (campo.name === "Sprint End Date" && (campo.type === "date" || campo.type === "text")) {
             defaultValue = sprintFin; // Fecha de fin del sprint
           }
           
@@ -1489,7 +1466,7 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
         const prop = propiedadesEvaluadas[propName];
         if (prop.type === "formula" && prop.formula) {
           try {
-            const evaluator = new FormulaEvaluator(fila, nuevasFilas);
+            const evaluator = new FormulaEvaluator(fila, nuevasFilas, sprintConfig);
             const resultado = evaluator.evaluate(prop.formula);
             // Guardar el resultado en value para que se muestre inmediatamente
             prop.value = resultado !== undefined && resultado !== null ? String(resultado) : "";
@@ -1534,7 +1511,7 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
       }
       
       try {
-        const evaluator = new FormulaEvaluator(fila, filas);
+        const evaluator = new FormulaEvaluator(fila, filas, sprintConfig);
         const result = evaluator.evaluate(formula);
         console.log('Evaluando fórmula:', formula, 'Resultado:', result, 'Fila:', fila.Name);
         return result !== undefined && result !== null ? String(result) : "";
@@ -1906,11 +1883,11 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
 
   // Ref para evitar bucles infinitos - rastrear si estamos actualizando desde el nodo
   const actualizandoDesdeNodoRef = useRef(false);
-  const ultimoNodoRef = useRef(JSON.stringify({ filas: node.attrs.filas, propiedades: node.attrs.propiedades }));
+  const ultimoNodoRef = useRef(JSON.stringify({ filas: node.attrs.filas, propiedades: node.attrs.propiedades, sprintConfig: node.attrs.sprintConfig }));
 
   // Sincronizar estado cuando cambia el nodo (útil cuando se carga desde guardado)
   useEffect(() => {
-    const nodoActualStr = JSON.stringify({ filas: node.attrs.filas, propiedades: node.attrs.propiedades });
+    const nodoActualStr = JSON.stringify({ filas: node.attrs.filas, propiedades: node.attrs.propiedades, sprintConfig: node.attrs.sprintConfig });
     
     // Solo actualizar si el nodo realmente cambió
     if (nodoActualStr !== ultimoNodoRef.current) {
@@ -1918,9 +1895,11 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
       
       const nodoFilas = inicializarFilas(node.attrs.filas);
       const nodoPropiedades = (node.attrs.propiedades || []).map(p => ({ ...p, visible: p.visible !== undefined ? p.visible : true }));
+      const nodoSprintConfig = node.attrs.sprintConfig || sprintConfig;
       
       setFilas(nodoFilas);
       setPropiedades(nodoPropiedades);
+      setSprintConfig(nodoSprintConfig);
       
       ultimoNodoRef.current = nodoActualStr;
       
@@ -1929,31 +1908,32 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
         actualizandoDesdeNodoRef.current = false;
       });
     }
-  }, [node.attrs.filas, node.attrs.propiedades]);
+  }, [node.attrs.filas, node.attrs.propiedades, node.attrs.sprintConfig]);
 
   // Actualizar atributos del nodo cuando cambian filas o propiedades (solo si no viene del nodo)
   const prevEstadoRef = useRef(null);
   useEffect(() => {
     // Inicializar en la primera ejecución
     if (prevEstadoRef.current === null) {
-      prevEstadoRef.current = { filas, propiedades };
+      prevEstadoRef.current = { filas, propiedades, sprintConfig };
       return;
     }
     // No actualizar si el cambio viene del nodo mismo
     if (actualizandoDesdeNodoRef.current) {
-      prevEstadoRef.current = { filas, propiedades };
+      prevEstadoRef.current = { filas, propiedades, sprintConfig };
       return;
     }
     
     // Comparar si realmente cambió algo
     const filasCambiaron = JSON.stringify(prevEstadoRef.current.filas) !== JSON.stringify(filas);
     const propiedadesCambiaron = JSON.stringify(prevEstadoRef.current.propiedades) !== JSON.stringify(propiedades);
+    const sprintConfigCambio = JSON.stringify(prevEstadoRef.current.sprintConfig) !== JSON.stringify(sprintConfig);
     
-    if (filasCambiaron || propiedadesCambiaron) {
-      updateAttributes({ filas, propiedades });
-      prevEstadoRef.current = { filas, propiedades };
+    if (filasCambiaron || propiedadesCambiaron || sprintConfigCambio) {
+      updateAttributes({ filas, propiedades, sprintConfig });
+      prevEstadoRef.current = { filas, propiedades, sprintConfig };
     }
-  }, [filas, propiedades, updateAttributes]);
+  }, [filas, propiedades, sprintConfig, updateAttributes]);
 
   return (
     <NodeViewWrapper 
@@ -2061,30 +2041,72 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
         )}
       </div>
 
-      {/* Selector de tipo de vista (Table/Timeline) */}
-      <div className="flex items-center gap-2 mb-3">
-        <button
-          onClick={() => setTipoVista('table')}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm transition-colors ${
-            tipoVista === 'table'
-              ? 'bg-gray-200 text-gray-900 font-medium'
-              : 'bg-transparent text-gray-600 hover:bg-gray-100'
-          }`}
-        >
-          <span className="text-base">⊞</span>
-          <span>Table</span>
-        </button>
-        <button
-          onClick={() => setTipoVista('timeline')}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm transition-colors ${
-            tipoVista === 'timeline'
-              ? 'bg-gray-200 text-gray-900 font-medium'
-              : 'bg-transparent text-gray-600 hover:bg-gray-100'
-          }`}
-        >
-          <span className="text-base">📄</span>
-          <span>Timeline</span>
-        </button>
+      {/* Selector de tipo de vista (Table/Timeline) y Configuración del Sprint */}
+      <div className="flex items-center justify-between gap-4 mb-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setTipoVista('table')}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm transition-colors ${
+              tipoVista === 'table'
+                ? 'bg-gray-200 text-gray-900 font-medium'
+                : 'bg-transparent text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            <span className="text-base">⊞</span>
+            <span>Table</span>
+          </button>
+          <button
+            onClick={() => setTipoVista('timeline')}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm transition-colors ${
+              tipoVista === 'timeline'
+                ? 'bg-gray-200 text-gray-900 font-medium'
+                : 'bg-transparent text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            <span className="text-base">📄</span>
+            <span>Timeline</span>
+          </button>
+        </div>
+        
+        {/* Configuración del Sprint */}
+        <div className="flex items-center gap-3 text-xs">
+          <div className="flex items-center gap-1">
+            <label className="text-gray-600 whitespace-nowrap">Fecha Inicio:</label>
+            <input
+              type="date"
+              value={sprintConfig.sprintStartDate || ''}
+              onChange={(e) => {
+                setSprintConfig({ ...sprintConfig, sprintStartDate: e.target.value });
+              }}
+              className="border rounded px-2 py-1 text-xs"
+            />
+          </div>
+          <div className="flex items-center gap-1">
+            <label className="text-gray-600 whitespace-nowrap">Fecha Fin:</label>
+            <input
+              type="date"
+              value={sprintConfig.sprintEndDate || ''}
+              onChange={(e) => {
+                setSprintConfig({ ...sprintConfig, sprintEndDate: e.target.value });
+              }}
+              className="border rounded px-2 py-1 text-xs"
+            />
+          </div>
+          <div className="flex items-center gap-1">
+            <label className="text-gray-600 whitespace-nowrap">Horas Diarias:</label>
+            <input
+              type="number"
+              min="1"
+              max="24"
+              value={sprintConfig.horasDiarias || 8}
+              onChange={(e) => {
+                const horas = parseInt(e.target.value) || 8;
+                setSprintConfig({ ...sprintConfig, horasDiarias: horas });
+              }}
+              className="border rounded px-2 py-1 text-xs w-16"
+            />
+          </div>
+        </div>
       </div>
 
       <div className="flex justify-between items-center mb-2 gap-2">
@@ -2130,9 +2152,9 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
           <button 
             onClick={cargarPlantillaEjemplo} 
             className="bg-purple-600 text-white px-3 py-1 rounded text-sm hover:bg-purple-700 transition-colors"
-            title="Cargar plantilla con ejemplos completos de sprint (12 tareas con datos y fórmulas)"
+            title="Cargar plantilla Scrum completa con ejemplos (columnas, fórmulas y tareas de ejemplo)"
           >
-            🎯 Plantilla con Ejemplos
+            🎯 Plantilla Scrum
           </button>
         <button onClick={agregarFila} className="bg-blue-600 text-white px-3 py-1 rounded">
           ➕ Agregar fila
@@ -3282,9 +3304,9 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
       {showEjemploModal && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center">
           <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
-            <h3 className="text-xl font-semibold mb-4">Agregar Plantilla con Ejemplos</h3>
+            <h3 className="text-xl font-semibold mb-4">Agregar Plantilla Scrum</h3>
             <p className="text-gray-600 mb-6">
-              Se agregarán todas las columnas y fórmulas. ¿Cuántas tareas de ejemplo deseas crear?
+              Se agregarán todas las columnas y fórmulas de metodología Scrum. ¿Cuántas tareas de ejemplo deseas crear?
             </p>
             <div className="flex gap-3">
               <button

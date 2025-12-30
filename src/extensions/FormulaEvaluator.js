@@ -4,9 +4,10 @@
  */
 
 export class FormulaEvaluator {
-  constructor(fila, todasLasFilas = []) {
+  constructor(fila, todasLasFilas = [], sprintConfig = null) {
     this.fila = fila;
     this.todasLasFilas = todasLasFilas;
+    this.sprintConfig = sprintConfig;
   }
 
   // Función principal para evaluar una fórmula
@@ -124,6 +125,36 @@ export class FormulaEvaluator {
 
   // Obtener el valor de una propiedad
   getPropValue(campo) {
+    // Propiedades globales del sprint (desde sprintConfig)
+    if (this.sprintConfig) {
+      const campoLower = campo.toLowerCase();
+      
+      // Sprint Start Date
+      if (campoLower === 'sprint start date' || campoLower === 'fecha inicio sprint') {
+        return this.sprintConfig.sprintStartDate || null;
+      }
+      
+      // Sprint End Date
+      if (campoLower === 'sprint end date' || campoLower === 'fecha fin sprint') {
+        return this.sprintConfig.sprintEndDate || null;
+      }
+      
+      // Horas Diarias (también puede ser "Horas Diarias Sprint")
+      if (campoLower === 'horas diarias' || campoLower === 'horas diarias sprint' || campoLower === 'horas por dia') {
+        return this.sprintConfig.horasDiarias || 8;
+      }
+    }
+    
+    // Current Date siempre devuelve la fecha actual
+    if (campo.toLowerCase() === 'current date' || campo.toLowerCase() === 'fecha actual') {
+      const hoy = new Date();
+      const año = hoy.getFullYear();
+      const mes = String(hoy.getMonth() + 1).padStart(2, '0');
+      const dia = String(hoy.getDate()).padStart(2, '0');
+      return `${año}-${mes}-${dia}`;
+    }
+    
+    // Buscar en las propiedades de la fila
     if (!this.fila || !this.fila.properties) {
       return null;
     }

@@ -39,6 +39,25 @@ export const TablaNotionNode = Node.create({
           };
         },
       },
+      sprintConfig: {
+        default: null,
+        parseHTML: element => {
+          try {
+            const config = element.getAttribute('data-sprint-config');
+            return config ? JSON.parse(config) : null;
+          } catch {
+            return null;
+          }
+        },
+        renderHTML: attributes => {
+          if (attributes.sprintConfig) {
+            return {
+              'data-sprint-config': JSON.stringify(attributes.sprintConfig),
+            };
+          }
+          return {};
+        },
+      },
     };
   },
 

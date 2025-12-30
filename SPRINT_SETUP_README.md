@@ -39,15 +39,17 @@ O agrega manualmente las siguientes columnas usando el botón "➕ Agregar propi
 | **Time Estimated** | number | Tiempo estimado (horas) | ✅ Sí |
 | **Percent Total** | formula | % tiempo usado vs estimado | ✅ Sí |
 | **Estado** | select | Estado de la tarea | ✅ Sí |
-| **Start Date** | date | Fecha de inicio | ✅ Sí |
-| **End Date** | date | Fecha de fin | ✅ Sí |
+| **Sprint Start Date** | date | Fecha de inicio del sprint (compartida por todas las tareas) | ✅ Sí |
+| **Sprint End Date** | date | Fecha de fin del sprint (compartida por todas las tareas) | ✅ Sí |
+
+**Nota importante:** `Sprint Start Date` y `Sprint End Date` son las fechas **del sprint completo**, compartidas por todas las tareas. En metodologías ágiles, todas las tareas pertenecen al mismo sprint y comparten las mismas fechas de inicio y fin.
 
 ### Columnas de Soporte (OCULTAS inicialmente)
 
 | Nombre | Tipo | Descripción | Visible |
 |--------|------|-------------|---------|
 | **Objective** | number | Meta total (normalmente 100) | ❌ No |
-| **Current Date** | date | Fecha actual (se actualiza) | ❌ No |
+| **Current Date** | date | Fecha actual (se actualiza automáticamente) | ❌ No |
 | **Days Worked** | number | Días trabajados | ❌ No |
 | **Days Elapsed** | number | Días transcurridos | ❌ No |
 | **Tasks Completed** | number | Subtareas completadas | ❌ No |
@@ -61,8 +63,8 @@ O agrega manualmente las siguientes columnas usando el botón "➕ Agregar propi
 | **Tiempo Restante** | formula | `if((prop("Time Spent") >= prop("Time Estimated")), "0", prop("Time Estimated") - prop("Time Spent"))` | Horas restantes |
 | **Porcentaje Tiempo** | formula | `if((prop("Time Estimated") > 0), format(round((prop("Time Spent") / prop("Time Estimated")) * 100)) + "%", "0%")` | % tiempo usado |
 | **Tasa Completitud** | formula | `if((prop("Total Tasks") > 0), format(round((prop("Tasks Completed") / prop("Total Tasks")) * 100)) + "%", "0%")` | % subtareas completadas |
-| **Dias Transcurridos Sprint** | formula | `if(and(!empty(prop("Start Date")), !empty(prop("Current Date"))), if((date(prop("Current Date")) >= date(prop("Start Date"))), floor((date(prop("Current Date")) - date(prop("Start Date"))) / 86400000) + 1, 0), 0)` | Días desde inicio |
-| **Dias Faltantes Sprint** | formula | `if(and(!empty(prop("End Date")), !empty(prop("Current Date"))), if((date(prop("Current Date")) <= date(prop("End Date"))), floor((date(prop("End Date")) - date(prop("Current Date"))) / 86400000), 0), 0)` | Días faltantes |
+| **Dias Transcurridos Sprint** | formula | `if(and(!empty(prop("Sprint Start Date")), !empty(prop("Current Date"))), if((date(prop("Current Date")) >= date(prop("Sprint Start Date"))), floor((date(prop("Current Date")) - date(prop("Sprint Start Date"))) / 86400000) + 1, 0), 0)` | Días desde inicio del sprint |
+| **Dias Faltantes Sprint** | formula | `if(and(!empty(prop("Sprint End Date")), !empty(prop("Current Date"))), if((date(prop("Current Date")) <= date(prop("Sprint End Date"))), floor((date(prop("Sprint End Date")) - date(prop("Current Date"))) / 86400000), 0), 0)` | Días faltantes hasta fin del sprint |
 | **Horas Disponibles** | formula | `prop("Dias Habiles Transcurridos") * prop("Horas Diarias")` | Horas disponibles |
 | **Sobrecarga** | formula | `if((prop("Time Estimated") > prop("Horas Disponibles")), "⚠️ Sobrecarga", "✅ OK")` | Indicador de sobrecarga |
 
@@ -70,9 +72,28 @@ O agrega manualmente las siguientes columnas usando el botón "➕ Agregar propi
 
 ## 📊 Paso 3: Datos de las 5 Tareas de Ejemplo
 
-Agrega 5 filas con los siguientes datos:
+### ⚠️ Importante: Fechas del Sprint
 
-### Tarea 1: Diseño de UI/UX
+En metodologías ágiles, **todas las tareas pertenecen al mismo sprint** y comparten las mismas fechas de inicio y fin. Las fechas del sprint son:
+- **Sprint Start Date**: Fecha de inicio del sprint (compartida por todas las tareas)
+- **Sprint End Date**: Fecha de fin del sprint (compartida por todas las tareas)
+
+Estas fechas se configuran una vez para todo el sprint y se aplican a todas las tareas. El sistema calculará automáticamente indicadores basados en estas fechas (días transcurridos, días faltantes, horas disponibles, sobrecarga, etc.).
+
+### Datos del Sprint (comunes para todas las tareas):
+
+```
+Sprint Start Date: 2025-01-15 (fecha de inicio del sprint - se configura una vez)
+Sprint End Date: 2025-01-30 (fecha de fin del sprint - se configura una vez)  
+Current Date: 2025-01-17 (usa la fecha actual de tu sistema)
+Horas Diarias Sprint: 8 (horas trabajadas por día)
+```
+
+Estos valores se asignan automáticamente cuando cargas la plantilla Scrum y son los mismos para todas las tareas.
+
+### Datos Individuales de cada Tarea:
+
+#### Tarea 1: Diseño de UI/UX
 
 ```
 Nombre: Diseño de UI/UX
@@ -83,15 +104,12 @@ Objective: 100
 Time Spent: 12
 Time Estimated: 16
 Days Worked: 2
-Start Date: 2025-01-15
-End Date: 2025-01-20
 Estado: En progreso
 Tasks Completed: 4
 Total Tasks: 5
-Current Date: 2025-01-17 (usa la fecha actual de tu sistema)
 ```
 
-### Tarea 2: Implementación API Backend
+#### Tarea 2: Implementación API Backend
 
 ```
 Nombre: Implementación API Backend
@@ -102,15 +120,14 @@ Objective: 100
 Time Spent: 20
 Time Estimated: 32
 Days Worked: 3
-Start Date: 2025-01-15
-End Date: 2025-01-25
+Start Date: 2025-01-15 (fecha inicio de ESTA tarea)
+End Date: 2025-01-25 (fecha fin de ESTA tarea)
 Estado: En progreso
 Tasks Completed: 6
 Total Tasks: 10
-Current Date: 2025-01-17
 ```
 
-### Tarea 3: Integración Base de Datos
+#### Tarea 3: Integración Base de Datos
 
 ```
 Nombre: Integración Base de Datos
@@ -121,15 +138,14 @@ Objective: 100
 Time Spent: 8
 Time Estimated: 24
 Days Worked: 1
-Start Date: 2025-01-16
-End Date: 2025-01-24
+Start Date: 2025-01-16 (fecha inicio de ESTA tarea)
+End Date: 2025-01-24 (fecha fin de ESTA tarea)
 Estado: En progreso
 Tasks Completed: 2
 Total Tasks: 5
-Current Date: 2025-01-17
 ```
 
-### Tarea 4: Pruebas Unitarias
+#### Tarea 4: Pruebas Unitarias
 
 ```
 Nombre: Pruebas Unitarias
@@ -140,15 +156,14 @@ Objective: 100
 Time Spent: 6
 Time Estimated: 20
 Days Worked: 1
-Start Date: 2025-01-17
-End Date: 2025-01-26
+Start Date: 2025-01-17 (fecha inicio de ESTA tarea)
+End Date: 2025-01-26 (fecha fin de ESTA tarea)
 Estado: Pendiente
 Tasks Completed: 3
 Total Tasks: 10
-Current Date: 2025-01-17
 ```
 
-### Tarea 5: Documentación Técnica
+#### Tarea 5: Documentación Técnica
 
 ```
 Nombre: Documentación Técnica
@@ -159,13 +174,14 @@ Objective: 100
 Time Spent: 4
 Time Estimated: 8
 Days Worked: 1
-Start Date: 2025-01-18
-End Date: 2025-01-27
+Start Date: 2025-01-18 (fecha inicio de ESTA tarea)
+End Date: 2025-01-27 (fecha fin de ESTA tarea)
 Estado: Pendiente
 Tasks Completed: 2
 Total Tasks: 4
-Current Date: 2025-01-17
 ```
+
+**Nota:** Todas las tareas comparten las mismas fechas del sprint (`Sprint Start Date` y `Sprint End Date`). Estas fechas se configuran una vez y se aplican a todas las tareas, ya que en metodologías ágiles todas las tareas pertenecen al mismo sprint.
 
 ---
 
@@ -189,7 +205,7 @@ Después de agregar los datos, configura qué columnas quieres ver:
 - ✅ **Percent Total** - Ver % tiempo usado
 
 #### Columnas Opcionales (útil para análisis detallado):
-- **Start Date** / **End Date** - Ver fechas
+- **Sprint Start Date** / **Sprint End Date** - Ver fechas del sprint (ya están visibles por defecto)
 - **Tiempo Restante** - Ver horas restantes
 - **Tasa Completitud** - Ver % de subtareas
 - **Dias Transcurridos Sprint** - Ver días desde inicio
@@ -277,27 +293,27 @@ if((prop("Total Tasks") > 0),
 
 #### Dias Transcurridos Sprint
 ```
-if(and(!empty(prop("Start Date")), !empty(prop("Current Date"))), 
-   if((date(prop("Current Date")) >= date(prop("Start Date"))), 
-      floor((date(prop("Current Date")) - date(prop("Start Date"))) / 86400000) + 1, 
+if(and(!empty(prop("Sprint Start Date")), !empty(prop("Current Date"))), 
+   if((date(prop("Current Date")) >= date(prop("Sprint Start Date"))), 
+      floor((date(prop("Current Date")) - date(prop("Sprint Start Date"))) / 86400000) + 1, 
       0), 
    0)
 ```
 **Qué hace:** Calcula cuántos días han pasado desde el inicio del sprint.
 
-**Ejemplo:** Start Date=2025-01-15, Current Date=2025-01-17 → 3 días
+**Ejemplo:** Sprint Start Date=2025-01-15, Current Date=2025-01-17 → 3 días
 
 #### Dias Faltantes Sprint
 ```
-if(and(!empty(prop("End Date")), !empty(prop("Current Date"))), 
-   if((date(prop("Current Date")) <= date(prop("End Date"))), 
-      floor((date(prop("End Date")) - date(prop("Current Date"))) / 86400000), 
+if(and(!empty(prop("Sprint End Date")), !empty(prop("Current Date"))), 
+   if((date(prop("Current Date")) <= date(prop("Sprint End Date"))), 
+      floor((date(prop("Sprint End Date")) - date(prop("Current Date"))) / 86400000), 
       0), 
    0)
 ```
 **Qué hace:** Calcula cuántos días quedan hasta el fin del sprint.
 
-**Ejemplo:** End Date=2025-01-25, Current Date=2025-01-17 → 8 días
+**Ejemplo:** Sprint End Date=2025-01-30, Current Date=2025-01-17 → 13 días
 
 ---
 

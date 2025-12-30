@@ -261,7 +261,7 @@ Las fórmulas del sprint son **generales** y se aplican a todas las filas de la 
 
 ### Columnas Base del Sprint (Se Agregan Automáticamente con la Plantilla)
 
-**✅ La plantilla de ejemplo agrega automáticamente todas estas columnas base con valores por defecto:**
+**✅ La plantilla Scrum agrega automáticamente todas estas columnas base con valores por defecto:**
 
 **1. Sprint Start Date (Texto)**
 - **Valor por defecto**: Fecha actual (se calcula automáticamente cuando cargas la plantilla)
@@ -351,8 +351,8 @@ La función `calcularDiasHabiles(fechaInicio, fechaFin)` calcula los días hábi
 
 ### Cómo Usar la Plantilla del Sprint
 
-1. **Carga la plantilla de ejemplo**:
-   - Haz clic en el botón "🎯 Plantilla con Ejemplos" en la tabla
+1. **Carga la plantilla Scrum**:
+   - Haz clic en el botón "🎯 Plantilla Scrum" en la tabla
    - Esto agregará automáticamente todas las columnas base del sprint con valores calculados:
      - `Sprint Start Date`: Fecha actual (hoy)
      - `Sprint End Date`: 15 días hábiles después de hoy (los sprints duran 15 días)
