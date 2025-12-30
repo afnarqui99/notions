@@ -1915,6 +1915,17 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                 <span>👁️</span>
                 <span>Propiedades visibles</span>
               </button>
+              <button
+                onClick={() => {
+                  setShowColumnasSugeridasModal(true);
+                  setColumnasSeleccionadas([]);
+                  setShowMenuConfig(false);
+                }}
+                className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-2 text-sm"
+              >
+                <span>📋</span>
+                <span>Columnas sugeridas</span>
+              </button>
               {sprintInfo && (
                 <button
                   onClick={() => {
