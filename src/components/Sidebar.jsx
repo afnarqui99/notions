@@ -173,9 +173,7 @@ export default function Sidebar({
                         <span className="w-4 h-4 flex-shrink-0 text-base leading-none flex items-center justify-center">
                           {emoji}
                         </span>
-                      ) : (
-                        <div className="w-4 h-4 rounded bg-gradient-to-br from-purple-400 to-pink-500 flex-shrink-0" />
-                      );
+                      ) : null;
                     })()}
                     <span className="flex-1 text-left truncate">{pagina.titulo || 'Sin título'}</span>
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
@@ -245,9 +243,7 @@ export default function Sidebar({
                       <span className="w-4 h-4 flex-shrink-0 text-base leading-none flex items-center justify-center">
                         {emoji}
                       </span>
-                    ) : (
-                      <div className="w-4 h-4 rounded bg-gradient-to-br from-blue-400 to-cyan-500 flex-shrink-0" />
-                    );
+                    ) : null;
                   })()}
                   <span className="flex-1 text-left truncate">{pagina.titulo || 'Sin título'}</span>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
