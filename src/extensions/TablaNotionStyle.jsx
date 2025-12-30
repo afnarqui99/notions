@@ -292,6 +292,8 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
   const [filaIndexParaIcono, setFilaIndexParaIcono] = useState(null);
   const [showColumnasSugeridasModal, setShowColumnasSugeridasModal] = useState(false);
   const [columnasSeleccionadas, setColumnasSeleccionadas] = useState([]);
+  const [showTextModal, setShowTextModal] = useState(false);
+  const [textEditing, setTextEditing] = useState({ filaIndex: null, propName: null, value: "" });
   
   // Estado para controlar si la tabla usa todo el ancho
   const [usarAnchoCompleto, setUsarAnchoCompleto] = useState(() => {
@@ -2447,26 +2449,56 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                             style={{ textAlign: 'right' }}
                       />
                     ) : prop.type === "select" ? (
-                          <div className="group relative inline-block w-full" onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type="text"
-                          className="notion-pill cursor-text border-none outline-none bg-transparent px-2 py-0.5 rounded"
-                          style={{ 
-                            backgroundColor: fila.properties?.[prop.name]?.color || "rgba(206, 205, 202, 0.3)",
-                            color: fila.properties?.[prop.name]?.color ? "white" : "rgb(55, 53, 47)",
-                            width: '100%',
-                            minWidth: '60px'
-                          }}
-                          value={fila.properties?.[prop.name]?.value || ""}
-                          onChange={(e) => {
-                            e.stopPropagation();
-                            actualizarValor(fi, prop.name, e.target.value);
-                          }}
-                          placeholder="Sin valor"
-                          onClick={(e) => e.stopPropagation()}
-                          onFocus={(e) => e.stopPropagation()}
-                          onMouseDown={(e) => e.stopPropagation()}
-                        />
+                      <div 
+                        className="w-full cursor-pointer" 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          // Convertir el valor de select a formato tags si es necesario
+                          const currentValue = fila.properties?.[prop.name]?.value;
+                          let tagsValue = [];
+                          if (currentValue) {
+                            // Si es un string, convertirlo a formato tag
+                            if (typeof currentValue === 'string') {
+                              tagsValue = [{
+                                label: currentValue,
+                                value: currentValue,
+                                color: fila.properties?.[prop.name]?.color || "#3b82f6"
+                              }];
+                            } else if (Array.isArray(currentValue)) {
+                              tagsValue = currentValue;
+                            }
+                          }
+                          setTagsEditando({
+                            filaIndex: filaIndexOriginal,
+                            propName: prop.name,
+                            tags: tagsValue
+                          });
+                          setShowTagsModal(true);
+                        }}
+                      >
+                        <div className="flex items-center gap-1 px-1 py-0.5 flex-wrap min-h-[18px]">
+                          {(() => {
+                            const currentValue = fila.properties?.[prop.name]?.value;
+                            const currentColor = fila.properties?.[prop.name]?.color || "rgba(206, 205, 202, 0.3)";
+                            if (currentValue) {
+                              const displayValue = typeof currentValue === 'string' ? currentValue : (currentValue.label || currentValue.value || '');
+                              return (
+                                <div
+                                  className="flex items-center gap-1 text-[0.7rem] px-1 py-0 rounded flex-shrink-0 whitespace-nowrap"
+                                  style={{
+                                    backgroundColor: currentColor,
+                                    color: currentColor !== "rgba(206, 205, 202, 0.3)" ? 'white' : 'rgb(55, 53, 47)',
+                                    height: '18px',
+                                    lineHeight: '1.2',
+                                  }}
+                                >
+                                  <span className="leading-tight">{displayValue}</span>
+                                </div>
+                              );
+                            }
+                            return <span className="text-[0.7rem] text-gray-400">Sin valor</span>;
+                          })()}
+                        </div>
                       </div>
                     ) : prop.type === "tags" ? (
                           <div 
@@ -2527,6 +2559,29 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                           e.target.style.border = 'none';
                         }}
                       />
+                    ) : prop.type === "text" ? (
+                      <div
+                        className="group relative w-full border-none outline-none bg-transparent cursor-pointer hover:bg-gray-100 rounded px-1 py-0.5 transition-colors"
+                        style={{
+                          color: 'rgb(55, 53, 47)',
+                          padding: '1px 4px',
+                          fontSize: '0.8125rem',
+                          minHeight: '20px'
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setTextEditing({
+                            filaIndex: filaIndexOriginal,
+                            propName: prop.name,
+                            value: fila.properties?.[prop.name]?.value || ""
+                          });
+                          setShowTextModal(true);
+                        }}
+                      >
+                        {fila.properties?.[prop.name]?.value || (
+                          <span className="text-gray-400 italic">Clic para editar...</span>
+                        )}
+                      </div>
                     ) : (
                       <input
                         type="text"
@@ -2669,27 +2724,42 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                       />
                     ) : prop.type === "select" ? (
                       <div className="flex items-center gap-2 w-full">
-                        <input
-                          type="text"
-                          value={fila.properties?.[prop.name]?.value || ""}
-                          onChange={(e) => actualizarValor(fi, prop.name, e.target.value)}
-                          className="flex-1 px-2 py-1 border rounded"
-                        />
+                        <div
+                          className="flex-1 px-2 py-1 border rounded cursor-pointer hover:bg-gray-50 transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // Convertir el valor de select a formato tags si es necesario
+                            const currentValue = fila.properties?.[prop.name]?.value;
+                            let tagsValue = [];
+                            if (currentValue) {
+                              // Si es un string, convertirlo a formato tag
+                              if (typeof currentValue === 'string') {
+                                tagsValue = [{
+                                  label: currentValue,
+                                  value: currentValue,
+                                  color: fila.properties?.[prop.name]?.color || "#3b82f6"
+                                }];
+                              } else if (Array.isArray(currentValue)) {
+                                tagsValue = currentValue;
+                              }
+                            }
+                            setTagsEditando({
+                              filaIndex: filaIndexOriginal,
+                              propName: prop.name,
+                              tags: tagsValue
+                            });
+                            setShowTagsModal(true);
+                          }}
+                        >
+                          {fila.properties?.[prop.name]?.value || (
+                            <span className="text-gray-400 italic">Clic para editar...</span>
+                          )}
+                        </div>
                         <div className="flex items-center gap-1">
                           <div 
                             className="w-6 h-6 rounded border"
                             style={{ backgroundColor: fila.properties?.[prop.name]?.color || "#3b82f6" }}
                           ></div>
-                          <input
-                            type="color"
-                            value={fila.properties?.[prop.name]?.color || "#3b82f6"}
-                            onChange={(e) => {
-                              const nuevas = [...filas];
-                              nuevas[fi].properties[prop.name].color = e.target.value;
-                              setFilas(nuevas);
-                            }}
-                            className="w-6 h-6 border rounded"
-                          />
                         </div>
                       </div>
                     ) : prop.type === "tags" ? (
@@ -2719,6 +2789,23 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                         value={fila.properties?.[prop.name]?.value || ""}
                         onChange={(e) => actualizarValor(fi, prop.name, e.target.value)}
                       />
+                    ) : prop.type === "text" ? (
+                      <div
+                        className="w-full px-2 py-1 border rounded cursor-pointer hover:bg-gray-50 transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setTextEditing({
+                            filaIndex: filaIndexOriginal,
+                            propName: prop.name,
+                            value: fila.properties?.[prop.name]?.value || ""
+                          });
+                          setShowTextModal(true);
+                        }}
+                      >
+                        {fila.properties?.[prop.name]?.value || (
+                          <span className="text-gray-400 italic">Clic para editar...</span>
+                        )}
+                      </div>
                     ) : (
                       <input
                         type="text"
@@ -3198,11 +3285,8 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
               <div className="flex items-start gap-3">
                 <span className="text-2xl">✅</span>
                 <div>
-                  <div className="font-semibold text-gray-900">
-                    Plantilla de ejemplo cargada
-                  </div>
                   <div className="text-sm text-gray-600">
-                    {sprintInfo.tareas} tareas creadas con todas las fórmulas implementadas
+                    {sprintInfo.tareas} tareas creadas
                   </div>
                 </div>
               </div>
@@ -3576,6 +3660,14 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
               { label: "QA", color: "#06b6d4" },
               { label: "TO DO", color: "#6b7280" }
             ];
+          } else if (propName === "Estado") {
+            return [
+              { label: "En progreso", color: "#3b82f6" },
+              { label: "Pendiente", color: "#f59e0b" },
+              { label: "Completado", color: "#10b981" },
+              { label: "Cancelado", color: "#ef4444" },
+              { label: "Pausado", color: "#6b7280" }
+            ];
           }
           // Para otros campos de tags, no hay lista predefinida
           return [];
@@ -3583,21 +3675,41 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
 
         const availableTags = getAvailableTags(tagsEditando.propName);
         const selectedTagLabels = tagsEditando.tags.map(t => t.label || t.value || t);
+        const prop = propiedades.find(p => p.name === tagsEditando.propName);
+        const isSelectType = prop && prop.type === "select";
         
         const toggleTag = (tag) => {
           const isSelected = selectedTagLabels.includes(tag.label);
-          if (isSelected) {
-            // Deseleccionar
-            setTagsEditando({
-              ...tagsEditando,
-              tags: tagsEditando.tags.filter(t => (t.label || t.value || t) !== tag.label)
-            });
+          if (isSelectType) {
+            // Para tipo select, solo permitir un tag a la vez (reemplazar el anterior)
+            if (isSelected) {
+              // Deseleccionar (limpiar)
+              setTagsEditando({
+                ...tagsEditando,
+                tags: []
+              });
+            } else {
+              // Seleccionar (reemplazar el anterior)
+              setTagsEditando({
+                ...tagsEditando,
+                tags: [tag]
+              });
+            }
           } else {
-            // Seleccionar
-            setTagsEditando({
-              ...tagsEditando,
-              tags: [...tagsEditando.tags, tag]
-            });
+            // Para tipo tags, permitir múltiples
+            if (isSelected) {
+              // Deseleccionar
+              setTagsEditando({
+                ...tagsEditando,
+                tags: tagsEditando.tags.filter(t => (t.label || t.value || t) !== tag.label)
+              });
+            } else {
+              // Seleccionar
+              setTagsEditando({
+                ...tagsEditando,
+                tags: [...tagsEditando.tags, tag]
+              });
+            }
           }
         };
 
@@ -3725,7 +3837,32 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                 <button
                   onClick={() => {
                     if (tagsEditando.filaIndex !== null && tagsEditando.propName) {
-                      actualizarValor(tagsEditando.filaIndex, tagsEditando.propName, tagsEditando.tags);
+                      const prop = propiedades.find(p => p.name === tagsEditando.propName);
+                      if (prop && prop.type === "select") {
+                        // Para tipo select, guardar solo el primer tag como valor string con color
+                        if (tagsEditando.tags.length > 0) {
+                          const firstTag = tagsEditando.tags[0];
+                          const nuevas = [...filas];
+                          nuevas[tagsEditando.filaIndex].properties[tagsEditando.propName] = {
+                            ...nuevas[tagsEditando.filaIndex].properties[tagsEditando.propName],
+                            value: firstTag.label || firstTag.value || firstTag,
+                            color: firstTag.color || nuevas[tagsEditando.filaIndex].properties[tagsEditando.propName]?.color || "#3b82f6"
+                          };
+                          setFilas(nuevas);
+                        } else {
+                          // Si no hay tags, limpiar el valor
+                          const nuevas = [...filas];
+                          nuevas[tagsEditando.filaIndex].properties[tagsEditando.propName] = {
+                            ...nuevas[tagsEditando.filaIndex].properties[tagsEditando.propName],
+                            value: "",
+                            color: nuevas[tagsEditando.filaIndex].properties[tagsEditando.propName]?.color || "#3b82f6"
+                          };
+                          setFilas(nuevas);
+                        }
+                      } else {
+                        // Para tipo tags, guardar el array completo
+                        actualizarValor(tagsEditando.filaIndex, tagsEditando.propName, tagsEditando.tags);
+                      }
                     }
                     setShowTagsModal(false);
                     setTagsEditando({ filaIndex: null, propName: null, tags: [] });
@@ -3739,6 +3876,83 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
           </div>
         );
       })()}
+
+      {/* Modal para editar Texto */}
+      {showTextModal && textEditing.filaIndex !== null && textEditing.propName && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex justify-center items-center p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-800">📝 Editar {textEditing.propName}</h2>
+              <button 
+                onClick={() => {
+                  setShowTextModal(false);
+                  setTextEditing({ filaIndex: null, propName: null, value: "" });
+                }}
+                className="text-gray-500 hover:text-gray-700 text-2xl font-bold"
+              >
+                ×
+              </button>
+            </div>
+            
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                {textEditing.propName}
+              </label>
+              <textarea
+                value={textEditing.value}
+                onChange={(e) => setTextEditing({ ...textEditing, value: e.target.value })}
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900"
+                style={{
+                  backgroundColor: 'white',
+                  color: 'rgb(17, 24, 39)',
+                  minHeight: '100px',
+                  resize: 'vertical'
+                }}
+                placeholder="Escribe aquí..."
+                autoFocus
+              />
+            </div>
+            
+            <div className="flex justify-between items-center">
+              <button
+                onClick={() => {
+                  if (textEditing.filaIndex !== null && textEditing.propName) {
+                    actualizarValor(textEditing.filaIndex, textEditing.propName, "");
+                  }
+                  setShowTextModal(false);
+                  setTextEditing({ filaIndex: null, propName: null, value: "" });
+                }}
+                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
+              >
+                Limpiar
+              </button>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowTextModal(false);
+                    setTextEditing({ filaIndex: null, propName: null, value: "" });
+                  }}
+                  className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => {
+                    if (textEditing.filaIndex !== null && textEditing.propName) {
+                      actualizarValor(textEditing.filaIndex, textEditing.propName, textEditing.value);
+                    }
+                    setShowTextModal(false);
+                    setTextEditing({ filaIndex: null, propName: null, value: "" });
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                >
+                  Guardar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </NodeViewWrapper>
   );
