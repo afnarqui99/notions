@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { NodeViewWrapper } from "@tiptap/react";
 import TagInputNotionLike from "./TagInputNotionLike";
 import EditorDescripcion from './EditorDescripcion';
@@ -353,6 +353,69 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
       return fila;
     });
     setFilas(nuevas);
+  };
+
+  // Función para obtener el ancho de una columna (usando el guardado o el default)
+  const obtenerAnchoColumna = (prop) => {
+    // Si tiene ancho personalizado guardado, usarlo
+    if (prop.width) {
+      return prop.width;
+    }
+    
+    // Sino, usar el ancho por defecto según el tipo
+    if (prop.type === "checkbox") {
+      return '50px';
+    } else if (prop.type === "number" || prop.type === "percent") {
+      return '120px';
+    } else if (prop.type === "date") {
+      return '140px';
+    } else if (prop.type === "formula") {
+      return '130px';
+    } else if (prop.type === "tags") {
+      return '180px';
+    } else if (prop.type === "select") {
+      return '140px';
+    } else {
+      return '150px';
+    }
+  };
+
+  // Función para actualizar el ancho de una columna
+  const actualizarAnchoColumna = (propName, nuevoAncho) => {
+    const nuevasPropiedades = propiedades.map(p => {
+      if (p.name === propName) {
+        return { ...p, width: nuevoAncho };
+      }
+      return p;
+    });
+    setPropiedades(nuevasPropiedades);
+  };
+
+  // Función para iniciar redimensionamiento de columna
+  const iniciarRedimensionamiento = (e, propName, anchoActual) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const inicioX = e.clientX;
+    const anchoInicial = parseInt(anchoActual, 10);
+    
+    const mover = (moveEvent) => {
+      const deltaX = moveEvent.clientX - inicioX;
+      const nuevoAncho = Math.max(80, anchoInicial + deltaX); // Mínimo 80px
+      actualizarAnchoColumna(propName, `${nuevoAncho}px`);
+    };
+    
+    const detener = () => {
+      document.removeEventListener('mousemove', mover);
+      document.removeEventListener('mouseup', detener);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    
+    document.addEventListener('mousemove', mover);
+    document.addEventListener('mouseup', detener);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
   };
 
   const agregarFila = () => {
@@ -965,35 +1028,40 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
     // Como el sprint inicia hoy, los días transcurridos son 0
     const diasHabilesTranscurridos = 0;
     
-    // Definir todos los campos con fórmulas (incluyendo los de Notion de la imagen)
+    // Definir todos los campos con fórmulas según README (SPRINT_SETUP_README.md)
     const plantillaCampos = [
-      // Campos principales visibles (como en Notion)
+      // Campos principales VISIBLES (listos para trabajar inmediatamente)
       { name: "Priority", type: "tags", visible: true },
       { name: "Type", type: "tags", visible: true },
       { name: "Percent", type: "formula", visible: true, formula: 'if(((prop("Progress") / prop("Objective")) >= 1), "✅", if(and(empty(prop("Progress")), !empty(prop("Objective"))), "0%", substring("➖➖➖➖", 0, floor((prop("Progress") / prop("Objective")) * 10)) + " " + format(round((prop("Progress") / prop("Objective")) * 100)) + "%"))' },
       { name: "Percent Total", type: "formula", visible: true, formula: 'if((prop("Time Estimated") > 0), format(round((prop("Time Spent") * 100) / prop("Time Estimated"))) + "%", "0%")' },
       { name: "Progress", type: "number", visible: true, totalizar: false },
-      // Campos de tiempo (ocultos inicialmente)
-      { name: "Time Spent", type: "number", visible: false, totalizar: true },
-      { name: "Time Estimated", type: "number", visible: false, totalizar: true },
-      // Campos base del sprint (ocultos inicialmente, valores generales para todas las filas)
+      { name: "Estado", type: "select", visible: true },
+      { name: "Time Spent", type: "number", visible: true, totalizar: true },
+      { name: "Time Estimated", type: "number", visible: true, totalizar: true },
+      { name: "Start Date", type: "date", visible: true },
+      { name: "End Date", type: "date", visible: true },
+      // Campos base del sprint (ocultos, valores generales para todas las filas)
       { name: "Sprint Start Date", type: "text", visible: false },
       { name: "Sprint End Date", type: "text", visible: false },
       { name: "Horas Diarias Sprint", type: "number", visible: false, totalizar: false },
-      // Campos de fechas (ocultos inicialmente)
-      { name: "Start Date", type: "text", visible: false },
-      { name: "End Date", type: "text", visible: false },
-      { name: "Current Date", type: "text", visible: false },
-      { name: "Created", type: "text", visible: false },
-      { name: "Expiration date", type: "text", visible: false },
-      // Campos calculados y fórmulas (ocultos inicialmente)
+      // Campos de soporte OCULTOS (necesarios para fórmulas pero no visibles por defecto)
+      { name: "Objective", type: "number", visible: false, totalizar: false },
+      { name: "Current Date", type: "date", visible: false },
+      { name: "Created", type: "date", visible: false },
+      { name: "Expiration date", type: "date", visible: false },
+      // Campos de días y horas OCULTOS (datos de entrada para cálculos)
+      { name: "Days Worked", type: "number", visible: false, totalizar: false },
+      { name: "Days Elapsed", type: "number", visible: false, totalizar: false },
+      // Campos de tareas OCULTOS (datos de entrada)
+      { name: "Tasks Completed", type: "number", visible: false, totalizar: true },
+      { name: "Total Tasks", type: "number", visible: false, totalizar: false },
+      // Fórmulas adicionales OCULTAS (disponibles si se necesitan)
       { name: "Progreso", type: "formula", visible: false, formula: 'if(((prop("Progress") / prop("Objective")) >= 1), "✅", (if(and(empty(prop("Progress")), !empty(prop("Objective"))), "0%", format(round((prop("Progress") / prop("Objective")) * 100)) + "%")))' },
       { name: "missing percentage", type: "formula", visible: false, formula: 'if((prop("Type") == "DONE"), 0, if((prop("Time Estimated") > 0), format(round((prop("Time Spent") * 100) / prop("Time Estimated"))) + "%", "0%"))' },
       { name: "Tiempo Restante", type: "formula", visible: false, formula: 'if((prop("Time Spent") >= prop("Time Estimated")), "0", prop("Time Estimated") - prop("Time Spent"))' },
       { name: "Porcentaje Tiempo", type: "formula", visible: false, formula: 'if((prop("Time Estimated") > 0), format(round((prop("Time Spent") / prop("Time Estimated")) * 100)) + "%", "0%")' },
-      // Campos de días y horas (ocultos inicialmente)
-      { name: "Days Worked", type: "number", visible: false, totalizar: false },
-      { name: "Days Elapsed", type: "number", visible: false, totalizar: false },
+      { name: "Tasa Completitud", type: "formula", visible: false, formula: 'if((prop("Total Tasks") > 0), format(round((prop("Tasks Completed") / prop("Total Tasks")) * 100)) + "%", "0%")' },
       { name: "Sprint Days", type: "number", visible: false, totalizar: false },
       { name: "Horas Diarias", type: "number", visible: false, totalizar: false },
       { name: "Horas Totales Sprint", type: "number", visible: false, totalizar: false },
@@ -1002,12 +1070,7 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
       { name: "Sobrecarga", type: "formula", visible: false, formula: 'if((prop("Time Estimated") > prop("Horas Disponibles")), "⚠️ Sobrecarga", "✅ OK")' },
       { name: "Dias Transcurridos Sprint", type: "formula", visible: false, formula: 'if(and(!empty(prop("Start Date")), !empty(prop("Current Date"))), if((date(prop("Current Date")) >= date(prop("Start Date"))), floor((date(prop("Current Date")) - date(prop("Start Date"))) / 86400000) + 1, 0), 0)' },
       { name: "Dias Faltantes Sprint", type: "formula", visible: false, formula: 'if(and(!empty(prop("End Date")), !empty(prop("Current Date"))), if((date(prop("Current Date")) <= date(prop("End Date"))), floor((date(prop("End Date")) - date(prop("Current Date"))) / 86400000), 0), 0)' },
-      // Campos de tareas (ocultos inicialmente)
-      { name: "Tasks Completed", type: "number", visible: false, totalizar: true },
-      { name: "Total Tasks", type: "number", visible: false, totalizar: false },
-      { name: "Tasa Completitud", type: "formula", visible: false, formula: 'if((prop("Total Tasks") > 0), format(round((prop("Tasks Completed") / prop("Total Tasks")) * 100)) + "%", "0%")' },
-      // Campos de estado y tags (ocultos inicialmente)
-      { name: "Estado", type: "select", visible: false },
+      // Campos adicionales OCULTOS (se pueden agregar manualmente si se necesitan)
       { name: "Tags", type: "tags", visible: false },
       { name: "tag", type: "tags", visible: false }, // Alias para tag
       { name: "Assign", type: "tags", visible: false },
@@ -1087,7 +1150,8 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
             defaultValue = horasDiarias; // Horas diarias del sprint
           }
           
-          if (campo.name === "Current Date" && campo.type === "text") {
+          // Manejar Current Date tanto para tipo date como text
+          if (campo.name === "Current Date" && (campo.type === "date" || campo.type === "text")) {
             defaultValue = hoy; // Fecha actual
           }
           
@@ -1144,7 +1208,8 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
               defaultValue = horasDiarias; // Horas diarias del sprint
             }
             
-            if (campo.name === "Current Date" && campo.type === "text") {
+            // Manejar Current Date tanto para tipo date como text
+            if (campo.name === "Current Date" && (campo.type === "date" || campo.type === "text")) {
               defaultValue = hoy; // Fecha actual
             }
             
@@ -1839,23 +1904,55 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
     );
   };
 
+  // Ref para evitar bucles infinitos - rastrear si estamos actualizando desde el nodo
+  const actualizandoDesdeNodoRef = useRef(false);
+  const ultimoNodoRef = useRef(JSON.stringify({ filas: node.attrs.filas, propiedades: node.attrs.propiedades }));
+
   // Sincronizar estado cuando cambia el nodo (útil cuando se carga desde guardado)
   useEffect(() => {
-    const nodoFilas = inicializarFilas(node.attrs.filas);
-    const nodoPropiedades = (node.attrs.propiedades || []).map(p => ({ ...p, visible: p.visible !== undefined ? p.visible : true }));
+    const nodoActualStr = JSON.stringify({ filas: node.attrs.filas, propiedades: node.attrs.propiedades });
     
-    // Solo actualizar si hay diferencias significativas
-    if (JSON.stringify(nodoFilas) !== JSON.stringify(filas)) {
+    // Solo actualizar si el nodo realmente cambió
+    if (nodoActualStr !== ultimoNodoRef.current) {
+      actualizandoDesdeNodoRef.current = true;
+      
+      const nodoFilas = inicializarFilas(node.attrs.filas);
+      const nodoPropiedades = (node.attrs.propiedades || []).map(p => ({ ...p, visible: p.visible !== undefined ? p.visible : true }));
+      
       setFilas(nodoFilas);
-    }
-    if (JSON.stringify(nodoPropiedades) !== JSON.stringify(propiedades)) {
       setPropiedades(nodoPropiedades);
+      
+      ultimoNodoRef.current = nodoActualStr;
+      
+      // Resetear el flag en el siguiente tick
+      requestAnimationFrame(() => {
+        actualizandoDesdeNodoRef.current = false;
+      });
     }
   }, [node.attrs.filas, node.attrs.propiedades]);
 
-  // Actualizar atributos del nodo cuando cambian filas o propiedades
+  // Actualizar atributos del nodo cuando cambian filas o propiedades (solo si no viene del nodo)
+  const prevEstadoRef = useRef(null);
   useEffect(() => {
-    updateAttributes({ filas, propiedades });
+    // Inicializar en la primera ejecución
+    if (prevEstadoRef.current === null) {
+      prevEstadoRef.current = { filas, propiedades };
+      return;
+    }
+    // No actualizar si el cambio viene del nodo mismo
+    if (actualizandoDesdeNodoRef.current) {
+      prevEstadoRef.current = { filas, propiedades };
+      return;
+    }
+    
+    // Comparar si realmente cambió algo
+    const filasCambiaron = JSON.stringify(prevEstadoRef.current.filas) !== JSON.stringify(filas);
+    const propiedadesCambiaron = JSON.stringify(prevEstadoRef.current.propiedades) !== JSON.stringify(propiedades);
+    
+    if (filasCambiaron || propiedadesCambiaron) {
+      updateAttributes({ filas, propiedades });
+      prevEstadoRef.current = { filas, propiedades };
+    }
   }, [filas, propiedades, updateAttributes]);
 
   return (
@@ -2283,33 +2380,9 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                 const tieneDosPalabras = palabras.length === 2;
                 const tieneMasPalabras = palabras.length > 2;
                 
-                // Anchos fijos por tipo de campo para asegurar visibilidad
-                let minWidth = '150px'; // Ancho fijo por defecto
-                let width = '150px';
-                
-                if (p.type === "checkbox") {
-                  minWidth = '50px';
-                  width = '50px';
-                } else if (p.type === "number" || p.type === "percent") {
-                  minWidth = '120px';
-                  width = '120px';
-                } else if (p.type === "date") {
-                  minWidth = '140px';
-                  width = '140px';
-                } else if (p.type === "formula") {
-                  minWidth = '130px';
-                  width = '130px';
-                } else if (p.type === "tags") {
-                  minWidth = '180px';
-                  width = '180px';
-                } else if (p.type === "select") {
-                  minWidth = '140px';
-                  width = '140px';
-                } else {
-                  // Para texto, ancho fijo generoso
-                  minWidth = '150px';
-                  width = '150px';
-                }
+                // Obtener ancho usando la función helper (considera width personalizado)
+                const width = obtenerAnchoColumna(p);
+                const minWidth = p.type === "checkbox" ? '50px' : '80px';
                 
                 // Mostrar el texto completo en una sola línea si el nombre es corto
                 // Solo dividir si el nombre es muy largo (más de 15 caracteres)
@@ -2330,9 +2403,14 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                 return (
                 <th
                   key={idx}
-                  className="cursor-pointer"
-                  onClick={() => toggleSort(p.name)}
-                  style={{ minWidth, width, maxWidth: width, whiteSpace: 'nowrap', padding: '2px 10px', overflow: 'visible' }}
+                  className="cursor-pointer relative group"
+                  onClick={(e) => {
+                    // No ordenar si se hace clic en el resizer
+                    if (!e.target.closest('.column-resizer')) {
+                      toggleSort(p.name);
+                    }
+                  }}
+                  style={{ minWidth, width, maxWidth: 'none', whiteSpace: 'nowrap', padding: '2px 10px', overflow: 'visible', position: 'relative' }}
                   title={p.name}
                 >
                   <div className="flex items-center gap-1.5" style={{ minWidth: 'fit-content' }}>
@@ -2357,6 +2435,13 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                     )}
                     {sortBy === p.name && <span className="text-[10px] opacity-60 flex-shrink-0">{sortAsc ? "↑" : "↓"}</span>}
                   </div>
+                  {/* Resizer para redimensionar columna */}
+                  <div
+                    className="column-resizer absolute top-0 right-0 w-1 h-full cursor-col-resize opacity-0 group-hover:opacity-100 bg-blue-400 hover:bg-blue-500 transition-opacity"
+                    onMouseDown={(e) => iniciarRedimensionamiento(e, p.name, width)}
+                    style={{ zIndex: 10 }}
+                    title="Arrastra para redimensionar"
+                  />
                 </th>
                 );
               })}
@@ -2407,6 +2492,9 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                       ? valor
                       : String(fila.properties?.[prop.name]?.value || "");
                     
+                    const columnWidth = obtenerAnchoColumna(prop);
+                    const columnMinWidth = prop.type === "checkbox" ? '50px' : '80px';
+                    
                     return (
                     <td 
                       key={pi} 
@@ -2415,9 +2503,8 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                         padding: '2px 8px', 
                         overflow: prop.type === "tags" ? 'visible' : 'hidden',
                         whiteSpace: prop.type === "checkbox" ? 'nowrap' : (prop.type === "tags" ? 'normal' : 'nowrap'),
-                        width: prop.type === "checkbox" ? '50px' : (prop.type === "number" || prop.type === "percent" ? '120px' : prop.type === "date" ? '140px' : prop.type === "formula" ? '130px' : prop.type === "tags" ? '180px' : prop.type === "select" ? '140px' : '150px'),
-                        minWidth: prop.type === "checkbox" ? '50px' : (prop.type === "number" || prop.type === "percent" ? '120px' : prop.type === "date" ? '140px' : prop.type === "formula" ? '130px' : prop.type === "tags" ? '180px' : prop.type === "select" ? '140px' : '150px'),
-                        maxWidth: prop.type === "checkbox" ? '50px' : (prop.type === "number" || prop.type === "percent" ? '120px' : prop.type === "date" ? '140px' : prop.type === "formula" ? '130px' : prop.type === "tags" ? '180px' : prop.type === "select" ? '140px' : '150px')
+                        width: columnWidth,
+                        minWidth: columnMinWidth
                       }}
                       onClick={(e) => {
                         // Solo permitir que se abra el drawer desde la columna de nombre
