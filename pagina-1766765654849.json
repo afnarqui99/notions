@@ -1,0 +1,354 @@
+{
+  "id": "pagina-1766765654849",
+  "titulo": "proyectos",
+  "contenido": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "paragraph"
+      },
+      {
+        "type": "tablaNotion",
+        "attrs": {
+          "filas": [
+            {
+              "Name": "Diseño de UI/UX",
+              "properties": {
+                "Priority": {
+                  "type": "tags",
+                  "value": [
+                    {
+                      "label": "Critical",
+                      "color": "#ef4444"
+                    }
+                  ]
+                },
+                "Type": {
+                  "type": "tags",
+                  "value": [
+                    {
+                      "label": "IN PROGRESS",
+                      "color": "#3b82f6"
+                    }
+                  ]
+                },
+                "Percent": {
+                  "type": "formula",
+                  "value": "➖➖➖➖ 80\"%\"",
+                  "formula": "if(((prop(\"Progress\") / prop(\"Objective\")) >= 1), \"✅\", if(and(empty(prop(\"Progress\")), !empty(prop(\"Objective\"))), \"0%\", substring(\"➖➖➖➖\", 0, floor((prop(\"Progress\") / prop(\"Objective\")) * 10)) + \" \" + format(round((prop(\"Progress\") / prop(\"Objective\")) * 100)) + \"%\"))"
+                },
+                "Percent Total": {
+                  "type": "formula",
+                  "value": "0%",
+                  "formula": "if((prop(\"Time Estimated\") > 0), format(round((prop(\"Time Spent\") * 100) / prop(\"Time Estimated\"))) + \"%\", \"0%\")"
+                },
+                "Progress": {
+                  "type": "number",
+                  "value": 80
+                },
+                "Time Spent": {
+                  "type": "number",
+                  "value": 12
+                },
+                "Time Estimated": {
+                  "type": "number",
+                  "value": 16
+                },
+                "Current Date": {
+                  "type": "text",
+                  "value": "2025-12-30"
+                },
+                "Created": {
+                  "type": "text",
+                  "value": "2025-12-30"
+                },
+                "Expiration date": {
+                  "type": "text",
+                  "value": ""
+                },
+                "Objective": {
+                  "type": "number",
+                  "value": 100
+                },
+                "missing percentage": {
+                  "type": "formula",
+                  "value": "0%",
+                  "formula": "if((prop(\"Type\") == \"DONE\"), 0, if((prop(\"Time Estimated\") > 0), format(round((prop(\"Time Spent\") * 100) / prop(\"Time Estimated\"))) + \"%\", \"0%\"))"
+                }
+              },
+              "image": null,
+              "imageFilename": null
+            }
+          ],
+          "propiedades": [
+            {
+              "name": "Priority",
+              "type": "tags",
+              "visible": true
+            },
+            {
+              "name": "Type",
+              "type": "tags",
+              "visible": true
+            },
+            {
+              "name": "Percent",
+              "type": "formula",
+              "visible": true,
+              "formula": "if(((prop(\"Progress\") / prop(\"Objective\")) >= 1), \"✅\", if(and(empty(prop(\"Progress\")), !empty(prop(\"Objective\"))), \"0%\", substring(\"➖➖➖➖\", 0, floor((prop(\"Progress\") / prop(\"Objective\")) * 10)) + \" \" + format(round((prop(\"Progress\") / prop(\"Objective\")) * 100)) + \"%\"))"
+            },
+            {
+              "name": "Percent Total",
+              "type": "formula",
+              "visible": true,
+              "formula": "if((prop(\"Time Estimated\") > 0), format(round((prop(\"Time Spent\") * 100) / prop(\"Time Estimated\"))) + \"%\", \"0%\")"
+            },
+            {
+              "name": "Progress",
+              "type": "number",
+              "visible": true,
+              "totalizar": false
+            },
+            {
+              "name": "Estado",
+              "type": "select",
+              "visible": true
+            },
+            {
+              "name": "Time Spent",
+              "type": "number",
+              "visible": true,
+              "totalizar": true
+            },
+            {
+              "name": "Time Estimated",
+              "type": "number",
+              "visible": true,
+              "totalizar": true
+            },
+            {
+              "name": "Objective",
+              "type": "number",
+              "visible": false,
+              "totalizar": false
+            },
+            {
+              "name": "Current Date",
+              "type": "date",
+              "visible": false
+            },
+            {
+              "name": "Created",
+              "type": "date",
+              "visible": false
+            },
+            {
+              "name": "Expiration date",
+              "type": "date",
+              "visible": false
+            },
+            {
+              "name": "Days Worked",
+              "type": "number",
+              "visible": false,
+              "totalizar": false
+            },
+            {
+              "name": "Days Elapsed",
+              "type": "number",
+              "visible": false,
+              "totalizar": false
+            },
+            {
+              "name": "Tasks Completed",
+              "type": "number",
+              "visible": false,
+              "totalizar": true
+            },
+            {
+              "name": "Total Tasks",
+              "type": "number",
+              "visible": false,
+              "totalizar": false
+            },
+            {
+              "name": "Progreso",
+              "type": "formula",
+              "visible": false,
+              "formula": "if(((prop(\"Progress\") / prop(\"Objective\")) >= 1), \"✅\", (if(and(empty(prop(\"Progress\")), !empty(prop(\"Objective\"))), \"0%\", format(round((prop(\"Progress\") / prop(\"Objective\")) * 100)) + \"%\")))"
+            },
+            {
+              "name": "missing percentage",
+              "type": "formula",
+              "visible": false,
+              "formula": "if((prop(\"Type\") == \"DONE\"), 0, if((prop(\"Time Estimated\") > 0), format(round((prop(\"Time Spent\") * 100) / prop(\"Time Estimated\"))) + \"%\", \"0%\"))"
+            },
+            {
+              "name": "Tiempo Restante",
+              "type": "formula",
+              "visible": false,
+              "formula": "if((prop(\"Time Spent\") >= prop(\"Time Estimated\")), \"0\", prop(\"Time Estimated\") - prop(\"Time Spent\"))"
+            },
+            {
+              "name": "Porcentaje Tiempo",
+              "type": "formula",
+              "visible": false,
+              "formula": "if((prop(\"Time Estimated\") > 0), format(round((prop(\"Time Spent\") / prop(\"Time Estimated\")) * 100)) + \"%\", \"0%\")"
+            },
+            {
+              "name": "Tasa Completitud",
+              "type": "formula",
+              "visible": false,
+              "formula": "if((prop(\"Total Tasks\") > 0), format(round((prop(\"Tasks Completed\") / prop(\"Total Tasks\")) * 100)) + \"%\", \"0%\")"
+            },
+            {
+              "name": "Sprint Days",
+              "type": "number",
+              "visible": false,
+              "totalizar": false
+            },
+            {
+              "name": "Horas Totales Sprint",
+              "type": "number",
+              "visible": false,
+              "totalizar": false
+            },
+            {
+              "name": "Dias Habiles Transcurridos",
+              "type": "number",
+              "visible": false,
+              "totalizar": false
+            },
+            {
+              "name": "Horas Disponibles",
+              "type": "formula",
+              "visible": false,
+              "formula": "prop(\"Dias Habiles Transcurridos\") * prop(\"Horas Diarias\")"
+            },
+            {
+              "name": "Sobrecarga",
+              "type": "formula",
+              "visible": false,
+              "formula": "if((prop(\"Time Estimated\") > prop(\"Horas Disponibles\")), \"⚠️ Sobrecarga\", \"✅ OK\")"
+            },
+            {
+              "name": "Dias Transcurridos Sprint",
+              "type": "formula",
+              "visible": false,
+              "formula": "if(and(!empty(prop(\"Sprint Start Date\")), !empty(prop(\"Current Date\"))), if((date(prop(\"Current Date\")) >= date(prop(\"Sprint Start Date\"))), floor((date(prop(\"Current Date\")) - date(prop(\"Sprint Start Date\"))) / 86400000) + 1, 0), 0)"
+            },
+            {
+              "name": "Dias Faltantes Sprint",
+              "type": "formula",
+              "visible": false,
+              "formula": "if(and(!empty(prop(\"Sprint End Date\")), !empty(prop(\"Current Date\"))), if((date(prop(\"Current Date\")) <= date(prop(\"Sprint End Date\"))), floor((date(prop(\"Sprint End Date\")) - date(prop(\"Current Date\"))) / 86400000), 0), 0)"
+            },
+            {
+              "name": "Tags",
+              "type": "tags",
+              "visible": false
+            },
+            {
+              "name": "tag",
+              "type": "tags",
+              "visible": false
+            },
+            {
+              "name": "Assign",
+              "type": "tags",
+              "visible": false
+            },
+            {
+              "name": "Done",
+              "type": "checkbox",
+              "visible": false
+            },
+            {
+              "name": "Link",
+              "type": "text",
+              "visible": false
+            },
+            {
+              "name": "Retrospective",
+              "type": "text",
+              "visible": false
+            },
+            {
+              "name": "Video",
+              "type": "text",
+              "visible": false
+            },
+            {
+              "name": "video",
+              "type": "text",
+              "visible": false
+            },
+            {
+              "name": "Lambdas",
+              "type": "text",
+              "visible": false
+            },
+            {
+              "name": "NameRepo",
+              "type": "text",
+              "visible": false
+            },
+            {
+              "name": "Property",
+              "type": "text",
+              "visible": false
+            },
+            {
+              "name": "to",
+              "type": "text",
+              "visible": false
+            },
+            {
+              "name": "area",
+              "type": "select",
+              "visible": false
+            },
+            {
+              "name": "epica",
+              "type": "select",
+              "visible": false
+            },
+            {
+              "name": "iteracion",
+              "type": "text",
+              "visible": false
+            },
+            {
+              "name": "puntos de historia",
+              "type": "number",
+              "visible": false,
+              "totalizar": false
+            },
+            {
+              "name": "release",
+              "type": "text",
+              "visible": false
+            },
+            {
+              "name": "Objective",
+              "type": "number",
+              "visible": false,
+              "totalizar": false
+            }
+          ],
+          "sprintConfig": {
+            "sprintStartDate": "2025-12-30",
+            "sprintEndDate": "2026-01-19",
+            "horasDiarias": 8,
+            "diasNoTrabajados": []
+          }
+        }
+      },
+      {
+        "type": "paragraph"
+      }
+    ]
+  },
+  "creadoEn": "2025-12-26T16:14:14.849Z",
+  "actualizadoEn": "2025-12-30T15:06:12.507Z"
+}
