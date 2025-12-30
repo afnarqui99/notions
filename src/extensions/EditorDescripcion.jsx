@@ -11,6 +11,8 @@ import Table from "@tiptap/extension-table";
 import TableRow from "@tiptap/extension-table-row";
 import { TableCellExtended } from "./TableCellExtended";
 import { TablaNotionNode } from "./TablaNotionNode";
+import { GaleriaImagenesNode } from "./GaleriaImagenesNode";
+import { GaleriaArchivosNode } from "./GaleriaArchivosNode";
 import TableHeader from "@tiptap/extension-table-header";
 import Image from "@tiptap/extension-image";
 import lowlight from "./lowlightInstance";
@@ -24,6 +26,8 @@ export default function EditorDescripcion({ content, onChange }) {
       CodeBlockLowlight.configure({ lowlight }),
       Toggle,
       TablaNotionNode,
+      GaleriaImagenesNode,
+      GaleriaArchivosNode,
       Heading,
       Underline,
       TextStyle,

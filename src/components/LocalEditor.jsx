@@ -9,6 +9,8 @@ import Table from "@tiptap/extension-table";
 import TableRow from "@tiptap/extension-table-row";
 import { TableCellExtended } from "../extensions/TableCellExtended";
 import { TablaNotionNode } from "../extensions/TablaNotionNode";
+import { GaleriaImagenesNode } from "../extensions/GaleriaImagenesNode";
+import { GaleriaArchivosNode } from "../extensions/GaleriaArchivosNode";
 import TableHeader from "@tiptap/extension-table-header";
 import { ImageExtended } from "../extensions/ImageExtended";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -330,6 +332,8 @@ export default function LocalEditor({ onShowConfig }) {
       CodeBlockLowlight.configure({ lowlight }),
       Toggle,
       TablaNotionNode,
+      GaleriaImagenesNode,
+      GaleriaArchivosNode,
       Heading,
       Underline,
       TextStyle,

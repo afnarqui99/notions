@@ -9,6 +9,21 @@ export const SlashCommand = Extension.create({
     return {
       suggestion: {
         char: '/',
+        allow: ({ query }) => {
+          // Permitir todos los comandos
+          return true;
+        },
+        filter: ({ items, query }) => {
+          // Filtrar items por label, description o keywords
+          if (!query) return items;
+          const queryLower = query.toLowerCase();
+          return items.filter(item => {
+            const labelMatch = item.label?.toLowerCase().includes(queryLower);
+            const descMatch = item.description?.toLowerCase().includes(queryLower);
+            const keywordsMatch = item.keywords?.some(k => k.toLowerCase().includes(queryLower));
+            return labelMatch || descMatch || keywordsMatch;
+          });
+        },
         startOfLine: false,
         command: ({ editor, range, props }) => {
           // Función auxiliar para salir de cualquier bloque antes de ejecutar el comando
@@ -96,6 +111,28 @@ export const SlashCommand = Extension.create({
   command: ({ editor, range }) => {
     editor.chain().focus().deleteRange(range).insertContent({
       type: 'tablaNotion',
+    }).run();
+  },
+},
+          {
+  label: "Galería de Imágenes",
+  description: "Galería organizada con grupos, nombres y descripciones",
+  icon: "🖼️",
+  keywords: ["imagenes", "galeria", "imagen", "fotos"],
+  command: ({ editor, range }) => {
+    editor.chain().focus().deleteRange(range).insertContent({
+      type: 'galeriaImagenes',
+    }).run();
+  },
+},
+          {
+  label: "Galería de Archivos",
+  description: "Organiza cualquier tipo de archivo: videos, PDFs, Excel, ZIP, etc.",
+  icon: "📁",
+  keywords: ["archivos", "files", "documentos", "videos", "pdf", "excel", "zip"],
+  command: ({ editor, range }) => {
+    editor.chain().focus().deleteRange(range).insertContent({
+      type: 'galeriaArchivos',
     }).run();
   },
 },
@@ -344,7 +381,7 @@ export const SlashCommand = Extension.create({
           {
             icon: '🖼️',
             label: 'Insertar imagen',
-            description: 'Sube una imagen desde tu dispositivo',
+            description: 'Sube una imagen con título, descripción y fecha',
             command: async ({ editor, range }) => {
               editor.chain().focus().deleteRange(range).run();
 
@@ -361,10 +398,17 @@ export const SlashCommand = Extension.create({
                   const url = await LocalStorageService.getFileURL(filename, 'files');
                   
                   if (url) {
-                    // Guardar la imagen con la referencia del archivo en un atributo data-filename
+                    // Nombre por defecto (sin extensión)
+                    const nombreDefault = file.name.replace(/\.[^/.]+$/, '');
+                    const fechaDefault = new Date().toISOString();
+                    
+                    // Guardar la imagen sin nombre inicialmente para que se abra el modal
+                    // El modal se abrirá automáticamente cuando se detecte que no hay nombre
                     editor.chain().focus().setImage({ 
                       src: url,
-                      'data-filename': filename  // Guardar el nombre del archivo para poder regenerar la URL
+                      'data-filename': filename,
+                      'data-fecha': fechaDefault,
+                      // No poner nombre por defecto para que se abra el modal
                     }).run();
                   } else {
                     alert('Error al subir la imagen.');
