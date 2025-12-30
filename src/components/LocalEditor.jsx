@@ -23,6 +23,7 @@ import LocalStorageService from "../services/LocalStorageService";
 import Modal from "./Modal";
 import ConfigModal from "./ConfigModal";
 import NewPageModal from "./NewPageModal";
+import PageLinkModal from "./PageLinkModal";
 import StorageWarning from "./StorageWarning";
 import Toast from "./Toast";
 import Sidebar from "./Sidebar";
@@ -75,6 +76,7 @@ export default function LocalEditor({ onShowConfig }) {
   const [modalError, setModalError] = useState({ isOpen: false, message: '', title: '' });
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [showNewPageModal, setShowNewPageModal] = useState(false);
+  const [showPageLinkModal, setShowPageLinkModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [paginaAEliminar, setPaginaAEliminar] = useState(null);
   const [eliminando, setEliminando] = useState(false);
@@ -385,9 +387,12 @@ export default function LocalEditor({ onShowConfig }) {
       TableCellExtended,
       ImageExtended,
       Link.configure({
-        openOnClick: true,
+        openOnClick: false, // Manejar clics manualmente para enlaces internos
         linkOnPaste: true,
-        autolink: true
+        autolink: true,
+        HTMLAttributes: {
+          class: 'cursor-pointer',
+        },
       }),
       Placeholder.configure({ placeholder: "Escribe '/' para comandos..." }),
       SlashCommand,
@@ -585,7 +590,11 @@ export default function LocalEditor({ onShowConfig }) {
     // Quitar el emoji del título para guardarlo limpio
     const tituloSinEmoji = quitarEmojiDelTitulo(titulo);
 
-    const id = `pagina-${Date.now()}`;
+    // Generar UUID único para la página (usar crypto.randomUUID() si está disponible, sino fallback a timestamp)
+    const id = typeof crypto !== 'undefined' && crypto.randomUUID 
+      ? crypto.randomUUID() 
+      : `pagina-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    
     const nuevaPagina = {
       id,
       titulo: tituloSinEmoji,
@@ -629,6 +638,81 @@ export default function LocalEditor({ onShowConfig }) {
     setPaginaSeleccionada(paginaId);
     setSelectorAbierto(false);
   };
+
+  // Función para obtener el título completo de una página (con emoji si existe)
+  const obtenerTituloCompletoPagina = (pagina) => {
+    if (!pagina) return '';
+    const emoji = pagina.emoji ? `${pagina.emoji} ` : '';
+    return `${emoji}${pagina.titulo || 'Sin título'}`;
+  };
+
+  // Manejar selección de página para crear enlace
+  const handleSelectPageForLink = (pagina) => {
+    if (!editor || !pagina) return;
+    
+    const tituloCompleto = obtenerTituloCompletoPagina(pagina);
+    // Crear enlace con formato especial: page:pagina-id
+    const href = `page:${pagina.id}`;
+    
+    // Insertar el enlace en el editor como un párrafo con texto y mark de enlace
+    editor.chain().focus().insertContent({
+      type: 'paragraph',
+      content: [
+        {
+          type: 'text',
+          text: tituloCompleto,
+          marks: [
+            {
+              type: 'link',
+              attrs: {
+                href: href,
+                target: null,
+              }
+            }
+          ]
+        }
+      ]
+    }).run();
+  };
+
+  // Escuchar evento para abrir modal de enlace a página
+  useEffect(() => {
+    const handleOpenPageLinkModal = () => {
+      setShowPageLinkModal(true);
+    };
+
+    window.addEventListener('openPageLinkModal', handleOpenPageLinkModal);
+    return () => {
+      window.removeEventListener('openPageLinkModal', handleOpenPageLinkModal);
+    };
+  }, []);
+
+  // Configurar manejo de clics en enlaces internos
+  useEffect(() => {
+    if (!editor) return;
+
+    const editorElement = editor.view.dom;
+    
+    const handleClick = (event) => {
+      const target = event.target;
+      // Verificar si el clic fue en un enlace
+      const linkElement = target.closest('a');
+      if (linkElement) {
+        const href = linkElement.getAttribute('href');
+        if (href && href.startsWith('page:')) {
+          event.preventDefault();
+          event.stopPropagation();
+          const paginaId = href.replace('page:', '');
+          seleccionarPagina(paginaId);
+        }
+      }
+    };
+
+    editorElement.addEventListener('click', handleClick);
+    return () => {
+      editorElement.removeEventListener('click', handleClick);
+    };
+  }, [editor, seleccionarPagina]);
 
   // Extraer URLs de imágenes y archivos del contenido
   const extraerArchivosDelContenido = (contenido) => {
@@ -1162,6 +1246,14 @@ export default function LocalEditor({ onShowConfig }) {
         isOpen={showNewPageModal}
         onClose={() => setShowNewPageModal(false)}
         onCreate={crearPagina}
+      />
+
+      {/* Modal de Enlace a Página */}
+      <PageLinkModal
+        isOpen={showPageLinkModal}
+        onClose={() => setShowPageLinkModal(false)}
+        paginas={paginas}
+        onSelectPage={handleSelectPageForLink}
       />
 
       {/* Modal de Confirmación para Eliminar */}

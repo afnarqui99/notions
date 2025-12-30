@@ -421,6 +421,21 @@ export const SlashCommand = Extension.create({
               input.click();
             },
           },
+          {
+            icon: '🔗',
+            label: 'Enlace a página',
+            description: 'Crear un enlace a otra página',
+            keywords: ['enlace', 'link', 'pagina', 'page'],
+            command: ({ editor, range }) => {
+              editor.chain().focus().deleteRange(range).run();
+              
+              // Disparar evento personalizado para abrir el modal de selección de página
+              const event = new CustomEvent('openPageLinkModal', {
+                detail: { editor }
+              });
+              window.dispatchEvent(event);
+            },
+          },
         ],
         render: () => {
           let popup;

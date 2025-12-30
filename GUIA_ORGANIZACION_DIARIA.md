@@ -25,7 +25,7 @@ Crea una página principal que sirva como índice de todo tu trabajo:
    - Puedes copiar y pegar el nombre completo con el emoji desde esta guía
    - O escribir el emoji usando tu teclado o el selector de emojis de Windows (Windows + .)
 2. Usa encabezados (H1, H2) para cada sección dentro del contenido de la página
-3. Crea enlaces a otras páginas usando `/` y seleccionando "Enlace a página"
+3. Crea enlaces a otras páginas usando `/` y seleccionando **"Enlace a página"** (ver sección de Enlaces a Páginas más abajo)
 
 **💡 Nota sobre los Emojis:**
 - Los emojis se incluyen **directamente en el título de la página** al crearla
@@ -613,8 +613,10 @@ Puedes crear una tabla simple para tareas:
 ## 💡 Tips y Mejores Prácticas
 
 ### 1. **Usa Enlaces entre Páginas**
-- Crea enlaces desde el Dashboard a páginas específicas
-- Usa `/` → "Enlace a página" para navegar fácilmente
+- Crea enlaces desde el Dashboard a páginas específicas usando `/` → "🔗 Enlace a página"
+- **Importante**: La página debe existir antes de crear el enlace
+- Todas las páginas aparecen en el sidebar, los enlaces son una forma adicional de navegar
+- Usa enlaces para crear índices o dashboards que conecten páginas relacionadas
 
 ### 2. **Organiza con Bloques Desplegables**
 - Usa bloques desplegables para información que no necesitas ver siempre
@@ -819,10 +821,114 @@ Conexión:
 
 ---
 
+## 🔗 Enlaces entre Páginas
+
+### ¿Cómo Funcionan los Enlaces?
+
+La aplicación permite crear enlaces internos entre páginas para facilitar la navegación. Estos enlaces funcionan de manera similar a los enlaces web, pero apuntan a otras páginas dentro de tu workspace.
+
+### Crear un Enlace a otra Página
+
+**Paso a paso:**
+
+1. En cualquier página, escribe `/` para abrir el menú de comandos
+2. Selecciona **"🔗 Enlace a página"** (también puedes buscarlo escribiendo "enlace" o "pagina")
+3. Se abrirá un modal con todas tus páginas disponibles
+4. Busca y selecciona la página que quieres enlazar
+5. El enlace se insertará automáticamente con el título completo de la página (incluyendo emoji si tiene)
+
+**Ejemplo:**
+```
+/ → Enlace a página → Seleccionar "📋 Sprint 2025-01"
+```
+
+Se insertará: **[📋 Sprint 2025-01]** (como un enlace clicable)
+
+### Características Importantes
+
+#### ✅ La Página Debe Existir Previamente
+
+**IMPORTANTE:** Los enlaces solo pueden apuntar a páginas que **ya existen**. No puedes crear una página desde un enlace. 
+
+**Flujo correcto:**
+1. Primero crea la página (botón "+" → Nueva página)
+2. Luego crea el enlace a esa página desde otra página usando `/` → "Enlace a página"
+
+**No funciona:**
+- ❌ Intentar crear una página desde un enlace (no existe esta funcionalidad)
+- ❌ El enlace no crea la página automáticamente
+
+#### 📋 Todas las Páginas Aparecen en el Sidebar
+
+**Las páginas enlazadas NO están ocultas del sidebar.** Todas las páginas que crees aparecerán en la lista del sidebar (barra lateral izquierda), sin importar si tienen enlaces apuntando a ellas o no.
+
+**Esto significa:**
+- ✅ Todas las páginas son visibles en el sidebar
+- ✅ Puedes acceder a cualquier página desde el sidebar
+- ✅ Los enlaces son una forma **adicional** y **conveniente** de navegar
+- ✅ Los enlaces son útiles para crear "dashboards" o "índices" que conecten páginas relacionadas
+
+**Ejemplo práctico:**
+- Tienes 10 páginas en total
+- Todas las 10 aparecen en el sidebar
+- En tu "Dashboard Personal" creas enlaces a 3 de esas páginas
+- Las otras 7 páginas siguen visibles en el sidebar, solo que no tienen enlace desde el Dashboard
+
+### Ventajas de Usar Enlaces
+
+1. **Navegación Rápida**: Desde un dashboard, puedes acceder rápidamente a páginas relacionadas
+2. **Organización Visual**: Puedes crear índices o menús dentro de tus páginas
+3. **Contexto**: Los enlaces muestran la relación entre páginas
+4. **Acceso Rápido**: Un clic para ir directamente a otra página
+
+### Casos de Uso
+
+**Dashboard Personal:**
+```
+📊 Dashboard Personal
+
+## 🎯 Sprints Activos
+- [📋 Sprint 2025-01] (enlace)
+- [📋 Sprint 2025-02] (enlace)
+
+## 📝 Notas
+- [📝 Notas de Proyectos] (enlace)
+- [📝 Apuntes] (enlace)
+```
+
+**Notas de un Proyecto:**
+```
+🏗️ Proyecto A
+
+Repositorio: https://github.com/usuario/proyecto-a
+
+Documentación relacionada:
+- [📋 Sprint Actual] (enlace al sprint que trabaja en este proyecto)
+- [🔐 Credenciales] (enlace a credenciales del proyecto)
+```
+
+### Actualización de Enlaces
+
+**Si cambias el título de una página:**
+- ✅ El enlace seguirá funcionando (usa el ID único de la página, no el título)
+- ⚠️ El texto visible del enlace puede quedar desactualizado si cambias el título
+- 💡 **Recomendación**: Si cambias el título de una página que tiene muchos enlaces, considera actualizar los enlaces manualmente para mantener la coherencia visual
+
+**Si eliminas una página:**
+- ⚠️ Los enlaces a esa página quedarán "rotos" (no navegarán a ninguna parte)
+- 💡 **Recomendación**: Antes de eliminar una página, busca y elimina los enlaces a ella o actualízalos a otras páginas
+
+---
+
 ## 🎯 Resumen de Comandos Útiles
 
 ### Crear Páginas:
-- `/` → "Página" → Escribe el nombre
+- Botón **"+"** en el sidebar → Escribe el nombre con emoji opcional
+
+### Enlace a Página:
+- `/` → "🔗 Enlace a página" o busca "enlace"/"pagina"
+- Selecciona la página del modal
+- El enlace se inserta automáticamente
 
 ### Insertar Tabla:
 - `/` → "tabla" o "table"
