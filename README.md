@@ -131,7 +131,135 @@ Este proyecto está basado en el componente `EditorNotionLike` del proyecto prin
 - Eliminar sistema de autenticación
 - Agregar dashboard de configuración
 
-## 📋 Guía de Columnas y Fórmulas para Gestión de Tareas
+## 🎯 Cómo Usar Esta Aplicación para Metodología Scrum
+
+Esta aplicación está diseñada especialmente para gestionar sprints Scrum de manera eficiente. Aquí te mostramos cómo usarla paso a paso:
+
+### ⚡ Inicio Rápido: Tu Primer Sprint en 3 Pasos
+
+#### 1️⃣ Crear una Nueva Página para tu Sprint
+
+1. Haz clic en el botón **"+"** (Nueva página) en la barra lateral
+2. Escribe el título de tu sprint, por ejemplo: **`📋 Sprint 2025-01`**
+   - Incluye un emoji al inicio para identificarlo fácilmente (puedes usar el selector de emojis con Windows + .)
+3. Presiona Enter o haz clic en "Crear Página"
+
+#### 2️⃣ Insertar una Tabla e Inicializar la Plantilla Scrum
+
+1. Dentro de la página, escribe `/` para abrir el menú de comandos
+2. Selecciona **"Tabla estilo Notion"**
+3. En la tabla creada, haz clic en el botón **"⋯"** (tres puntos) en la esquina superior derecha
+4. Selecciona **"🎯 Plantilla Scrum"**
+5. ¡Listo! El sistema agregará automáticamente:
+   - ✅ Todas las columnas necesarias para Scrum
+   - ✅ 5 tareas de ejemplo preconfiguradas
+   - ✅ Todas las fórmulas calculadas automáticamente
+   - ✅ Fechas del sprint configuradas (15 días hábiles)
+
+#### 3️⃣ Configurar las Fechas de tu Sprint
+
+1. En la parte superior de la tabla, verás los controles de configuración del sprint:
+   - **Sprint Start Date**: Fecha de inicio del sprint
+   - **Sprint End Date**: Fecha de fin del sprint (automáticamente 15 días hábiles después)
+   - **Horas Diarias**: Horas que trabajas por día (por defecto: 8 horas)
+2. Ajusta estas fechas según tu sprint real
+3. Las fórmulas se recalcularán automáticamente
+
+### 📊 Columnas Principales que Usarás
+
+Una vez cargada la plantilla, tendrás estas columnas disponibles:
+
+#### Columnas para Editar Manualmente:
+
+- **Name**: Nombre de la tarea
+- **Estado**: Estado de la tarea (TO DO, IN PROGRESS, DONE, etc.) - Selección rápida
+- **Priority**: Prioridad (Critical, Medium, Low)
+- **Time Estimated**: Tiempo estimado en horas (ej: 8, 16, 24)
+- **Time Spent**: Tiempo real trabajado en horas (actualízalo diariamente)
+- **Progress**: Progreso de 0 a 100 (ej: 0, 25, 50, 75, 100)
+- **Objective**: Objetivo total (normalmente 100)
+
+#### Columnas Calculadas Automáticamente:
+
+- **Percent**: Muestra el porcentaje de progreso visualmente (➖➖➖ 75%)
+- **Percent Total**: Porcentaje de tiempo usado vs tiempo estimado
+- **Dias Transcurridos**: Días hábiles desde el inicio del sprint
+- **Dias Faltantes**: Días hábiles restantes hasta el fin del sprint
+- **Horas Disponibles**: Horas disponibles hasta la fecha actual
+- **Horas Totales Sprint**: Total de horas del sprint completo
+- **Sobrecarga**: ⚠️ Te alerta si una tarea excede las horas disponibles
+
+### 🚀 Flujo de Trabajo Diario Típico
+
+**Al inicio del día:**
+1. Abre tu página del sprint
+2. Revisa **"Dias Faltantes"** para saber cuánto tiempo queda
+3. Revisa **"Horas Disponibles"** para planificar tu día
+
+**Mientras trabajas:**
+1. Actualiza el **"Estado"** de tus tareas:
+   - `TO DO` → `IN PROGRESS` cuando empiezas
+   - `IN PROGRESS` → `DONE` cuando terminas
+2. Actualiza **"Time Spent"** con las horas trabajadas
+3. Actualiza **"Progress"** con el porcentaje completado (0-100)
+
+**Al final del día:**
+1. Revisa **"Percent Total"** para ver si estás dentro del tiempo estimado
+2. Revisa **"Sobrecarga"** para identificar tareas que necesitan ajuste
+3. Planifica el siguiente día basándote en **"Dias Faltantes"**
+
+### 📈 Ejemplo Práctico Completo
+
+Imagina que tienes un sprint de 15 días hábiles (26 Dic 2025 - 08 Ene 2026):
+
+```
+Sprint Config:
+├── Sprint Start Date: 2025-12-26
+├── Sprint End Date: 2026-01-08
+├── Horas Diarias: 8 horas
+└── Current Date: 2025-12-30
+
+Tareas del Sprint:
+┌─────────────────┬──────────┬───────┬─────────────────┬─────────────┬──────────┐
+│ Name            │ Estado   │ Prior │ Time Estimated  │ Time Spent  │ Progress │
+├─────────────────┼──────────┼───────┼─────────────────┼─────────────┼──────────┤
+│ Crear API Login │ DONE     │ High  │ 16              │ 14          │ 100      │
+│ Dashboard UI    │ IN PROGR │ High  │ 24              │ 12          │ 50       │
+│ Tests Unitarios │ TO DO    │ Med   │ 8               │ 0           │ 0        │
+│ Documentación   │ TO DO    │ Low   │ 8               │ 0           │ 0        │
+│ Bug Fixes       │ IN PROGR │ High  │ 16              │ 6           │ 30       │
+└─────────────────┴──────────┴───────┴─────────────────┴─────────────┴──────────┘
+
+Columnas Calculadas (Automáticas):
+├── Dias Transcurridos: 3 días hábiles
+├── Dias Faltantes: 12 días hábiles
+├── Horas Disponibles: 24 horas (3 días × 8 horas)
+├── Horas Totales Sprint: 120 horas (15 días × 8 horas)
+└── Sobrecarga: "⚠️ Sobrecarga" en Dashboard UI (24h > 24h disponibles)
+```
+
+### 💡 Consejos para Maximizar el Uso
+
+1. **Usa la Plantilla Scrum**: Siempre inicia con la plantilla, no crees las columnas manualmente
+2. **Actualiza Daily**: Actualiza `Time Spent` y `Progress` al final de cada día
+3. **Revisa Sobrecarga**: Si ves ⚠️, considera dividir la tarea o ajustar estimaciones
+4. **Organiza por Prioridad**: Usa la columna `Priority` para filtrar tareas importantes
+5. **Mantén Actualizada Current Date**: Actualiza la fecha actual periódicamente para cálculos precisos
+
+### 🎯 Gestión de Múltiples Sprints
+
+Si trabajas con múltiples sprints (cada 15 días), te recomendamos:
+
+1. **Crea un Dashboard Principal** con una lista de todos tus sprints
+2. **Usa nomenclatura clara**: `Sprint 2025-01`, `Sprint 2025-02`, etc.
+3. **Organiza por trimestres** si tienes muchos sprints
+4. **Mantén el sprint activo** fácilmente accesible desde tu dashboard
+
+Para más detalles sobre organización diaria, consulta: `GUIA_ORGANIZACION_DIARIA.md`
+
+---
+
+## 📋 Guía Detallada: Columnas y Fórmulas para Gestión de Tareas
 
 ### Columnas Base para Controlar el Estado y Progreso
 
