@@ -13,6 +13,7 @@ import { TableCellExtended } from "./TableCellExtended";
 import { TablaNotionNode } from "./TablaNotionNode";
 import { GaleriaImagenesNode } from "./GaleriaImagenesNode";
 import { GaleriaArchivosNode } from "./GaleriaArchivosNode";
+import { ResumenFinancieroNode } from "./ResumenFinancieroNode";
 import TableHeader from "@tiptap/extension-table-header";
 import Image from "@tiptap/extension-image";
 import lowlight from "./lowlightInstance";
@@ -28,6 +29,7 @@ export default function EditorDescripcion({ content, onChange }) {
       TablaNotionNode,
       GaleriaImagenesNode,
       GaleriaArchivosNode,
+      ResumenFinancieroNode,
       Heading,
       Underline,
       TextStyle,
@@ -70,4 +72,8 @@ export default function EditorDescripcion({ content, onChange }) {
     </div>
   );
 }
+
+
+
+
 

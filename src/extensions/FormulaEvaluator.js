@@ -4,10 +4,14 @@
  */
 
 export class FormulaEvaluator {
-  constructor(fila, todasLasFilas = [], sprintConfig = null) {
+  constructor(fila, todasLasFilas = [], sprintConfig = null, tablasVinculadas = [], tableIdActual = null, cargarDatosTabla = null) {
     this.fila = fila;
     this.todasLasFilas = todasLasFilas;
     this.sprintConfig = sprintConfig;
+    this.tablasVinculadas = tablasVinculadas || [];
+    this.tableIdActual = tableIdActual;
+    this.cargarDatosTabla = cargarDatosTabla; // Función para cargar datos de otras tablas
+    this.cacheDatosTablas = {}; // Cache para datos de tablas cargadas
   }
 
   // Función principal para evaluar una fórmula
@@ -17,27 +21,20 @@ export class FormulaEvaluator {
     }
 
     try {
-      console.log('🔍 Evaluando fórmula original:', formula);
-      
       // Reemplazar prop("Campo") con los valores reales
       let processed = this.processProps(formula);
-      console.log('📝 Después de processProps:', processed);
       
       // Evaluar funciones especiales (iterativamente para manejar anidamiento)
       processed = this.evaluateFunctions(processed);
-      console.log('⚙️ Después de evaluateFunctions:', processed);
       
       // Evaluar expresiones matemáticas básicas
       let result = this.evaluateMath(processed);
-      console.log('✅ Resultado final antes de limpiar:', result);
       
       // Si el resultado todavía parece una fórmula sin evaluar, intentar evaluarlo de nuevo
       if (typeof result === 'string' && (result.includes('if(') || result.includes('prop(') || result.includes('format('))) {
-        console.warn('⚠️ Fórmula no completamente evaluada, reintentando:', result);
         // Intentar una evaluación más agresiva
         const retry = this.evaluateFunctions(result);
         result = this.evaluateMath(retry);
-        console.log('🔄 Resultado después de reintento:', result);
       }
       
       // Limpiar comillas y paréntesis extra del resultado final
@@ -84,10 +81,8 @@ export class FormulaEvaluator {
         result = result.replace(/^\)+/g, ''); // Elimina cualquier paréntesis de apertura al inicio
       }
       
-      console.log('✅ Resultado final limpio:', result);
       return result;
     } catch (error) {
-      console.error('❌ Error evaluando fórmula:', error, formula);
       return `Error: ${error.message}`;
     }
   }
@@ -99,7 +94,6 @@ export class FormulaEvaluator {
     
     return formula.replace(propRegex, (match, campo) => {
       const valor = this.getPropValue(campo);
-      console.log(`  📊 prop("${campo}") =`, valor, `(tipo: ${typeof valor})`);
       
       // Si es un número, devolverlo directamente
       if (typeof valor === 'number') {
@@ -118,7 +112,6 @@ export class FormulaEvaluator {
         return `"${valor}"`;
       }
       // Si está vacío, devolver 0
-      console.warn(`  ⚠️ prop("${campo}") está vacío o es null, usando 0`);
       return '0';
     });
   }
@@ -298,7 +291,6 @@ export class FormulaEvaluator {
           // empty() devuelve true solo si el valor es null, undefined, string vacío, o el número 0
           // Pero NO si es cualquier otro número (como 10)
           const isEmpty = valor === null || valor === undefined || valor === '' || (typeof valor === 'number' && valor === 0);
-          console.log(`  🔍 empty(${expr.trim()}) = ${valor} (tipo: ${typeof valor}) => ${isEmpty ? '1' : '0'}`);
           return isEmpty ? '1' : '0';
         });
 
@@ -310,7 +302,6 @@ export class FormulaEvaluator {
           // !empty() devuelve true si el valor NO está vacío
           const isEmpty = valor === null || valor === undefined || valor === '' || (typeof valor === 'number' && valor === 0);
           const result = isEmpty ? '0' : '1';
-          console.log(`  🔍 !empty(${expr.trim()}) = ${valor} (tipo: ${typeof valor}) => ${result}`);
           return result;
         });
         
@@ -364,18 +355,13 @@ export class FormulaEvaluator {
             }
           }
           
-          console.log(`  🔀 if() encontrado: condicion="${condicion}", verdadero="${verdadero}", falso="${falso}"`);
-          
           // Evaluar la condición
           let condEval = condicion.trim();
           condEval = this.evaluateFunctions(condEval);
           const condResult = this.evaluateCondition(condEval);
           
-          console.log(`  ✅ Condición evaluada: "${condEval}" = ${condResult}`);
-          
           // Evaluar el valor verdadero o falso según corresponda
           const valor = condResult ? verdadero.trim() : falso;
-          console.log(`  📌 Usando ${condResult ? 'verdadero' : 'falso'}: "${valor}"`);
           
           // Evaluar recursivamente el valor seleccionado
           let valorEvaluado = this.evaluateFunctions(valor);
@@ -410,8 +396,6 @@ export class FormulaEvaluator {
             }
           }
           
-          console.log(`  🎯 Valor evaluado final: "${valorEvaluado}"`);
-          
           // Reemplazar el if() completo con el resultado
           // El valor ya está limpio (sin comillas ni paréntesis extra)
           // Agregar comillas para mantener consistencia con el formato de strings
@@ -427,21 +411,17 @@ export class FormulaEvaluator {
       const andRegex = /and\s*\(\s*([^)]+)\s*\)/g;
       result = result.replace(andRegex, (match, args) => {
         const partes = this.splitByCommas(args);
-        console.log(`  🔍 and() con ${partes.length} argumentos:`, partes);
         const valores = partes.map(a => {
           const evalExpr = this.evaluateFunctions(a.trim());
           // Si el resultado es "0" o "1", tratarlo como booleano directamente
           if (evalExpr === '0' || evalExpr === '1') {
             const boolResult = evalExpr === '1';
-            console.log(`    - "${a.trim()}" => "${evalExpr}" (booleano: ${boolResult})`);
             return boolResult;
           }
           const condResult = this.evaluateCondition(evalExpr);
-          console.log(`    - "${a.trim()}" => "${evalExpr}" => ${condResult}`);
           return condResult;
         });
         const result = valores.every(v => v) ? '1' : '0';
-        console.log(`  ✅ and() resultado: ${result}`);
         return result;
       });
 
@@ -486,14 +466,12 @@ export class FormulaEvaluator {
           const numVal = parseFloat(this.evaluateExpression(evalNum));
           
           if (isNaN(numVal)) {
-            console.log(`  🔍 format(${num}) = NaN, devolviendo "0"`);
             result = result.substring(0, startPos) + '"0"' + result.substring(closeParenPos + 1);
             continue;
           }
           
           const dec = decimals ? parseInt(decimals) : 0;
           const formatted = numVal.toFixed(dec);
-          console.log(`  🔍 format(${num}, ${dec}) = ${numVal} => "${formatted}"`);
           
           // Reemplazar el format() completo con el resultado entre comillas
           // Pero si está dentro de una concatenación, no agregar comillas (se agregarán en la concatenación)
@@ -760,11 +738,202 @@ export class FormulaEvaluator {
         }
       }
 
+      // Evaluar tabla() - tabla(tableId, columna) suma todos los valores de una columna en otra tabla
+      const tablaRegex = /tabla\s*\(/g;
+      let tablaMatch;
+      const tablaMatches = [];
+      while ((tablaMatch = tablaRegex.exec(result)) !== null) {
+        tablaMatches.push(tablaMatch.index);
+      }
+      for (let i = tablaMatches.length - 1; i >= 0; i--) {
+        const startPos = tablaMatches[i];
+        const openParenPos = result.indexOf('(', startPos);
+        const closeParenPos = this.findMatchingParen(result, openParenPos);
+        if (closeParenPos === -1) continue;
+        const innerContent = result.substring(openParenPos + 1, closeParenPos);
+        const parts = this.splitByCommas(innerContent);
+        
+        if (parts.length >= 2) {
+          let tableId = parts[0].trim();
+          let columna = parts[1].trim();
+          
+          // Remover comillas
+          tableId = tableId.startsWith('"') && tableId.endsWith('"') ? tableId.slice(1, -1) : tableId;
+          columna = columna.startsWith('"') && columna.endsWith('"') ? columna.slice(1, -1) : columna;
+          
+          try {
+            const datosTabla = this.cargarDatosTablaVinculada(tableId);
+            if (datosTabla && datosTabla.filas) {
+              const total = datosTabla.filas.reduce((suma, fila) => {
+                const valor = fila.properties?.[columna]?.value;
+                if (typeof valor === 'number') {
+                  return suma + valor;
+                }
+                const num = parseFloat(valor);
+                if (!isNaN(num)) {
+                  return suma + num;
+                }
+                return suma;
+              }, 0);
+              result = result.substring(0, startPos) + total.toString() + result.substring(closeParenPos + 1);
+            } else {
+              result = result.substring(0, startPos) + '0' + result.substring(closeParenPos + 1);
+            }
+          } catch (error) {
+            result = result.substring(0, startPos) + '0' + result.substring(closeParenPos + 1);
+          }
+        } else {
+          result = result.substring(0, startPos) + '0' + result.substring(closeParenPos + 1);
+        }
+      }
+
+      // Evaluar tablaFiltrada() - tablaFiltrada(tableId, columnaFiltro, valor, columnaSuma)
+      const tablaFiltradaRegex = /tablaFiltrada\s*\(/g;
+      let tablaFiltradaMatch;
+      const tablaFiltradaMatches = [];
+      while ((tablaFiltradaMatch = tablaFiltradaRegex.exec(result)) !== null) {
+        tablaFiltradaMatches.push(tablaFiltradaMatch.index);
+      }
+      for (let i = tablaFiltradaMatches.length - 1; i >= 0; i--) {
+        const startPos = tablaFiltradaMatches[i];
+        const openParenPos = result.indexOf('(', startPos);
+        const closeParenPos = this.findMatchingParen(result, openParenPos);
+        if (closeParenPos === -1) continue;
+        const innerContent = result.substring(openParenPos + 1, closeParenPos);
+        const parts = this.splitByCommas(innerContent);
+        
+        if (parts.length >= 4) {
+          let tableId = parts[0].trim();
+          let columnaFiltro = parts[1].trim();
+          let valorFiltro = parts[2].trim();
+          let columnaSuma = parts[3].trim();
+          
+          // Remover comillas
+          tableId = tableId.startsWith('"') && tableId.endsWith('"') ? tableId.slice(1, -1) : tableId;
+          columnaFiltro = columnaFiltro.startsWith('"') && columnaFiltro.endsWith('"') ? columnaFiltro.slice(1, -1) : columnaFiltro;
+          valorFiltro = valorFiltro.startsWith('"') && valorFiltro.endsWith('"') ? valorFiltro.slice(1, -1) : valorFiltro;
+          columnaSuma = columnaSuma.startsWith('"') && columnaSuma.endsWith('"') ? columnaSuma.slice(1, -1) : columnaSuma;
+          
+          try {
+            const datosTabla = this.cargarDatosTablaVinculada(tableId);
+            if (datosTabla && datosTabla.filas) {
+              const filasFiltradas = datosTabla.filas.filter(fila => {
+                const valor = fila.properties?.[columnaFiltro]?.value;
+                const valorStr = String(valor || '').toLowerCase();
+                return valorStr === valorFiltro.toLowerCase();
+              });
+              
+              const total = filasFiltradas.reduce((suma, fila) => {
+                const valor = fila.properties?.[columnaSuma]?.value;
+                if (typeof valor === 'number') {
+                  return suma + valor;
+                }
+                const num = parseFloat(valor);
+                if (!isNaN(num)) {
+                  return suma + num;
+                }
+                return suma;
+              }, 0);
+              result = result.substring(0, startPos) + total.toString() + result.substring(closeParenPos + 1);
+            } else {
+              result = result.substring(0, startPos) + '0' + result.substring(closeParenPos + 1);
+            }
+          } catch (error) {
+            result = result.substring(0, startPos) + '0' + result.substring(closeParenPos + 1);
+          }
+        } else {
+          result = result.substring(0, startPos) + '0' + result.substring(closeParenPos + 1);
+        }
+      }
+
+      // Evaluar tablaCount() - tablaCount(tableId, columnaFiltro?, valor?)
+      const tablaCountRegex = /tablaCount\s*\(/g;
+      let tablaCountMatch;
+      const tablaCountMatches = [];
+      while ((tablaCountMatch = tablaCountRegex.exec(result)) !== null) {
+        tablaCountMatches.push(tablaCountMatch.index);
+      }
+      for (let i = tablaCountMatches.length - 1; i >= 0; i--) {
+        const startPos = tablaCountMatches[i];
+        const openParenPos = result.indexOf('(', startPos);
+        const closeParenPos = this.findMatchingParen(result, openParenPos);
+        if (closeParenPos === -1) continue;
+        const innerContent = result.substring(openParenPos + 1, closeParenPos);
+        const parts = this.splitByCommas(innerContent);
+        
+        if (parts.length >= 1) {
+          let tableId = parts[0].trim();
+          tableId = tableId.startsWith('"') && tableId.endsWith('"') ? tableId.slice(1, -1) : tableId;
+          
+          try {
+            const datosTabla = this.cargarDatosTablaVinculada(tableId);
+            if (datosTabla && datosTabla.filas) {
+              let count = datosTabla.filas.length;
+              
+              // Si hay filtro, aplicarlo
+              if (parts.length >= 3) {
+                let columnaFiltro = parts[1].trim();
+                let valorFiltro = parts[2].trim();
+                columnaFiltro = columnaFiltro.startsWith('"') && columnaFiltro.endsWith('"') ? columnaFiltro.slice(1, -1) : columnaFiltro;
+                valorFiltro = valorFiltro.startsWith('"') && valorFiltro.endsWith('"') ? valorFiltro.slice(1, -1) : valorFiltro;
+                
+                count = datosTabla.filas.filter(fila => {
+                  const valor = fila.properties?.[columnaFiltro]?.value;
+                  const valorStr = String(valor || '').toLowerCase();
+                  return valorStr === valorFiltro.toLowerCase();
+                }).length;
+              }
+              
+              result = result.substring(0, startPos) + count.toString() + result.substring(closeParenPos + 1);
+            } else {
+              result = result.substring(0, startPos) + '0' + result.substring(closeParenPos + 1);
+            }
+          } catch (error) {
+            result = result.substring(0, startPos) + '0' + result.substring(closeParenPos + 1);
+          }
+        } else {
+          result = result.substring(0, startPos) + '0' + result.substring(closeParenPos + 1);
+        }
+      }
+
       // Verificar si hubo cambios
       changed = (before !== result);
     }
 
     return result;
+  }
+
+  // Función para cargar datos de una tabla vinculada (síncrona, usa cache)
+  cargarDatosTablaVinculada(tableId) {
+    // Si ya está en cache, retornarlo
+    if (this.cacheDatosTablas[tableId]) {
+      return this.cacheDatosTablas[tableId];
+    }
+    
+    // Si hay función de carga, usarla (debe ser síncrona o retornar datos del cache)
+    if (this.cargarDatosTabla) {
+      try {
+        const datos = this.cargarDatosTabla(tableId);
+        if (datos) {
+          this.cacheDatosTablas[tableId] = datos;
+          return datos;
+        }
+      } catch (error) {
+        // Error cargando datos de tabla
+      }
+    }
+    
+    return null;
+  }
+
+  // Función para actualizar el cache de datos de tablas
+  actualizarCacheTabla(tableId, datos) {
+    this.cacheDatosTablas[tableId] = datos;
+  }
+
+  // Función para limpiar el cache
+  limpiarCache() {
+    this.cacheDatosTablas = {};
   }
 
   // Evaluar condiciones (comparaciones, >=, <=, ==, !=, etc.)
@@ -810,7 +979,6 @@ export class FormulaEvaluator {
   // Evaluar expresiones matemáticas básicas
   evaluateMath(expr) {
     expr = expr.trim();
-    console.log(`  📐 evaluateMath entrada: "${expr}"`);
     
     // Manejar concatenación de strings con +
     if (expr.includes('"') && expr.includes('+')) {
@@ -842,16 +1010,12 @@ export class FormulaEvaluator {
         parts.push(current.trim());
       }
       
-      console.log(`  📐 Partes para concatenar:`, parts);
-      
       // Evaluar cada parte y concatenar
       if (parts.length > 1) {
         const concatenated = parts.map(p => {
           const trimmed = p.trim();
-          console.log(`    - Procesando parte: "${trimmed}"`);
           if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
             const result = trimmed.slice(1, -1);
-            console.log(`      => String: "${result}"`);
             return result;
           }
           // Evaluar la expresión (puede ser un número o una expresión matemática)
@@ -886,10 +1050,8 @@ export class FormulaEvaluator {
           }
           
           const strResult = String(evalResult);
-          console.log(`      => Evaluado: ${trimmed} => "${strResult}"`);
           return strResult;
         }).join('');
-        console.log(`  📐 Resultado concatenado: "${concatenated}"`);
         // Limpiar cualquier comilla o paréntesis extra que pueda haber quedado
         let cleaned = concatenated.trim();
         // Quitar comillas externas si existen
@@ -918,7 +1080,6 @@ export class FormulaEvaluator {
         // Limpiar patrones problemáticos
         cleaned = cleaned.replace(/"%\)+"$/g, '%');
         cleaned = cleaned.replace(/\)+"%\)+"$/g, '%');
-        console.log(`  📐 Resultado concatenado limpio: "${cleaned}"`);
         return cleaned;
       }
     }
@@ -974,7 +1135,6 @@ export class FormulaEvaluator {
       
       return result;
     } catch (error) {
-      console.warn('Error en evaluateMath:', error, expr);
       return expr; // Si falla, devolver la expresión original
     }
   }

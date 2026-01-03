@@ -5,9 +5,6 @@ import DirectorySelectorModal from './DirectorySelectorModal';
 import Modal from './Modal';
 
 export default function ConfigDashboard({ onConfigSaved }) {
-  console.log('📋 ConfigDashboard: Componente renderizado', { onConfigSaved: !!onConfigSaved });
-  console.log('📋 ConfigDashboard: Renderizando componente completo');
-  
   const [useLocalStorage, setUseLocalStorage] = useState(false);
   const [selectedPath, setSelectedPath] = useState('');
   const [showDirectoryModal, setShowDirectoryModal] = useState(false);
@@ -15,40 +12,9 @@ export default function ConfigDashboard({ onConfigSaved }) {
   const [showMessageModal, setShowMessageModal] = useState(false);
   
   useEffect(() => {
-    console.log('📋 ConfigDashboard: useEffect ejecutado');
-    console.log('📋 ConfigDashboard: Root element:', document.getElementById('root'));
-    const root = document.getElementById('root');
-    if (root) {
-      console.log('📋 ConfigDashboard: Root tiene hijos:', root.children.length);
-      console.log('📋 ConfigDashboard: Root innerHTML length:', root.innerHTML.length);
-    }
-  }, []);
-
-  useEffect(() => {
-    console.log('📋 ConfigDashboard: useEffect ejecutado');
     const config = LocalStorageService.config;
     setUseLocalStorage(config.useLocalStorage || false);
     setSelectedPath(config.basePath || config.lastSelectedPath || '');
-    
-    // Verificar que el componente se renderizó en el DOM
-    setTimeout(() => {
-      const element = document.querySelector('[data-testid="config-dashboard"]');
-      console.log('📋 ConfigDashboard: Elemento en DOM:', element ? '✅ Existe' : '❌ No existe');
-      if (element) {
-        const styles = window.getComputedStyle(element);
-        console.log('📋 ConfigDashboard: Estilos del elemento:', {
-          display: styles.display,
-          visibility: styles.visibility,
-          opacity: styles.opacity,
-          width: styles.width,
-          height: styles.height,
-          backgroundColor: styles.backgroundColor
-        });
-        console.log('📋 ConfigDashboard: Contenido del elemento (primeros 300 chars):', element.innerHTML.substring(0, 300));
-      } else {
-        console.error('❌ ConfigDashboard: El elemento NO existe en el DOM');
-      }
-    }, 200);
   }, []);
 
   const handleDirectorySelected = (path) => {
@@ -81,15 +47,6 @@ export default function ConfigDashboard({ onConfigSaved }) {
       }
     }, 1000);
   };
-
-  console.log('📋 ConfigDashboard: Renderizando JSX', { 
-    useLocalStorage, 
-    selectedPath, 
-    showDirectoryModal,
-    showMessageModal 
-  });
-  
-  console.log('📋 ConfigDashboard: Retornando JSX');
   
   return (
     <div 

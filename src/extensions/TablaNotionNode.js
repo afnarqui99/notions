@@ -58,6 +58,82 @@ export const TablaNotionNode = Node.create({
           return {};
         },
       },
+      comportamiento: {
+        default: null,
+        parseHTML: element => {
+          try {
+            const comportamiento = element.getAttribute('data-comportamiento');
+            return comportamiento || null;
+          } catch {
+            return null;
+          }
+        },
+        renderHTML: attributes => {
+          if (attributes.comportamiento) {
+            return {
+              'data-comportamiento': attributes.comportamiento,
+            };
+          }
+          return {};
+        },
+      },
+      tableId: {
+        default: null,
+        parseHTML: element => {
+          try {
+            const tableId = element.getAttribute('data-table-id');
+            return tableId || null;
+          } catch {
+            return null;
+          }
+        },
+        renderHTML: attributes => {
+          if (attributes.tableId) {
+            return {
+              'data-table-id': attributes.tableId,
+            };
+          }
+          return {};
+        },
+      },
+      nombreTabla: {
+        default: null,
+        parseHTML: element => {
+          try {
+            const nombre = element.getAttribute('data-nombre-tabla');
+            return nombre || null;
+          } catch {
+            return null;
+          }
+        },
+        renderHTML: attributes => {
+          if (attributes.nombreTabla) {
+            return {
+              'data-nombre-tabla': attributes.nombreTabla,
+            };
+          }
+          return {};
+        },
+      },
+      tablasVinculadas: {
+        default: [],
+        parseHTML: element => {
+          try {
+            const vinculadas = element.getAttribute('data-tablas-vinculadas');
+            return vinculadas ? JSON.parse(vinculadas) : [];
+          } catch {
+            return [];
+          }
+        },
+        renderHTML: attributes => {
+          if (attributes.tablasVinculadas && attributes.tablasVinculadas.length > 0) {
+            return {
+              'data-tablas-vinculadas': JSON.stringify(attributes.tablasVinculadas),
+            };
+          }
+          return {};
+        },
+      },
     };
   },
 
@@ -74,4 +150,8 @@ addNodeView() {
   return ReactNodeViewRenderer(TablaNotionStyle);
 }
 });
+
+
+
+
 

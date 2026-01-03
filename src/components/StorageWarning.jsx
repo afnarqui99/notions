@@ -10,12 +10,6 @@ export default function StorageWarning({ onOpenConfig }) {
       const config = LocalStorageService.config;
       const hasHandle = !!LocalStorageService.baseDirectoryHandle;
       
-      console.log('🔍 StorageWarning: Verificando estado...', {
-        useLocalStorage: config.useLocalStorage,
-        hasHandle,
-        baseDirectoryHandle: LocalStorageService.baseDirectoryHandle
-      });
-      
       // Mostrar advertencia solo si:
       // 1. La configuración indica almacenamiento local
       // 2. No hay handle
@@ -26,25 +20,19 @@ export default function StorageWarning({ onOpenConfig }) {
           const files = await LocalStorageService.listFiles('data');
           const hasFiles = files && files.length > 0;
           
-          console.log('🔍 StorageWarning: Archivos en localStorage:', hasFiles ? `${files.length} archivos` : 'ninguno');
-          
           // Solo mostrar advertencia si no hay archivos disponibles
           // Si hay archivos, el usuario puede trabajar normalmente aunque no esté usando el almacenamiento local
           if (!hasFiles) {
-            console.log('⚠️ StorageWarning: Mostrando advertencia (config.useLocalStorage=true pero no hay handle ni archivos)');
             setShowWarning(true);
           } else {
-            console.log('✅ StorageWarning: Ocultando advertencia (hay archivos disponibles en localStorage)');
             setShowWarning(false);
           }
         } catch (error) {
-          console.error('Error verificando archivos:', error);
           // Si hay error, mostrar advertencia por seguridad
           setShowWarning(true);
         }
       } else {
         // Si hay handle o no hay configuración de almacenamiento local, ocultar advertencia
-        console.log('✅ StorageWarning: Ocultando advertencia (handle existe o no hay config)');
         setShowWarning(false);
       }
     };
@@ -58,16 +46,11 @@ export default function StorageWarning({ onOpenConfig }) {
     
     // Escuchar cuando se restaura el handle del directorio
     const handleDirectoryChanged = () => {
-      console.log('🔄 StorageWarning: Evento directoryHandleChanged recibido, verificando estado...');
       // Esperar un momento para que el handle se establezca completamente
       setTimeout(() => {
         const hasHandle = !!LocalStorageService.baseDirectoryHandle;
-        console.log('🔍 StorageWarning: Después del evento, hasHandle:', hasHandle);
         if (hasHandle) {
-          console.log('✅ StorageWarning: Handle detectado después del evento, ocultando advertencia');
           setShowWarning(false);
-        } else {
-          console.log('⚠️ StorageWarning: Handle aún no disponible después del evento');
         }
       }, 200); // Aumentado a 200ms para dar más tiempo
     };
@@ -83,7 +66,6 @@ export default function StorageWarning({ onOpenConfig }) {
         // Si hay handle, asegurarse de que la advertencia esté oculta
         setShowWarning(prev => {
           if (prev) {
-            console.log('✅ StorageWarning: Handle detectado en verificación periódica, ocultando advertencia');
             return false;
           }
           return prev;
@@ -97,16 +79,14 @@ export default function StorageWarning({ onOpenConfig }) {
           setShowWarning(prev => {
             // Solo mostrar si no hay archivos disponibles
             if (!hasFiles && !prev) {
-              console.log('⚠️ StorageWarning: Mostrando advertencia en verificación periódica (no hay archivos)');
               return true;
             } else if (hasFiles && prev) {
-              console.log('✅ StorageWarning: Ocultando advertencia (hay archivos disponibles)');
               return false;
             }
             return prev;
           });
         } catch (error) {
-          console.error('Error verificando archivos en verificación periódica:', error);
+          // Error verificando archivos
         }
       } else {
         // Si no hay configuración de almacenamiento local, ocultar advertencia
@@ -175,4 +155,8 @@ export default function StorageWarning({ onOpenConfig }) {
     </div>
   );
 }
+
+
+
+
 

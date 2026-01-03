@@ -11,6 +11,7 @@ import { TableCellExtended } from "../extensions/TableCellExtended";
 import { TablaNotionNode } from "../extensions/TablaNotionNode";
 import { GaleriaImagenesNode } from "../extensions/GaleriaImagenesNode";
 import { GaleriaArchivosNode } from "../extensions/GaleriaArchivosNode";
+import { ResumenFinancieroNode } from "../extensions/ResumenFinancieroNode";
 import TableHeader from "@tiptap/extension-table-header";
 import { ImageExtended } from "../extensions/ImageExtended";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -27,6 +28,7 @@ import PageLinkModal from "./PageLinkModal";
 import StorageWarning from "./StorageWarning";
 import Toast from "./Toast";
 import Sidebar from "./Sidebar";
+import { PageContext } from '../utils/pageContext';
 
 export default function LocalEditor({ onShowConfig }) {
   // Función helper para extraer emoji del título
@@ -109,11 +111,8 @@ export default function LocalEditor({ onShowConfig }) {
         // Intentar obtener el filename de diferentes formas
         let filename = node.attrs['data-filename'] || node.attrs['dataFilename'] || node.attrs.dataFilename;
         
-        console.log('🖼️ Procesando imagen al guardar:', { src, filename, attrs: node.attrs });
-        
         // Si tenemos el nombre del archivo guardado, usar referencia de archivo
         if (filename) {
-          console.log('✅ Convirtiendo blob a referencia de archivo:', filename);
           return {
             ...node,
             attrs: {
@@ -129,8 +128,6 @@ export default function LocalEditor({ onShowConfig }) {
         if (src.startsWith('blob:')) {
           // No podemos extraer el nombre del archivo de una URL blob
           // Intentar buscar en el DOM si es posible
-          console.warn('⚠️ Imagen con URL blob sin nombre de archivo guardado. Se perderá al recargar.');
-          console.warn('⚠️ Atributos disponibles:', node.attrs);
           return node;
         } else if (src.includes('./files/')) {
           // Ya es una referencia de archivo, extraer el filename si no está
@@ -211,12 +208,11 @@ export default function LocalEditor({ onShowConfig }) {
               nuevaSrc = url;
             }
           } catch (error) {
-            console.warn(`No se pudo cargar la imagen ${filename}:`, error);
+            // Error al cargar imagen
           }
         } else if (src.startsWith('blob:')) {
           // Si es una URL blob sin filename, intentar extraer de la URL o mantenerla
           // Las URLs blob antiguas sin filename no se pueden regenerar
-          console.warn('⚠️ Imagen con URL blob sin nombre de archivo. No se puede regenerar.');
           return node; // Mantener la URL blob si no podemos convertirla
         } else if (src.includes('./files/')) {
           // Es una referencia relativa, convertir a URL blob
@@ -238,7 +234,7 @@ export default function LocalEditor({ onShowConfig }) {
               }
             }
           } catch (error) {
-            console.warn(`No se pudo cargar la imagen ${fileFromSrc}:`, error);
+            // Error al cargar imagen
           }
         } else if (src.startsWith('indexeddb://')) {
           // Es una referencia de IndexedDB, convertir a URL blob
@@ -260,7 +256,7 @@ export default function LocalEditor({ onShowConfig }) {
               }
             }
           } catch (error) {
-            console.warn(`No se pudo cargar la imagen desde IndexedDB ${fileFromSrc}:`, error);
+            // Error al cargar imagen desde IndexedDB
           }
         } else if (src.includes('files/')) {
           // Es una URL completa con files/, extraer el nombre del archivo
@@ -284,7 +280,7 @@ export default function LocalEditor({ onShowConfig }) {
                 }
               }
             } catch (error) {
-              console.warn(`No se pudo cargar la imagen ${fileFromSrc}:`, error);
+              // Error al cargar imagen
             }
           }
         }
@@ -346,7 +342,6 @@ export default function LocalEditor({ onShowConfig }) {
         'data'
       );
 
-      console.log("💾 Autoguardado:", paginaSeleccionada);
       setHayCambiosSinGuardar(false);
       
       if (mostrarToast) {
@@ -358,7 +353,6 @@ export default function LocalEditor({ onShowConfig }) {
       
       return true;
     } catch (error) {
-      console.error("Error guardando contenido:", error);
       if (mostrarToast) {
         setToast({
           message: 'Error al guardar. Intenta de nuevo.',
@@ -373,13 +367,17 @@ export default function LocalEditor({ onShowConfig }) {
 
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({ codeBlock: false }),
+      StarterKit.configure({ 
+        codeBlock: false,
+        heading: false // Deshabilitar Heading de StarterKit para evitar duplicación
+      }),
       CodeBlockLowlight.configure({ lowlight }),
       Toggle,
       TablaNotionNode,
       GaleriaImagenesNode,
       GaleriaArchivosNode,
-      Heading,
+      ResumenFinancieroNode,
+      Heading.configure({ levels: [1, 2, 3, 4, 5, 6] }),
       Underline,
       TextStyle,
       Table,
@@ -408,28 +406,16 @@ export default function LocalEditor({ onShowConfig }) {
       const config = LocalStorageService.config;
       const hasHandle = !!LocalStorageService.baseDirectoryHandle;
       
-      console.log('📋 Configuración:', config);
-      console.log('📁 baseDirectoryHandle:', hasHandle ? '✅ Existe' : '❌ No existe');
-      
       if (config.useLocalStorage && !hasHandle) {
-        console.warn('⚠️ ADVERTENCIA: Configuración indica almacenamiento local pero no hay baseDirectoryHandle.');
-        console.warn('⚠️ Los archivos están en el sistema de archivos pero no se puede acceder sin seleccionar la carpeta nuevamente.');
-        console.warn('⚠️ Para acceder a tus archivos locales, ve a Configuración y vuelve a seleccionar la carpeta.');
         // No intentar cargar desde localStorage si hay configuración de almacenamiento local
         setPaginas([]);
         return;
-      } else if (config.useLocalStorage && hasHandle) {
-        console.log('✅ Acceso a archivos locales activo');
       }
       
       try {
-        const source = hasHandle ? 'archivos locales' : 'localStorage del navegador';
-        console.log(`📂 Listando archivos desde ${source}...`);
         const files = await LocalStorageService.listFiles('data');
-        console.log(`📄 Archivos encontrados (${source}):`, files);
         
         if (files.length === 0 && config.useLocalStorage && !hasHandle) {
-          console.warn('⚠️ No se encontraron archivos. Esto es normal si no has seleccionado la carpeta nuevamente.');
           setPaginas([]);
           return;
         }
@@ -456,7 +442,7 @@ export default function LocalEditor({ onShowConfig }) {
 
         setPaginas(paginasData);
       } catch (error) {
-        console.error("Error cargando páginas:", error);
+        // Error cargando páginas
       }
     };
 
@@ -479,7 +465,6 @@ export default function LocalEditor({ onShowConfig }) {
   // Escuchar cambios en el handle del directorio
   useEffect(() => {
     const handleDirectoryChanged = () => {
-      console.log('🔄 Handle de directorio cambió, recargando páginas...');
       setHandleVersion(prev => prev + 1);
     };
 
@@ -504,6 +489,9 @@ export default function LocalEditor({ onShowConfig }) {
   // Cargar contenido de página seleccionada
   useEffect(() => {
     if (!editor || !paginaSeleccionada) return;
+    
+    // Actualizar contexto de página actual
+    PageContext.setCurrentPageId(paginaSeleccionada);
 
     const cargarContenido = async () => {
       try {
@@ -524,7 +512,6 @@ export default function LocalEditor({ onShowConfig }) {
         }
         setHayCambiosSinGuardar(false);
       } catch (error) {
-        console.error("Error cargando contenido:", error);
         editor.commands.setContent({ type: "doc", content: [{ type: "paragraph" }] });
         ultimoContenidoRef.current = JSON.stringify({ type: "doc", content: [{ type: "paragraph" }] });
       }
@@ -620,15 +607,7 @@ export default function LocalEditor({ onShowConfig }) {
     };
 
     try {
-      console.log('📝 Creando nueva página:', {
-        titulo: tituloSinEmoji,
-        emoji: emojiFinal,
-        estructura: nuevaPagina
-      });
-      console.log('📁 baseDirectoryHandle:', LocalStorageService.baseDirectoryHandle ? '✅ Existe' : '❌ No existe');
-      
-      const resultado = await LocalStorageService.saveJSONFile(`${id}.json`, nuevaPagina, 'data');
-      console.log('✅ Resultado del guardado:', resultado);
+      await LocalStorageService.saveJSONFile(`${id}.json`, nuevaPagina, 'data');
       
       setPaginas([nuevaPagina, ...paginas]);
       setPaginaSeleccionada(id);
@@ -636,7 +615,6 @@ export default function LocalEditor({ onShowConfig }) {
       setTituloPaginaActual(tituloSinEmoji);
       editor?.commands.setContent({ type: "doc", content: [{ type: "paragraph" }] });
     } catch (error) {
-      console.error("❌ Error creando página:", error);
       setModalError({ 
         isOpen: true, 
         message: `No se pudo crear la página. Error: ${error.message}. Verifica la consola para más detalles.`, 
@@ -648,6 +626,7 @@ export default function LocalEditor({ onShowConfig }) {
   const seleccionarPagina = async (paginaId) => {
     if (!paginaId || !editor) return;
     setPaginaSeleccionada(paginaId);
+    PageContext.setCurrentPageId(paginaId);
     setSelectorAbierto(false);
   };
 
@@ -787,6 +766,52 @@ export default function LocalEditor({ onShowConfig }) {
     return Array.from(archivos);
   };
 
+  const renombrarPagina = async (paginaId, nuevoTitulo) => {
+    if (!nuevoTitulo || nuevoTitulo.trim() === '') return;
+    
+    try {
+      // Cargar datos actuales de la página
+      const data = await LocalStorageService.readJSONFile(`${paginaId}.json`, 'data');
+      if (!data) {
+        return;
+      }
+      
+      // Guardar con el nuevo título
+      await LocalStorageService.saveJSONFile(
+        `${paginaId}.json`,
+        {
+          ...data,
+          titulo: nuevoTitulo.trim(),
+          actualizadoEn: new Date().toISOString(),
+          creadoEn: data.creadoEn || new Date().toISOString()
+        },
+        'data'
+      );
+      
+      // Actualizar la lista de páginas
+      const nuevasPaginas = paginas.map(p => 
+        p.id === paginaId ? { ...p, titulo: nuevoTitulo.trim() } : p
+      );
+      setPaginas(nuevasPaginas);
+      
+      // Si es la página seleccionada, actualizar el título
+      if (paginaSeleccionada === paginaId) {
+        setTitulo(nuevoTitulo.trim());
+        setTituloPaginaActual(nuevoTitulo.trim());
+      }
+      
+      setToast({
+        message: 'Nombre de página actualizado',
+        type: 'success'
+      });
+    } catch (error) {
+      setToast({
+        message: 'Error al renombrar la página',
+        type: 'error'
+      });
+    }
+  };
+
   const eliminarPagina = async () => {
     if (!paginaAEliminar) return;
     
@@ -814,7 +839,7 @@ export default function LocalEditor({ onShowConfig }) {
               const eliminado = await LocalStorageService.deleteBinaryFile(filename, 'files');
               if (eliminado) archivosEliminados++;
             } catch (error) {
-              console.warn(`No se pudo eliminar el archivo ${filename}:`, error);
+              // Error eliminando archivo
             }
           }
           
@@ -822,7 +847,7 @@ export default function LocalEditor({ onShowConfig }) {
           await LocalStorageService.deleteJSONFile(`${pagina.id}.json`, 'data');
           paginasEliminadas++;
         } catch (error) {
-          console.error(`Error eliminando página ${pagina.id}:`, error);
+          // Error eliminando página
         }
       }
       
@@ -833,6 +858,7 @@ export default function LocalEditor({ onShowConfig }) {
       // Si la página eliminada (o alguna hija) era la seleccionada, limpiar la selección
       if (idsAEliminar.includes(paginaSeleccionada)) {
         setPaginaSeleccionada(null);
+        PageContext.clearCurrentPageId();
         setTituloPaginaActual('');
         editor?.commands.setContent({ type: "doc", content: [{ type: "paragraph" }] });
       }
@@ -849,7 +875,6 @@ export default function LocalEditor({ onShowConfig }) {
         type: 'success'
       });
     } catch (error) {
-      console.error("Error eliminando página:", error);
       setModalError({
         isOpen: true,
         message: `No se pudo eliminar la página. Error: ${error.message}`,
@@ -897,7 +922,6 @@ export default function LocalEditor({ onShowConfig }) {
           }).run();
         }
       } catch (error) {
-        console.error("Error subiendo imagen:", error);
         setModalError({ 
           isOpen: true, 
           message: "No se pudo subir la imagen. Verifica que tengas una carpeta configurada.", 
@@ -945,7 +969,6 @@ export default function LocalEditor({ onShowConfig }) {
             .run();
         }
       } catch (error) {
-        console.error("Error subiendo archivo:", error);
         setModalError({ 
           isOpen: true, 
           message: "No se pudo subir el archivo. Verifica que tengas una carpeta configurada.", 
@@ -984,7 +1007,6 @@ export default function LocalEditor({ onShowConfig }) {
         title: "PDF generado" 
       });
     } catch (error) {
-      console.error("Error exportando PDF:", error);
       setModalError({ 
         isOpen: true, 
         message: "Ocurrió un error al generar el PDF. Por favor, intenta de nuevo.", 
@@ -1024,7 +1046,7 @@ export default function LocalEditor({ onShowConfig }) {
         )
       );
     } catch (error) {
-      console.error("Error actualizando título:", error);
+      // Error actualizando título
     }
   };
 
@@ -1058,6 +1080,7 @@ export default function LocalEditor({ onShowConfig }) {
         onSidebarStateChange={setSidebarColapsado}
         onEliminarPagina={abrirModalEliminar}
         onReordenarPaginas={setPaginas}
+        onRenombrarPagina={renombrarPagina}
       />
 
       {/* Modal de selección */}
@@ -1212,7 +1235,7 @@ export default function LocalEditor({ onShowConfig }) {
                                   localStorage.setItem('notion-favoritos', JSON.stringify(nuevosFavoritos));
                                   setFavoritos(nuevosFavoritos);
                                 } catch (error) {
-                                  console.error('Error guardando favoritos:', error);
+                                  // Error guardando favoritos
                                 }
                               }}
                               className="ml-2 p-1 hover:bg-gray-100 rounded transition-colors flex-shrink-0"
