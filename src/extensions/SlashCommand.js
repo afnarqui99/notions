@@ -105,13 +105,92 @@ export const SlashCommand = Extension.create({
         },
         items: () => [
           {
-  label: "Tabla estilo Notion",
+  label: "Tabla",
   description: "Insertar una tabla dinámica con columnas configurables",
   icon: "📋",
+  keywords: ["tabla", "table", "notion"],
   command: ({ editor, range }) => {
     editor.chain().focus().deleteRange(range).insertContent({
       type: 'tablaNotion',
     }).run();
+  },
+},
+          {
+  label: "Plantilla Financiero",
+  description: "Crear sistema financiero completo con Ingresos, Egresos y Deudas interconectadas",
+  icon: "💰",
+  keywords: ["financiero", "finanzas", "ingresos", "egresos", "deudas", "plantilla"],
+  command: ({ editor, range }) => {
+    editor.chain().focus().deleteRange(range).run();
+    
+    // Crear contenido estructurado para la plantilla financiera
+    const contenido = [
+      // Título principal
+      {
+        type: 'heading',
+        attrs: { level: 1 },
+        content: [{ type: 'text', text: '💰 Sistema Financiero' }]
+      },
+      // Párrafo separador
+      { type: 'paragraph', content: [] },
+      // Título de gráficas
+      {
+        type: 'heading',
+        attrs: { level: 2 },
+        content: [{ type: 'text', text: '📊 Resumen Financiero' }]
+      },
+      { type: 'paragraph', content: [] },
+      {
+        type: 'resumenFinanciero'
+      },
+      { type: 'paragraph', content: [] },
+      // Primera tabla: Ingresos
+      {
+        type: 'heading',
+        attrs: { level: 2 },
+        content: [{ type: 'text', text: '💰 Ingresos' }]
+      },
+      { type: 'paragraph', content: [] },
+      {
+        type: 'tablaNotion',
+        attrs: {
+          nombreTabla: 'Ingresos',
+          comportamiento: 'financiero'
+        }
+      },
+      { type: 'paragraph', content: [] },
+      // Segunda tabla: Egresos
+      {
+        type: 'heading',
+        attrs: { level: 2 },
+        content: [{ type: 'text', text: '💸 Egresos' }]
+      },
+      { type: 'paragraph', content: [] },
+      {
+        type: 'tablaNotion',
+        attrs: {
+          nombreTabla: 'Egresos',
+          comportamiento: 'financiero'
+        }
+      },
+      { type: 'paragraph', content: [] },
+      // Tercera tabla: Deudas
+      {
+        type: 'heading',
+        attrs: { level: 2 },
+        content: [{ type: 'text', text: '💳 Deudas' }]
+      },
+      { type: 'paragraph', content: [] },
+      {
+        type: 'tablaNotion',
+        attrs: {
+          nombreTabla: 'Deudas',
+          comportamiento: 'financiero'
+        }
+      }
+    ];
+    
+    editor.chain().focus().insertContent(contenido).run();
   },
 },
           {
@@ -545,4 +624,8 @@ function updatePopupPosition(popup, clientRect) {
   popup.style.top = `${rect.top + rect.height + window.scrollY + 6}px`;
   popup.style.zIndex = '9999';
 }
+
+
+
+
 

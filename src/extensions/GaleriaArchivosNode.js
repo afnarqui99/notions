@@ -40,3 +40,4 @@ export const GaleriaArchivosNode = Node.create({
   },
 });
 
+

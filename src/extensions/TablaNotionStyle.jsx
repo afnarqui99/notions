@@ -6,7 +6,11 @@ import { FormulaEvaluator, calcularTotal } from './FormulaEvaluator';
 import FormulaSuggestions from './FormulaSuggestions';
 import PropertyVisibilityModal from '../components/PropertyVisibilityModal';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
+import VincularTablasModal from '../components/VincularTablasModal';
+import GraficasCombinadas from '../components/GraficasCombinadas';
 import LocalStorageService from '../services/LocalStorageService';
+import TableRegistryService from '../services/TableRegistryService';
+import { PageContext } from '../utils/pageContext';
 
 // Componente auxiliar para cargar imagen desde filename
 function ImagenDesdeFilename({ fila, className, alt }) {
@@ -32,7 +36,6 @@ function ImagenDesdeFilename({ fila, className, alt }) {
               filename = fila.image.replace('./files/', '');
             } else if (fila.image.startsWith('blob:')) {
               // Si es una URL blob antigua, no podemos cargarla
-              console.warn('⚠️ Imagen con URL blob sin filename. No se puede cargar.');
               setImagenUrl(null);
               return;
             }
@@ -51,7 +54,6 @@ function ImagenDesdeFilename({ fila, className, alt }) {
             setImagenUrl(null);
           }
         } catch (error) {
-          console.error('Error cargando imagen:', error);
           setImagenUrl(null);
         }
       } else {
@@ -101,7 +103,6 @@ function NombreCeldaConImagen({ fila, filaIndex, onSubirImagen, onEliminarImagen
             } else if (fila.image.startsWith('blob:')) {
               // Si es una URL blob antigua, no podemos cargarla
               // Intentar usar imageFilename si existe
-              console.warn('⚠️ Imagen con URL blob sin filename. No se puede cargar.');
               setImagenUrl(null);
               return;
             }
@@ -120,7 +121,6 @@ function NombreCeldaConImagen({ fila, filaIndex, onSubirImagen, onEliminarImagen
             setImagenUrl(null);
           }
         } catch (error) {
-          console.error('Error cargando imagen:', error);
           setImagenUrl(null);
         }
       } else {
@@ -230,13 +230,13 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
       const nuevaFila = { 
         ...fila,
         image: fila.image || null,
-        imageFilename: fila.imageFilename || null
+        imageFilename: fila.imageFilename || null,
+        abonos: fila.abonos || [] // Preservar historial de abonos
       };
       
       // Migración: Si hay una URL blob pero no hay filename, limpiar la imagen
       // (las URLs blob no persisten después de recargar)
       if (nuevaFila.image && nuevaFila.image.startsWith('blob:') && !nuevaFila.imageFilename) {
-        console.warn('⚠️ Imagen con URL blob sin filename detectada. Se limpiará.');
         nuevaFila.image = null;
         nuevaFila.imageFilename = null;
       }
@@ -268,6 +268,115 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
     const props = node.attrs.propiedades || [];
     return props.map(p => ({ ...p, visible: p.visible !== undefined ? p.visible : true }));
   });
+  // Estado para el comportamiento de la tabla (scrum, financiero, null)
+  const [comportamiento, setComportamiento] = useState(() => {
+    return node.attrs.comportamiento || null;
+  });
+
+  // Estado para tableId y nombreTabla
+  const [tableId, setTableId] = useState(() => {
+    // Si no existe tableId, generar uno nuevo
+    if (!node.attrs.tableId) {
+      const newTableId = TableRegistryService.generateTableId();
+      // Actualizar el nodo inmediatamente
+      updateAttributes({ tableId: newTableId });
+      return newTableId;
+    }
+    return node.attrs.tableId;
+  });
+  const [nombreTabla, setNombreTabla] = useState(() => {
+    return node.attrs.nombreTabla || null;
+  });
+  const [tablasVinculadas, setTablasVinculadas] = useState(() => {
+    return node.attrs.tablasVinculadas || [];
+  });
+  
+  // Cache para datos de tablas vinculadas
+  const cacheDatosTablas = useRef({});
+  
+  // Función para cargar datos de una tabla vinculada
+  const cargarDatosTablaVinculada = (tableIdBuscado) => {
+    // Si ya está en cache, retornarlo
+    if (cacheDatosTablas.current[tableIdBuscado]) {
+      return cacheDatosTablas.current[tableIdBuscado];
+    }
+    
+    // Buscar la tabla en el registro
+    const tablaInfo = TableRegistryService.getTable(tableIdBuscado);
+    if (!tablaInfo || !tablaInfo.paginaId) {
+      return null;
+    }
+    
+    // Intentar cargar desde el cache primero (si ya se cargó antes)
+    // Si no está, retornar null (se cargará de forma asíncrona)
+    return null;
+  };
+  
+  // Función para cargar datos de tablas vinculadas de forma asíncrona
+  const precargarDatosTablasVinculadas = async () => {
+    if (!tablasVinculadas || tablasVinculadas.length === 0) {
+      return;
+    }
+    
+    for (const vinculacion of tablasVinculadas) {
+      const tableIdBuscado = vinculacion.tableId;
+      
+      // Si ya está en cache, saltar
+      if (cacheDatosTablas.current[tableIdBuscado]) {
+        continue;
+      }
+      
+      try {
+        // Buscar la tabla en el registro
+        const tablaInfo = TableRegistryService.getTable(tableIdBuscado);
+        if (!tablaInfo || !tablaInfo.paginaId) {
+          continue;
+        }
+        
+        // Cargar la página
+        const paginaData = await LocalStorageService.readJSONFile(`${tablaInfo.paginaId}.json`, 'data');
+        if (!paginaData || !paginaData.contenido) {
+          continue;
+        }
+        
+        // Buscar el nodo de tabla en el contenido
+        const encontrarTablaEnContenido = (content) => {
+          if (!content || !content.content) return null;
+          
+          for (const node of content.content) {
+            if (node.type === 'tablaNotion' && node.attrs?.tableId === tableIdBuscado) {
+              return node.attrs;
+            }
+            // Buscar recursivamente en nodos hijos
+            if (node.content) {
+              const encontrado = encontrarTablaEnContenido(node);
+              if (encontrado) return encontrado;
+            }
+          }
+          return null;
+        };
+        
+        const tablaData = encontrarTablaEnContenido(paginaData.contenido);
+        if (tablaData) {
+          cacheDatosTablas.current[tableIdBuscado] = {
+            filas: tablaData.filas || [],
+            propiedades: tablaData.propiedades || []
+          };
+        }
+      } catch (error) {
+        // Error cargando datos de tabla vinculada
+      }
+    }
+    
+    // Forzar re-evaluación de fórmulas después de cargar
+    if (Object.keys(cacheDatosTablas.current).length > 0) {
+      // Disparar evento para re-evaluar fórmulas
+      window.dispatchEvent(new CustomEvent('tablasVinculadasCargadas', {
+        detail: { tableId: tableId }
+      }));
+    }
+  };
+
   // Estado para configuración global del sprint
   const [sprintConfig, setSprintConfig] = useState(() => {
     const config = node.attrs.sprintConfig;
@@ -327,8 +436,16 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
   const [columnasSeleccionadas, setColumnasSeleccionadas] = useState([]);
   const [showTextModal, setShowTextModal] = useState(false);
   const [textEditing, setTextEditing] = useState({ filaIndex: null, propName: null, value: "" });
+  const [showNumericModal, setShowNumericModal] = useState(false);
+  const [numericEditing, setNumericEditing] = useState(null);
+  const [showAbonoModal, setShowAbonoModal] = useState(false);
+  const [abonoEditing, setAbonoEditing] = useState(null);
   const [showDiasNoTrabajadosModal, setShowDiasNoTrabajadosModal] = useState(false);
   const [showDeleteTableModal, setShowDeleteTableModal] = useState(false);
+  const [showPlantillasModal, setShowPlantillasModal] = useState(false);
+  const [showVincularModal, setShowVincularModal] = useState(false);
+  const [showGraficasModal, setShowGraficasModal] = useState(false);
+  const [showEditNombreModal, setShowEditNombreModal] = useState(false);
   
   // Estado para controlar si la tabla usa todo el ancho
   const [usarAnchoCompleto, setUsarAnchoCompleto] = useState(() => {
@@ -358,7 +475,7 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
     try {
       localStorage.setItem('notion-table-fullwidth', usarAnchoCompleto.toString());
     } catch (error) {
-      console.error('Error guardando preferencia de ancho:', error);
+      // Error guardando preferencia de ancho
     }
   }, [usarAnchoCompleto]);
 
@@ -367,23 +484,185 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
     try {
       localStorage.setItem('notion-table-view-type', tipoVista);
     } catch (error) {
-      console.error('Error guardando preferencia de vista:', error);
+      // Error guardando preferencia de vista
     }
   }, [tipoVista]);
+
+  // Función para procesar un abono a deuda
+  const procesarAbono = async () => {
+    if (!abonoEditing || !abonoEditing.value) return;
+    
+    const montoAbono = parseFloat(abonoEditing.value.replace(',', '.')) || 0;
+    if (montoAbono <= 0) return;
+    
+    if (montoAbono > abonoEditing.deudaActual) {
+      alert('El monto del abono no puede ser mayor que la deuda actual');
+      return;
+    }
+    
+    // 1. Restar el abono de la deuda actual y guardar en historial
+    const nuevaDeuda = abonoEditing.deudaActual - montoAbono;
+    
+    // Guardar el abono en el historial de la fila
+    const filaActual = filas[abonoEditing.filaIndex];
+    const abonosHistorial = filaActual.abonos || [];
+    const nuevoAbono = {
+      monto: montoAbono,
+      fecha: abonoEditing.fecha || new Date().toISOString().split('T')[0],
+      descripcion: abonoEditing.descripcion || "",
+      fechaCreacion: new Date().toISOString()
+    };
+    abonosHistorial.push(nuevoAbono);
+    
+    // Actualizar la fila con el nuevo abono y la nueva deuda
+    const filasActualizadas = filas.map((fila, idx) => {
+      if (idx === abonoEditing.filaIndex) {
+        return {
+          ...fila,
+          abonos: abonosHistorial,
+          properties: {
+            ...fila.properties,
+            Deudas: {
+              ...fila.properties.Deudas,
+              value: nuevaDeuda.toString()
+            }
+          }
+        };
+      }
+      return fila;
+    });
+    setFilas(filasActualizadas);
+    updateAttributes({ filas: filasActualizadas });
+    
+    // 2. Crear un egreso automáticamente en la tabla de Egresos
+    const paginaId = PageContext.getCurrentPageId();
+    if (paginaId && editor) {
+      try {
+        // Buscar la tabla de Egresos en el editor
+        const todasLasTablas = TableRegistryService.getTablesByPage(paginaId);
+        const tablaEgresos = todasLasTablas.find(t => 
+          t.comportamiento === 'financiero' && t.nombre === 'Egresos'
+        );
+        
+        if (tablaEgresos) {
+          // Buscar el nodo de la tabla de Egresos en el editor
+          const transaction = editor.state.tr;
+          let tablaEgresosNode = null;
+          let tablaEgresosPos = null;
+          
+          editor.state.doc.descendants((node, pos) => {
+            if (node.type.name === 'tablaNotion' && node.attrs.tableId === tablaEgresos.tableId) {
+              tablaEgresosNode = node;
+              tablaEgresosPos = pos;
+              return false;
+            }
+          });
+          
+          if (tablaEgresosNode && tablaEgresosPos !== null) {
+            // Obtener las filas y propiedades actuales
+            const filasEgresos = [...(tablaEgresosNode.attrs.filas || [])];
+            const propiedadesEgresos = tablaEgresosNode.attrs.propiedades || [];
+            
+            // Crear nueva fila de egreso
+            const nuevaFilaEgreso = {
+              Name: `Abono a: ${abonoEditing.nombreDeuda}`,
+              image: null,
+              imageFilename: null,
+              properties: {}
+            };
+            
+            // Inicializar propiedades
+            propiedadesEgresos.forEach((prop) => {
+              let defaultValue = prop.type === "checkbox" ? false : prop.type === "tags" ? [] : "";
+              nuevaFilaEgreso.properties[prop.name] = {
+                type: prop.type,
+                value: defaultValue,
+                color: prop.type === "select" ? "#3b82f6" : undefined,
+                formula: prop.type === "formula" ? "" : undefined,
+              };
+            });
+            
+            // Establecer el valor del egreso
+            if (nuevaFilaEgreso.properties['Egresos']) {
+              nuevaFilaEgreso.properties['Egresos'].value = montoAbono.toString();
+            }
+            
+            // Establecer descripción si existe
+            if (nuevaFilaEgreso.properties['Descripción']) {
+              const descripcionAbono = abonoEditing.descripcion 
+                ? `Abono a deuda: ${abonoEditing.nombreDeuda} - ${abonoEditing.descripcion}`
+                : `Abono a deuda: ${abonoEditing.nombreDeuda}`;
+              nuevaFilaEgreso.properties['Descripción'].value = descripcionAbono;
+            }
+            
+            // Establecer fecha si existe
+            if (nuevaFilaEgreso.properties['Fecha Movimiento']) {
+              nuevaFilaEgreso.properties['Fecha Movimiento'].value = abonoEditing.fecha || new Date().toISOString().split('T')[0];
+            }
+            
+            // Agregar la nueva fila
+            filasEgresos.push(nuevaFilaEgreso);
+            
+            // Actualizar el nodo
+            const newAttrs = {
+              ...tablaEgresosNode.attrs,
+              filas: filasEgresos
+            };
+            
+            transaction.setNodeMarkup(tablaEgresosPos, null, newAttrs);
+            editor.view.dispatch(transaction);
+            
+            // Disparar evento para actualizar el resumen financiero
+            window.dispatchEvent(new CustomEvent('tablaActualizada', {
+              detail: { tableId: tablaEgresos.tableId }
+            }));
+          }
+        }
+      } catch (error) {
+        // Error al crear egreso automático
+      }
+    }
+    
+    // Cerrar modal
+    setShowAbonoModal(false);
+    setAbonoEditing(null);
+    
+    // Disparar evento para actualizar esta tabla también
+    window.dispatchEvent(new CustomEvent('tablaActualizada', {
+      detail: { tableId }
+    }));
+  };
 
   const actualizarValor = (filaIdx, key, valor) => {
     const nuevas = filas.map((fila, idx) => {
       if (idx === filaIdx) {
-        return {
+        // Obtener el tipo de la propiedad
+        const prop = propiedades.find(p => p.name === key);
+        const tipo = prop?.type || "text";
+        
+        const updatedFila = {
           ...fila,
           properties: {
             ...fila.properties,
             [key]: {
+              type: tipo,
               ...fila.properties[key],
               value: valor
             }
           }
         };
+
+        // Si la columna actualizada es "Concepto" y es de tipo select, actualizar el "Name"
+        if (key === "Concepto" && prop?.type === "select") {
+          if (valor && typeof valor === 'string' && valor.length > 0) {
+            updatedFila.Name = valor;
+          } else if (Array.isArray(valor) && valor.length > 0) {
+            updatedFila.Name = valor[0]?.label || valor[0]?.value || valor[0] || "Nueva tarea";
+          } else {
+            updatedFila.Name = "Nueva tarea";
+          }
+        }
+        return updatedFila;
       }
       return fila;
     });
@@ -500,8 +779,37 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
     setDrawerExpandido(false); // Resetear el estado de expansión al cerrar
   };
 
-  // Función para obtener las columnas sugeridas de la plantilla de ejemplo
-  const obtenerColumnasSugeridas = () => {
+  // Función para detectar si la tabla es de tipo Scrum (usa comportamiento guardado o detecta por campos)
+  const esTablaScrum = () => {
+    // Si hay comportamiento guardado, usarlo
+    if (comportamiento === 'scrum') return true;
+    if (comportamiento === 'financiero') return false;
+    
+    // Si no hay comportamiento guardado, detectar por campos (compatibilidad hacia atrás)
+    const camposScrum = [
+      "Puntos de Historia", "puntos de historia", "Story Points",
+      "Time Estimated", "Time Spent", "Progress", "Type", "Priority",
+      "Tasks Completed", "Total Tasks", "Sprint Days"
+    ];
+    return propiedades.some(prop => 
+      camposScrum.some(campo => prop.name === campo)
+    );
+  };
+
+  // Función para detectar si la tabla es financiera (usa comportamiento guardado o detecta por campos)
+  const esTablaFinanciera = () => {
+    // Si hay comportamiento guardado, usarlo
+    if (comportamiento === 'financiero') return true;
+    if (comportamiento === 'scrum') return false;
+    
+    // Si no hay comportamiento guardado, detectar por campos (compatibilidad hacia atrás)
+    return propiedades.some(prop => 
+      prop.name === "Ingresos" || prop.name === "Egresos" || prop.name === "Deudas"
+    );
+  };
+
+  // Función para obtener columnas Scrum
+  const obtenerColumnasScrum = () => {
     return [
       // Campos principales visibles
       { name: "Priority", type: "tags", visible: true, descripcion: "Prioridad de la tarea (Critical, Medium, Low)" },
@@ -566,6 +874,56 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
     ];
   };
 
+  // Función para obtener columnas financieras
+  const obtenerColumnasFinancieras = () => {
+    return [
+      // Campos financieros principales
+      { name: "Persona", type: "tags", visible: true, descripcion: "Persona relacionada con el movimiento financiero" },
+      { name: "Ingresos", type: "text", visible: true, descripcion: "Monto de ingresos" },
+      { name: "Egresos", type: "text", visible: true, descripcion: "Monto de egresos" },
+      { name: "Deudas", type: "text", visible: true, descripcion: "Monto de deudas" },
+      { name: "Fecha Movimiento", type: "date", visible: true, descripcion: "Fecha del movimiento financiero" },
+      { name: "Categoría", type: "tags", visible: false, descripcion: "Categoría del movimiento financiero" },
+      { name: "Descripción", type: "text", visible: true, descripcion: "Descripción del movimiento (opcional)" },
+      // Fórmulas financieras
+      { name: "Saldo", type: "formula", visible: true, formula: 'prop("Ingresos") - prop("Egresos")', descripcion: "Saldo calculado (Ingresos - Egresos)" },
+      { name: "Total Ingresos", type: "formula", visible: false, formula: 'suma(prop("Ingresos"))', descripcion: "Suma total de todos los ingresos" },
+      { name: "Total Egresos", type: "formula", visible: false, formula: 'suma(prop("Egresos"))', descripcion: "Suma total de todos los egresos" },
+      { name: "Total Deudas", type: "formula", visible: false, formula: 'suma(prop("Deudas"))', descripcion: "Suma total de todas las deudas" },
+      { name: "Saldo Total", type: "formula", visible: false, formula: 'suma(prop("Ingresos")) - suma(prop("Egresos"))', descripcion: "Saldo total (Total Ingresos - Total Egresos)" },
+      { name: "Balance", type: "formula", visible: false, formula: 'if(((suma(prop("Ingresos")) - suma(prop("Egresos"))) > 0), "✅ Positivo", if(((suma(prop("Ingresos")) - suma(prop("Egresos"))) < 0), "⚠️ Negativo", "⚪ Neutro"))', descripcion: "Estado del balance (Positivo/Negativo/Neutro)" },
+      { name: "Porcentaje Egresos", type: "formula", visible: false, formula: 'if((suma(prop("Ingresos")) > 0), format(round((suma(prop("Egresos")) * 100) / suma(prop("Ingresos")))) + "%", "0%")', descripcion: "Porcentaje de egresos sobre ingresos" },
+      { name: "Porcentaje Deudas", type: "formula", visible: false, formula: 'if((suma(prop("Ingresos")) > 0), format(round((suma(prop("Deudas")) * 100) / suma(prop("Ingresos")))) + "%", "0%")', descripcion: "Porcentaje de deudas sobre ingresos" },
+    ];
+  };
+
+  // Función para obtener las columnas sugeridas (filtradas según el comportamiento)
+  const obtenerColumnasSugeridas = () => {
+    // Si no hay comportamiento (no se ha aplicado plantilla), retornar array vacío
+    if (!comportamiento) {
+      return [];
+    }
+    
+    const columnasScrum = obtenerColumnasScrum();
+    const columnasFinancieras = obtenerColumnasFinancieras();
+    
+    // Si hay comportamiento guardado, usar ese
+    if (comportamiento === 'scrum') {
+      return columnasScrum;
+    }
+    
+    if (comportamiento === 'financiero') {
+      return columnasFinancieras;
+    }
+    
+    // Si es mixto, devolver todas las columnas
+    if (comportamiento === 'mixto') {
+      return [...columnasScrum, ...columnasFinancieras];
+    }
+    
+    return [];
+  };
+
   // Función para agregar columnas seleccionadas
   const agregarColumnasSeleccionadas = () => {
     const columnasSugeridas = obtenerColumnasSugeridas();
@@ -586,6 +944,33 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
       return;
     }
 
+    // Detectar si las columnas agregadas son de Scrum o Financieras para establecer comportamiento
+    const columnasScrum = obtenerColumnasScrum();
+    const columnasFinancieras = obtenerColumnasFinancieras();
+    
+    const tieneColumnasScrum = nuevasColumnas.some(col => 
+      columnasScrum.some(cs => cs.name === col.name)
+    );
+    const tieneColumnasFinancieras = nuevasColumnas.some(col => 
+      columnasFinancieras.some(cf => cf.name === col.name)
+    );
+    
+    // Establecer comportamiento si no está definido
+    let nuevoComportamiento = comportamiento;
+    if (!comportamiento) {
+      if (tieneColumnasScrum && !tieneColumnasFinancieras) {
+        nuevoComportamiento = 'scrum';
+      } else if (tieneColumnasFinancieras && !tieneColumnasScrum) {
+        nuevoComportamiento = 'financiero';
+      } else if (tieneColumnasScrum && tieneColumnasFinancieras) {
+        nuevoComportamiento = 'mixto';
+      }
+    } else if (comportamiento === 'scrum' && tieneColumnasFinancieras) {
+      nuevoComportamiento = 'mixto';
+    } else if (comportamiento === 'financiero' && tieneColumnasScrum) {
+      nuevoComportamiento = 'mixto';
+    }
+
     // Agregar las nuevas columnas a las propiedades
     const nuevasPropiedades = [...propiedades];
     nuevasColumnas.forEach(columna => {
@@ -599,6 +984,11 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
     });
 
     setPropiedades(nuevasPropiedades);
+    
+    // Actualizar comportamiento si cambió
+    if (nuevoComportamiento !== comportamiento) {
+      setComportamiento(nuevoComportamiento);
+    }
 
     // Agregar las nuevas columnas a todas las filas existentes
     const nuevasFilas = filas.map((fila) => {
@@ -640,6 +1030,180 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
     alert(`✅ Se agregaron ${nuevasColumnas.length} columnas nuevas.`);
     setShowColumnasSugeridasModal(false);
     setColumnasSeleccionadas([]);
+  };
+
+  // Función para aplicar una plantilla
+  // Función para obtener nombre por defecto según tipo de plantilla
+  const obtenerNombrePorPlantilla = (tipoPlantilla) => {
+    const nombresMap = {
+      'scrum': 'Scrum Sprint',
+      'ingresos': 'Ingresos',
+      'egresos': 'Egresos',
+      'deuda': 'Deudas',
+      'personalizada': null
+    };
+    return nombresMap[tipoPlantilla] || null;
+  };
+
+  const aplicarPlantilla = (tipoPlantilla) => {
+    let columnasAAgregar = [];
+    let nuevoComportamiento = null;
+    let nuevoNombre = null;
+
+    switch (tipoPlantilla) {
+      case 'scrum':
+        columnasAAgregar = obtenerColumnasScrum();
+        nuevoComportamiento = 'scrum';
+        nuevoNombre = obtenerNombrePorPlantilla('scrum');
+        break;
+      case 'ingresos':
+        columnasAAgregar = [
+          ...obtenerColumnasFinancieras().filter(col => 
+            col.name === "Persona" || col.name === "Ingresos" || col.name === "Fecha Movimiento" || 
+            col.name === "Descripción" || col.name === "Total Ingresos"
+          ),
+          { name: "Concepto", type: "select", visible: true, descripcion: "Concepto del ingreso" },
+          { name: "Categoría", type: "tags", visible: true, descripcion: "Categoría del ingreso" }
+        ];
+        // Asegurar que Descripción esté visible
+        columnasAAgregar = columnasAAgregar.map(col => 
+          col.name === "Descripción" ? { ...col, visible: true } : col
+        );
+        nuevoComportamiento = 'financiero';
+        nuevoNombre = obtenerNombrePorPlantilla('ingresos');
+        break;
+      case 'egresos':
+        columnasAAgregar = [
+          ...obtenerColumnasFinancieras().filter(col => 
+            col.name === "Persona" || col.name === "Egresos" || col.name === "Fecha Movimiento" || 
+            col.name === "Descripción" || col.name === "Total Egresos"
+          ),
+          { name: "Concepto", type: "select", visible: true, descripcion: "Concepto del egreso" },
+          { name: "Categoría", type: "tags", visible: true, descripcion: "Categoría del egreso" }
+        ];
+        // Asegurar que Descripción esté visible
+        columnasAAgregar = columnasAAgregar.map(col => 
+          col.name === "Descripción" ? { ...col, visible: true } : col
+        );
+        nuevoComportamiento = 'financiero';
+        nuevoNombre = obtenerNombrePorPlantilla('egresos');
+        break;
+      case 'deuda':
+        columnasAAgregar = [
+          ...obtenerColumnasFinancieras().filter(col => 
+            col.name === "Persona" || col.name === "Deudas" || col.name === "Fecha Movimiento" || 
+            col.name === "Descripción" || col.name === "Total Deudas" ||
+            col.name === "Porcentaje Deudas"
+          ),
+          { name: "Concepto", type: "select", visible: true, descripcion: "Concepto de la deuda" },
+          { name: "Categoría", type: "tags", visible: true, descripcion: "Categoría de la deuda" }
+        ];
+        // Asegurar que Descripción esté visible
+        columnasAAgregar = columnasAAgregar.map(col => 
+          col.name === "Descripción" ? { ...col, visible: true } : col
+        );
+        nuevoComportamiento = 'financiero';
+        nuevoNombre = obtenerNombrePorPlantilla('deuda');
+        break;
+      case 'personalizada':
+        // Plantilla personalizada no agrega columnas, solo cierra el modal
+        setShowPlantillasModal(false);
+        return;
+      default:
+        return;
+    }
+
+    // Filtrar columnas que ya existen
+    const camposExistentes = propiedades.map(p => p.name);
+    const nuevasColumnas = columnasAAgregar.filter(col => !camposExistentes.includes(col.name));
+
+    if (nuevasColumnas.length === 0 && camposExistentes.length > 0) {
+      alert('Todas las columnas de esta plantilla ya existen en la tabla.');
+      setShowPlantillasModal(false);
+      return;
+    }
+
+    // Agregar las nuevas columnas a las propiedades
+    const nuevasPropiedades = [...propiedades];
+    nuevasColumnas.forEach(columna => {
+      nuevasPropiedades.push({
+        name: columna.name,
+        type: columna.type,
+        visible: columna.visible !== undefined ? columna.visible : true,
+        totalizar: columna.type === "number" && (columna.name === "Time Spent" || columna.name === "Tasks Completed") ? true : false,
+        formula: columna.formula || undefined
+      });
+    });
+
+    setPropiedades(nuevasPropiedades);
+    setComportamiento(nuevoComportamiento);
+
+    // Agregar las nuevas columnas a todas las filas existentes
+    let nuevasFilas = filas.map((fila) => {
+      const nuevasProperties = { ...fila.properties };
+      nuevasColumnas.forEach(columna => {
+        let defaultValue = columna.type === "checkbox" ? false : columna.type === "tags" ? [] : columna.type === "formula" ? "" : columna.type === "date" ? "" : "";
+        let defaultColor = undefined;
+        
+        // Valores por defecto para Priority
+        if (columna.name === "Priority" && columna.type === "tags") {
+          defaultValue = [{ label: "Medium", color: "#fbbf24" }];
+        }
+        
+        // Valores por defecto para Type
+        if (columna.name === "Type" && columna.type === "tags") {
+          defaultValue = [{ label: "TO DO", color: "#6b7280" }];
+        }
+
+        // Valor por defecto para Objective
+        if (columna.name === "Objective" && columna.type === "number") {
+          defaultValue = 100;
+        }
+        
+        nuevasProperties[columna.name] = {
+          type: columna.type,
+          value: defaultValue,
+          color: columna.type === "select" ? "#3b82f6" : defaultColor,
+          formula: columna.formula || undefined,
+        };
+      });
+      return {
+        ...fila,
+        properties: nuevasProperties,
+      };
+    });
+
+    // Si es una plantilla financiera y no hay filas, agregar una fila por defecto
+    if (nuevoComportamiento === 'financiero' && nuevasFilas.length === 0) {
+      const nuevaFila = {
+        Name: "Nueva tarea",
+        image: null,
+        imageFilename: null,
+        properties: {},
+      };
+
+      // Inicializar propiedades con valores por defecto para todas las propiedades (existentes + nuevas)
+      nuevasPropiedades.forEach((prop) => {
+        let defaultValue = prop.type === "checkbox" ? false : prop.type === "tags" ? [] : prop.type === "formula" ? "" : "";
+        let defaultColor = undefined;
+        
+        if (prop.type === "date") {
+          defaultValue = new Date().toISOString().split('T')[0];
+        }
+        
+        nuevaFila.properties[prop.name] = {
+          type: prop.type,
+          value: defaultValue,
+          color: prop.type === "select" ? "#3b82f6" : defaultColor,
+          formula: prop.type === "formula" ? (prop.formula || "") : undefined,
+        };
+      });
+
+      nuevasFilas = [nuevaFila];
+    }
+
+    setFilas(nuevasFilas);
+    setShowPlantillasModal(false);
   };
 
   // Función para obtener la fórmula por defecto según el nombre de la columna
@@ -1503,12 +2067,18 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
         const prop = propiedadesEvaluadas[propName];
         if (prop.type === "formula" && prop.formula) {
           try {
-            const evaluator = new FormulaEvaluator(fila, nuevasFilas, sprintConfig);
+            const evaluator = new FormulaEvaluator(
+              fila, 
+              nuevasFilas, 
+              sprintConfig, 
+              tablasVinculadas, 
+              tableId, 
+              cargarDatosTablaVinculada
+            );
             const resultado = evaluator.evaluate(prop.formula);
             // Guardar el resultado en value para que se muestre inmediatamente
             prop.value = resultado !== undefined && resultado !== null ? String(resultado) : "";
           } catch (error) {
-            console.error(`Error evaluando fórmula ${propName}:`, error);
             prop.value = "Error";
           }
         }
@@ -1569,12 +2139,17 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
       }
       
       try {
-        const evaluator = new FormulaEvaluator(fila, filas, sprintConfig);
+        const evaluator = new FormulaEvaluator(
+          fila, 
+          filas, 
+          sprintConfig, 
+          tablasVinculadas, 
+          tableId, 
+          cargarDatosTablaVinculada
+        );
         const result = evaluator.evaluate(formula);
-        console.log('Evaluando fórmula:', formula, 'Resultado:', result, 'Fila:', fila.Name);
         return result !== undefined && result !== null ? String(result) : "";
       } catch (error) {
-        console.error('Error evaluando fórmula:', error, formula);
         return "Error";
       }
     }
@@ -1696,7 +2271,6 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
         nuevas[filaIndex].iconType = undefined; // Limpiar tipo de icono si se sube archivo
         setFilas(nuevas);
       } catch (error) {
-        console.error("Error subiendo imagen:", error);
         alert("No se pudo subir la imagen. Verifica que tengas una carpeta configurada.");
       }
     };
@@ -1922,50 +2496,50 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
         <div className="space-y-2">
           {tareasDistribuidas.map((tarea, idx) => {
             const { fila, horas, diasHabilesNecesarios, fechaInicio, fechaFin, posicion, ancho } = tarea;
-            
-            // Obtener información adicional
-            const progreso = campoProgreso ? obtenerValorCelda(fila, campoProgreso) : null;
-            const estado = fila.properties?.["Estado"]?.value || fila.properties?.["Priority"]?.value;
-            const estadoColor = fila.properties?.["Estado"]?.color || fila.properties?.["Priority"]?.color || "#3b82f6";
-            
-            return (
-              <div
-                key={idx}
-                className="relative h-10 flex items-center cursor-pointer hover:opacity-80 transition-opacity group"
-                onClick={() => abrirDrawer(fila)}
-                style={{ paddingLeft: `${posicion}%` }}
-              >
+              
+              // Obtener información adicional
+              const progreso = campoProgreso ? obtenerValorCelda(fila, campoProgreso) : null;
+              const estado = fila.properties?.["Estado"]?.value || fila.properties?.["Priority"]?.value;
+              const estadoColor = fila.properties?.["Estado"]?.color || fila.properties?.["Priority"]?.color || "#3b82f6";
+              
+              return (
                 <div
-                  className="h-8 rounded px-2 flex items-center text-xs font-medium text-white shadow-sm relative"
-                  style={{
-                    width: `${ancho}%`,
-                    backgroundColor: estadoColor,
-                    minWidth: '80px'
-                  }}
-                  title={`${fila.Name} - ${horas}h (${diasHabilesNecesarios} días hábiles) - ${fechaInicio.toLocaleDateString('es-ES')} a ${fechaFin.toLocaleDateString('es-ES')}${progreso ? ` - ${progreso}` : ''}`}
+                  key={idx}
+                  className="relative h-10 flex items-center cursor-pointer hover:opacity-80 transition-opacity group"
+                  onClick={() => abrirDrawer(fila)}
+                  style={{ paddingLeft: `${posicion}%` }}
                 >
-                  <span className="truncate flex-1">{fila.Name}</span>
+                  <div
+                    className="h-8 rounded px-2 flex items-center text-xs font-medium text-white shadow-sm relative"
+                    style={{
+                      width: `${ancho}%`,
+                      backgroundColor: estadoColor,
+                      minWidth: '80px'
+                    }}
+                  title={`${fila.Name} - ${horas}h (${diasHabilesNecesarios} días hábiles) - ${fechaInicio.toLocaleDateString('es-ES')} a ${fechaFin.toLocaleDateString('es-ES')}${progreso ? ` - ${progreso}` : ''}`}
+                  >
+                    <span className="truncate flex-1">{fila.Name}</span>
                   <span className="ml-2 text-xs opacity-90 bg-black/20 px-1 rounded whitespace-nowrap">
                     {horas}h
                   </span>
-                  {progreso && (
-                    <span className="ml-2 text-xs opacity-90 bg-black/20 px-1 rounded">
-                      {progreso}
-                    </span>
-                  )}
-                  {/* Indicador de progreso visual */}
-                  {campoProgreso && typeof fila.properties?.[campoProgreso.name]?.value === 'number' && (
-                    <div
-                      className="absolute bottom-0 left-0 bg-black/30 h-1 rounded-b"
-                      style={{
-                        width: `${Math.min(100, (fila.properties[campoProgreso.name]?.value || 0))}%`
-                      }}
-                    />
-                  )}
+                    {progreso && (
+                      <span className="ml-2 text-xs opacity-90 bg-black/20 px-1 rounded">
+                        {progreso}
+                      </span>
+                    )}
+                    {/* Indicador de progreso visual */}
+                    {campoProgreso && typeof fila.properties?.[campoProgreso.name]?.value === 'number' && (
+                      <div
+                        className="absolute bottom-0 left-0 bg-black/30 h-1 rounded-b"
+                        style={{
+                          width: `${Math.min(100, (fila.properties[campoProgreso.name]?.value || 0))}%`
+                        }}
+                      />
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
           
           {/* Tareas sin horas estimadas */}
           {filasOrdenadas.filter(fila => {
@@ -2006,23 +2580,31 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
 
   // Ref para evitar bucles infinitos - rastrear si estamos actualizando desde el nodo
   const actualizandoDesdeNodoRef = useRef(false);
-  const ultimoNodoRef = useRef(JSON.stringify({ filas: node.attrs.filas, propiedades: node.attrs.propiedades, sprintConfig: node.attrs.sprintConfig }));
+  const ultimoNodoRef = useRef(JSON.stringify({ filas: node.attrs.filas, propiedades: node.attrs.propiedades, sprintConfig: node.attrs.sprintConfig, comportamiento: node.attrs.comportamiento }));
+  const registroInicializadoRef = useRef(false);
+  const filaPorDefectoAgregadaRef = useRef(false);
+  const vinculacionAutoEjecutadaRef = useRef(false);
+
+  // Ref para evitar aplicar plantilla múltiples veces
+  const plantillaAutoAplicadaRef = useRef(false);
 
   // Sincronizar estado cuando cambia el nodo (útil cuando se carga desde guardado)
   useEffect(() => {
-    const nodoActualStr = JSON.stringify({ filas: node.attrs.filas, propiedades: node.attrs.propiedades, sprintConfig: node.attrs.sprintConfig });
+    const nodoActualStr = JSON.stringify({ filas: node.attrs.filas, propiedades: node.attrs.propiedades, sprintConfig: node.attrs.sprintConfig, comportamiento: node.attrs.comportamiento });
     
     // Solo actualizar si el nodo realmente cambió
     if (nodoActualStr !== ultimoNodoRef.current) {
       actualizandoDesdeNodoRef.current = true;
       
-      const nodoFilas = inicializarFilas(node.attrs.filas);
-      const nodoPropiedades = (node.attrs.propiedades || []).map(p => ({ ...p, visible: p.visible !== undefined ? p.visible : true }));
+    const nodoFilas = inicializarFilas(node.attrs.filas);
+    const nodoPropiedades = (node.attrs.propiedades || []).map(p => ({ ...p, visible: p.visible !== undefined ? p.visible : true }));
       const nodoSprintConfig = node.attrs.sprintConfig || sprintConfig;
-      
+      const nodoComportamiento = node.attrs.comportamiento || null;
+    
       setFilas(nodoFilas);
       setPropiedades(nodoPropiedades);
       setSprintConfig(nodoSprintConfig);
+      setComportamiento(nodoComportamiento);
       
       ultimoNodoRef.current = nodoActualStr;
       
@@ -2031,19 +2613,333 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
         actualizandoDesdeNodoRef.current = false;
       });
     }
-  }, [node.attrs.filas, node.attrs.propiedades, node.attrs.sprintConfig]);
+  }, [node.attrs.filas, node.attrs.propiedades, node.attrs.sprintConfig, node.attrs.comportamiento]);
+
+  // Auto-aplicar plantilla basada en nombreTabla si la tabla está vacía
+  useEffect(() => {
+    // Solo aplicar si:
+    // 1. No se ha aplicado ya
+    // 2. Hay nombreTabla
+    // 3. No hay propiedades (tabla nueva)
+    // 4. No estamos actualizando desde el nodo
+    if (plantillaAutoAplicadaRef.current || !nombreTabla || propiedades.length > 0 || actualizandoDesdeNodoRef.current) {
+      return;
+    }
+
+    // Mapear nombreTabla a tipo de plantilla
+    const nombreToPlantilla = {
+      'Ingresos': 'ingresos',
+      'Egresos': 'egresos',
+      'Deudas': 'deuda',
+      'Scrum Sprint': 'scrum'
+    };
+
+    const tipoPlantilla = nombreToPlantilla[nombreTabla];
+    if (tipoPlantilla) {
+      plantillaAutoAplicadaRef.current = true;
+      // Usar setTimeout para asegurar que el componente esté completamente montado
+      setTimeout(() => {
+        aplicarPlantilla(tipoPlantilla);
+      }, 100);
+    }
+  }, [nombreTabla, propiedades.length]);
+
+  // Agregar fila por defecto si es tabla financiera y está vacía (solo una vez)
+  useEffect(() => {
+    // Solo agregar si:
+    // 1. Es comportamiento financiero
+    // 2. No hay filas
+    // 3. Hay propiedades (la plantilla ya se aplicó)
+    // 4. No estamos actualizando desde el nodo
+    // 5. No se ha agregado ya una fila por defecto
+    if (comportamiento === 'financiero' && 
+        filas.length === 0 && 
+        propiedades.length > 0 && 
+        !actualizandoDesdeNodoRef.current &&
+        !filaPorDefectoAgregadaRef.current) {
+      
+      filaPorDefectoAgregadaRef.current = true;
+      
+      const nuevaFila = {
+        Name: "Nueva tarea",
+        image: null,
+        imageFilename: null,
+        properties: {},
+      };
+
+      // Inicializar propiedades con valores por defecto
+      propiedades.forEach((prop) => {
+        let defaultValue = prop.type === "checkbox" ? false : prop.type === "tags" ? [] : prop.type === "formula" ? "" : "";
+        let defaultColor = undefined;
+        
+        if (prop.type === "date") {
+          defaultValue = new Date().toISOString().split('T')[0];
+        }
+        
+        nuevaFila.properties[prop.name] = {
+          type: prop.type,
+          value: defaultValue,
+          color: prop.type === "select" ? "#3b82f6" : defaultColor,
+          formula: prop.type === "formula" ? (prop.formula || "") : undefined,
+        };
+      });
+
+      setFilas([nuevaFila]);
+    }
+  }, [comportamiento, filas.length, propiedades.length]);
+
+  // Efecto para pre-cargar datos de tablas vinculadas
+  useEffect(() => {
+    precargarDatosTablasVinculadas();
+  }, [tablasVinculadas.length, tableId]);
+
+  // Efecto para escuchar cambios en tablas vinculadas y re-evaluar fórmulas
+  useEffect(() => {
+    const handlerTablaActualizada = (event) => {
+      const { tableId: tableIdActualizada } = event.detail;
+      
+      // Si la tabla actualizada está vinculada a esta tabla, re-evaluar fórmulas
+      const estaVinculada = tablasVinculadas.some(v => v.tableId === tableIdActualizada);
+      if (estaVinculada && tableIdActualizada !== tableId) {
+        // Limpiar cache de esa tabla y recargar
+        delete cacheDatosTablas.current[tableIdActualizada];
+        precargarDatosTablasVinculadas();
+        
+        // Re-evaluar todas las fórmulas
+        const nuevasFilas = filas.map(fila => {
+          const nuevasProps = { ...fila.properties };
+          Object.keys(nuevasProps).forEach(propName => {
+            const prop = propiedades.find(p => p.name === propName);
+            if (prop && prop.type === "formula" && prop.formula) {
+              try {
+                const evaluator = new FormulaEvaluator(
+                  fila,
+                  filas,
+                  sprintConfig,
+                  tablasVinculadas,
+                  tableId,
+                  cargarDatosTablaVinculada
+                );
+                const resultado = evaluator.evaluate(prop.formula);
+                nuevasProps[propName] = {
+                  ...nuevasProps[propName],
+                  value: resultado !== undefined && resultado !== null ? String(resultado) : ""
+                };
+              } catch (error) {
+                // Error re-evaluando fórmula
+              }
+            }
+          });
+          return { ...fila, properties: nuevasProps };
+        });
+        setFilas(nuevasFilas);
+      }
+    };
+    
+    const handlerTablasCargadas = () => {
+      // Re-evaluar fórmulas cuando se cargan datos de tablas vinculadas
+      const nuevasFilas = filas.map(fila => {
+        const nuevasProps = { ...fila.properties };
+        Object.keys(nuevasProps).forEach(propName => {
+          const prop = propiedades.find(p => p.name === propName);
+          if (prop && prop.type === "formula" && prop.formula) {
+            try {
+              const evaluator = new FormulaEvaluator(
+                fila,
+                filas,
+                sprintConfig,
+                tablasVinculadas,
+                tableId,
+                cargarDatosTablaVinculada
+              );
+              const resultado = evaluator.evaluate(prop.formula);
+              nuevasProps[propName] = {
+                ...nuevasProps[propName],
+                value: resultado !== undefined && resultado !== null ? String(resultado) : ""
+              };
+            } catch (error) {
+              // Error re-evaluando fórmula
+            }
+          }
+        });
+        return { ...fila, properties: nuevasProps };
+      });
+      setFilas(nuevasFilas);
+    };
+    
+    window.addEventListener('tablaActualizada', handlerTablaActualizada);
+    window.addEventListener('tablasVinculadasCargadas', handlerTablasCargadas);
+    
+    return () => {
+      window.removeEventListener('tablaActualizada', handlerTablaActualizada);
+      window.removeEventListener('tablasVinculadasCargadas', handlerTablasCargadas);
+    };
+  }, [tablasVinculadas, tableId, filas, propiedades, sprintConfig]);
+
+  // Efecto para disparar evento cuando esta tabla cambia
+  useEffect(() => {
+    if (tableId && (filas.length > 0 || propiedades.length > 0)) {
+      // Disparar evento para notificar a otras tablas que esta tabla cambió
+      window.dispatchEvent(new CustomEvent('tablaActualizada', {
+        detail: { tableId }
+      }));
+    }
+  }, [filas, propiedades, tableId]);
+
+  // Efecto para registrar/actualizar la tabla en el registro global
+  useEffect(() => {
+    if (!tableId) return;
+    
+    const paginaId = PageContext.getCurrentPageId();
+    if (!paginaId) {
+      // Si no hay página actual aún, esperar un poco y reintentar
+      const timeout = setTimeout(() => {
+        const retryPageId = PageContext.getCurrentPageId();
+        if (retryPageId) {
+          registrarTablaEnRegistro(retryPageId);
+        }
+      }, 200);
+      return () => clearTimeout(timeout);
+    }
+    
+    registrarTablaEnRegistro(paginaId);
+  }, [tableId, comportamiento, nombreTabla, propiedades.length]);
+  
+
+  // Función para registrar/actualizar la tabla en el registro
+  const registrarTablaEnRegistro = (paginaId) => {
+    if (!tableId || !paginaId) return;
+    
+    const columnas = propiedades.map(p => p.name);
+    const tableInfo = {
+      tipo: comportamiento || null,
+      nombre: nombreTabla || `Tabla ${tableId.substring(0, 8)}`,
+      paginaId,
+      comportamiento: comportamiento || null,
+      columnas,
+      tablasVinculadas: tablasVinculadas || []
+    };
+    
+    const existingTable = TableRegistryService.getTable(tableId);
+    if (existingTable) {
+      // Actualizar tabla existente
+      TableRegistryService.updateTable(tableId, {
+        ...tableInfo,
+        columnas,
+        comportamiento: comportamiento || null,
+        nombre: nombreTabla || existingTable.nombre
+      });
+    } else {
+      // Registrar nueva tabla
+      TableRegistryService.registerTable(tableId, tableInfo);
+      registroInicializadoRef.current = true;
+      
+      // Si es una tabla financiera y hay otras tablas financieras en la misma página, vincularlas automáticamente
+      // Solo ejecutar una vez usando el ref
+      if (comportamiento === 'financiero' && nombreTabla && !vinculacionAutoEjecutadaRef.current) {
+        vinculacionAutoEjecutadaRef.current = true;
+        setTimeout(() => {
+          vincularTablasFinancierasAutomaticamente(paginaId);
+        }, 500); // Esperar un poco para que otras tablas se registren
+      }
+    }
+  };
+
+  // Función para vincular automáticamente tablas financieras de la misma página
+  const vincularTablasFinancierasAutomaticamente = (paginaId) => {
+    if (!tableId || !paginaId) return;
+    
+    // Obtener todas las tablas financieras de la misma página
+    const todasLasTablas = TableRegistryService.getTablesByPage(paginaId);
+    const tablasFinancieras = todasLasTablas.filter(t => 
+      t.comportamiento === 'financiero' && 
+      t.tableId !== tableId && 
+      t.nombre && 
+      ['Ingresos', 'Egresos', 'Deudas'].includes(t.nombre)
+    );
+    
+    // Si hay otras tablas financieras, vincular solo las que no estén ya vinculadas
+    if (tablasFinancieras.length > 0) {
+      // Obtener nombres únicos de tablas ya vinculadas
+      const nombresYaVinculados = new Set(
+        (tablasVinculadas || []).map(v => {
+          const tablaInfo = TableRegistryService.getTable(v.tableId);
+          return tablaInfo?.nombre;
+        }).filter(Boolean)
+      );
+      
+      // Filtrar tablas financieras: solo una por nombre único y que no esté ya vinculada
+      const nombresVistos = new Set();
+      const tablasParaVincular = tablasFinancieras.filter(t => {
+        // Si ya hay una tabla con este nombre vinculada, no agregar otra
+        if (nombresYaVinculados.has(t.nombre)) {
+          return false;
+        }
+        
+        // Si ya vimos una tabla con este nombre en esta iteración, no agregar otra
+        if (nombresVistos.has(t.nombre)) {
+          return false;
+        }
+        
+        nombresVistos.add(t.nombre);
+        return true;
+      });
+      
+      // Solo agregar las tablas que no están ya vinculadas
+      const nuevasVinculaciones = tablasParaVincular
+        .filter(t => !tablasVinculadas?.some(v => v.tableId === t.tableId))
+        .map(t => ({
+          tableId: t.tableId,
+          relacion: 'balance',
+          columnas: {
+            origen: null,
+            destino: null
+          }
+        }));
+      
+      if (nuevasVinculaciones.length > 0) {
+        // También vincular esta tabla en las otras tablas (solo si no está ya vinculada)
+        tablasParaVincular.forEach(t => {
+          const tablaInfo = TableRegistryService.getTable(t.tableId);
+          if (tablaInfo && (!tablaInfo.tablasVinculadas || !tablaInfo.tablasVinculadas.some(v => v.tableId === tableId))) {
+            const vinculacionesExistentes = tablaInfo.tablasVinculadas || [];
+            TableRegistryService.updateTable(t.tableId, {
+              tablasVinculadas: [
+                ...vinculacionesExistentes,
+                {
+                  tableId: tableId,
+                  relacion: 'balance',
+                  columnas: {
+                    origen: null,
+                    destino: null
+                  }
+                }
+              ]
+            });
+          }
+        });
+        
+        // Actualizar esta tabla solo con las nuevas vinculaciones
+        const todasLasVinculaciones = [...(tablasVinculadas || []), ...nuevasVinculaciones];
+        setTablasVinculadas(todasLasVinculaciones);
+        TableRegistryService.updateTable(tableId, {
+          tablasVinculadas: todasLasVinculaciones
+        });
+      }
+    }
+  };
 
   // Actualizar atributos del nodo cuando cambian filas o propiedades (solo si no viene del nodo)
   const prevEstadoRef = useRef(null);
   useEffect(() => {
     // Inicializar en la primera ejecución
     if (prevEstadoRef.current === null) {
-      prevEstadoRef.current = { filas, propiedades, sprintConfig };
+      prevEstadoRef.current = { filas, propiedades, sprintConfig, comportamiento, tableId, nombreTabla, tablasVinculadas };
       return;
     }
     // No actualizar si el cambio viene del nodo mismo
     if (actualizandoDesdeNodoRef.current) {
-      prevEstadoRef.current = { filas, propiedades, sprintConfig };
+      prevEstadoRef.current = { filas, propiedades, sprintConfig, comportamiento, tableId, nombreTabla, tablasVinculadas };
       return;
     }
     
@@ -2051,16 +2947,21 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
     const filasCambiaron = JSON.stringify(prevEstadoRef.current.filas) !== JSON.stringify(filas);
     const propiedadesCambiaron = JSON.stringify(prevEstadoRef.current.propiedades) !== JSON.stringify(propiedades);
     const sprintConfigCambio = JSON.stringify(prevEstadoRef.current.sprintConfig) !== JSON.stringify(sprintConfig);
+    const comportamientoCambio = prevEstadoRef.current.comportamiento !== comportamiento;
+    const tableIdCambio = prevEstadoRef.current.tableId !== tableId;
+    const nombreTablaCambio = prevEstadoRef.current.nombreTabla !== nombreTabla;
+    const tablasVinculadasCambio = JSON.stringify(prevEstadoRef.current.tablasVinculadas) !== JSON.stringify(tablasVinculadas);
     
-    if (filasCambiaron || propiedadesCambiaron || sprintConfigCambio) {
-      updateAttributes({ filas, propiedades, sprintConfig });
-      prevEstadoRef.current = { filas, propiedades, sprintConfig };
+    if (filasCambiaron || propiedadesCambiaron || sprintConfigCambio || comportamientoCambio || tableIdCambio || nombreTablaCambio || tablasVinculadasCambio) {
+      updateAttributes({ filas, propiedades, sprintConfig, comportamiento, tableId, nombreTabla, tablasVinculadas });
+      prevEstadoRef.current = { filas, propiedades, sprintConfig, comportamiento, tableId, nombreTabla, tablasVinculadas };
     }
-  }, [filas, propiedades, sprintConfig, updateAttributes]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filas, propiedades, sprintConfig, comportamiento, tableId, nombreTabla, tablasVinculadas]);
 
   return (
     <NodeViewWrapper 
-      className={`relative group border rounded bg-white shadow p-4 text-sm ${usarAnchoCompleto ? 'notion-table-fullwidth' : ''}`}
+      className={`relative border rounded bg-white shadow p-4 text-sm ${usarAnchoCompleto ? 'notion-table-fullwidth' : ''}`}
       style={usarAnchoCompleto ? { 
         position: 'relative',
         left: `calc(-1 * (50vw - 50% - var(--sidebar-width, 256px) + 1rem))`,
@@ -2072,121 +2973,20 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
         paddingRight: '1rem'
       } : {}}
     >
-      <div className="absolute left-0 top-1/2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="absolute left-0 top-1/2 transform -translate-y-1/2 opacity-0 hover:opacity-100 transition-opacity z-10">
         <button
           onClick={() => {
             setShowDeleteTableModal(true);
           }}
-          className="bg-white border rounded px-2 py-1 text-xs shadow hover:bg-red-100"
+          className="bg-white border border-gray-300 rounded px-2 py-1 text-xs shadow-sm hover:bg-red-100 hover:border-red-300 transition-colors"
           title="Eliminar tabla"
         >
           🗑️
         </button>
-        <button className="bg-white border rounded px-2 py-1 text-xs shadow hover:bg-gray-100 mt-1">↕️</button>
       </div>
 
-      {/* Menú de configuración en esquina superior derecha (tres puntitos) */}
-      <div className="absolute top-2 right-2 z-20">
-        <button
-          onClick={() => setShowMenuConfig(!showMenuConfig)}
-          className="p-1.5 rounded hover:bg-gray-200 transition-colors text-gray-600"
-          title="Más opciones"
-        >
-          <span className="text-lg">⋯</span>
-        </button>
-        {showMenuConfig && (
-          <>
-            <div 
-              className="fixed inset-0 z-30" 
-              onClick={() => setShowMenuConfig(false)}
-            />
-            <div className="absolute right-0 top-10 bg-white border rounded-lg shadow-xl z-40 min-w-[200px] py-2">
-              <button
-                onClick={() => {
-                  setShowPropertyVisibilityModal(true);
-                  setShowMenuConfig(false);
-                }}
-                className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-2 text-sm"
-              >
-                <span>👁️</span>
-                <span>Propiedades visibles</span>
-              </button>
-              <button
-                onClick={() => {
-                  setShowColumnasSugeridasModal(true);
-                  setColumnasSeleccionadas([]);
-                  setShowMenuConfig(false);
-                }}
-                className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-2 text-sm"
-              >
-                <span>📋</span>
-                <span>Columnas sugeridas</span>
-              </button>
-              {sprintInfo && (
-                <button
-                  onClick={() => {
-                    setShowSprintStatsModal(true);
-                    setShowMenuConfig(false);
-                  }}
-                  className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-2 text-sm"
-                >
-                  <span>📊</span>
-                  <span>Estadísticas del Sprint</span>
-                </button>
-              )}
-              {propiedadesVisibles.length > 0 && (
-                <div className="border-t my-1">
-                  <div className="px-4 py-2 text-xs text-gray-500 font-semibold">
-                    Eliminar Columnas
-                  </div>
-                  {propiedadesVisibles.map((prop) => (
-                    <button
-                      key={prop.name}
-                      onClick={() => {
-                        setColumnaAEliminar(prop.name);
-                        setShowDeleteColumnModal(true);
-                        setShowMenuConfig(false);
-                      }}
-                      className="w-full text-left px-4 py-2 hover:bg-red-50 hover:text-red-600 flex items-center gap-2 text-sm"
-                    >
-                      <span>🗑️</span>
-                      <span>{prop.name}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Selector de tipo de vista (Table/Timeline) */}
-      <div className="flex items-center gap-2 mb-2">
-        <button
-          onClick={() => setTipoVista('table')}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm transition-colors ${
-            tipoVista === 'table'
-              ? 'bg-gray-200 text-gray-900 font-medium'
-              : 'bg-transparent text-gray-600 hover:bg-gray-100'
-          }`}
-        >
-          <span className="text-base">⊞</span>
-          <span>Table</span>
-        </button>
-        <button
-          onClick={() => setTipoVista('timeline')}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm transition-colors ${
-            tipoVista === 'timeline'
-              ? 'bg-gray-200 text-gray-900 font-medium'
-              : 'bg-transparent text-gray-600 hover:bg-gray-100'
-          }`}
-        >
-          <span className="text-base">📄</span>
-          <span>Timeline</span>
-        </button>
-      </div>
-
-      {/* Configuración del Sprint - Compacta */}
+      {/* Configuración del Sprint - Compacta (solo para tablas Scrum) */}
+      {(comportamiento === 'scrum' || comportamiento === 'mixto') && (
       <div className="mb-3">
         <div className="flex items-center gap-2 text-xs flex-wrap">
           <div className="flex items-center gap-1">
@@ -2402,7 +3202,176 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
           );
         })()}
       </div>
+      )}
 
+      {/* Visualización de Indicadores Financieros (solo para tablas financieras) */}
+      {(() => {
+          if (comportamiento !== 'financiero' && comportamiento !== 'mixto') return null;
+          
+          // Verificar si hay campos financieros en la tabla
+          const tieneIngresos = propiedades.some(p => p.name === "Ingresos");
+          const tieneEgresos = propiedades.some(p => p.name === "Egresos");
+          const tieneDeudas = propiedades.some(p => p.name === "Deudas");
+          
+          // Solo mostrar si hay al menos uno de los campos financieros
+          if (!tieneIngresos && !tieneEgresos && !tieneDeudas) return null;
+          
+          // Calcular totales
+          const totalIngresos = tieneIngresos ? calcularTotal(filas, "Ingresos") : 0;
+          const totalEgresos = tieneEgresos ? calcularTotal(filas, "Egresos") : 0;
+          const totalDeudas = tieneDeudas ? calcularTotal(filas, "Deudas") : 0;
+          const saldoTotal = totalIngresos - totalEgresos;
+          
+          // Calcular porcentajes
+          const porcentajeEgresos = totalIngresos > 0 ? Math.round((totalEgresos / totalIngresos) * 100) : 0;
+          const porcentajeDeudas = totalIngresos > 0 ? Math.round((totalDeudas / totalIngresos) * 100) : 0;
+          
+          // Formatear números con separador de miles
+          const formatearNumero = (num) => {
+            return new Intl.NumberFormat('es-ES', { 
+              minimumFractionDigits: 0, 
+              maximumFractionDigits: 2 
+            }).format(num);
+          };
+          
+          return (
+            <div className="mt-2 flex gap-2 flex-wrap">
+              {/* Ingresos */}
+              {tieneIngresos && (
+                <div className="flex-1 min-w-[200px] p-2 bg-green-50 rounded border border-green-200 text-xs">
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <span className="text-green-700 font-semibold">💰 Ingresos:</span>
+                    <span className="text-green-900 font-medium">${formatearNumero(totalIngresos)}</span>
+                  </div>
+                </div>
+              )}
+              
+              {/* Egresos */}
+              {tieneEgresos && (
+                <div className="flex-1 min-w-[200px] p-2 bg-red-50 rounded border border-red-200 text-xs">
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <span className="text-red-700 font-semibold">💸 Egresos:</span>
+                    <span className="text-red-900 font-medium">${formatearNumero(totalEgresos)}</span>
+                    {totalIngresos > 0 && (
+                      <span className="text-red-600 text-xs whitespace-nowrap">
+                        ({porcentajeEgresos}%)
+                      </span>
+                    )}
+                  </div>
+                  {totalIngresos > 0 && (
+                    <div className="mt-1">
+                      <div className="w-full bg-red-200 rounded-full h-1.5">
+                        <div 
+                          className="h-1.5 rounded-full bg-red-500 transition-all"
+                          style={{ width: `${Math.min(porcentajeEgresos, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {/* Saldo */}
+              {(tieneIngresos || tieneEgresos) && (
+                <div className={`flex-1 min-w-[200px] p-2 rounded border text-xs ${
+                  saldoTotal >= 0 
+                    ? 'bg-blue-50 border-blue-200' 
+                    : 'bg-orange-50 border-orange-200'
+                }`}>
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <span className={`font-semibold ${
+                      saldoTotal >= 0 ? 'text-blue-700' : 'text-orange-700'
+                    }`}>
+                      💼 Saldo:
+                    </span>
+                    <span className={`font-medium ${
+                      saldoTotal >= 0 ? 'text-blue-900' : 'text-orange-900'
+                    }`}>
+                      ${formatearNumero(saldoTotal)}
+                    </span>
+                    <span className={`text-xs whitespace-nowrap ${
+                      saldoTotal >= 0 ? 'text-blue-600' : 'text-orange-600'
+                    }`}>
+                      {saldoTotal >= 0 ? '✅' : '⚠️'}
+                    </span>
+                  </div>
+                </div>
+              )}
+              
+              {/* Deudas */}
+              {tieneDeudas && (
+                <div className="flex-1 min-w-[200px] p-2 bg-yellow-50 rounded border border-yellow-200 text-xs">
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <span className="text-yellow-700 font-semibold">📋 Deudas:</span>
+                    <span className="text-yellow-900 font-medium">${formatearNumero(totalDeudas)}</span>
+                    {totalIngresos > 0 && (
+                      <span className="text-yellow-600 text-xs whitespace-nowrap">
+                        ({porcentajeDeudas}%)
+                      </span>
+                    )}
+                  </div>
+                  {totalIngresos > 0 && (
+                    <div className="mt-1">
+                      <div className="w-full bg-yellow-200 rounded-full h-1.5">
+                        <div 
+                          className="h-1.5 rounded-full bg-yellow-500 transition-all"
+                          style={{ width: `${Math.min(porcentajeDeudas, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+      {/* Mostrar tablas vinculadas - eliminar duplicados */}
+      {tablasVinculadas && tablasVinculadas.length > 0 && (() => {
+        // Eliminar duplicados basados en tableId
+        const tablasUnicas = tablasVinculadas.filter((vinculacion, index, self) => 
+          index === self.findIndex(t => t.tableId === vinculacion.tableId)
+        );
+        
+        if (tablasUnicas.length === 0) return null;
+        
+        // Agrupar por nombre para mostrar solo una vez cada nombre único
+        // Si hay múltiples tablas con el mismo nombre, mostrar solo la primera
+        const nombresVistos = new Set();
+        const tablasParaMostrar = tablasUnicas.filter((vinculacion) => {
+          const tablaInfo = TableRegistryService.getTable(vinculacion.tableId);
+          const nombre = tablaInfo?.nombre || vinculacion.tableId.substring(0, 8);
+          
+          if (nombresVistos.has(nombre)) {
+            return false; // Ya mostramos una tabla con este nombre
+          }
+          
+          nombresVistos.add(nombre);
+          return true;
+        });
+        
+        if (tablasParaMostrar.length === 0) return null;
+        
+        return (
+          <div className="mb-2 flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-gray-500">🔗 Tablas vinculadas:</span>
+            {tablasParaMostrar.map((vinculacion, idx) => {
+              const tablaInfo = TableRegistryService.getTable(vinculacion.tableId);
+              const nombre = tablaInfo?.nombre || vinculacion.tableId.substring(0, 8);
+              return (
+                <span
+                  key={vinculacion.tableId || idx}
+                  className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded border border-blue-200"
+                  title={`Relación: ${vinculacion.relacion || 'referencia'} | ID: ${vinculacion.tableId.substring(0, 8)}`}
+                >
+                  {nombre}
+                </span>
+              );
+            })}
+          </div>
+        );
+      })()}
+      
       <div className="flex justify-between items-center mb-2 gap-2">
         <input
           type="text"
@@ -2436,28 +3405,172 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
           >
             {usarAnchoCompleto ? '📐 Centrado' : '📏 Ancho completo'}
           </button>
-          <button 
-            onClick={cargarPlantillaAgil} 
-            className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700 transition-colors"
-            title="Cargar plantilla completa de metodología ágil Azure DevOps"
-          >
-            📋 Plantillas
-          </button>
-          <button 
-            onClick={cargarPlantillaEjemplo} 
-            className="bg-purple-600 text-white px-3 py-1 rounded text-sm hover:bg-purple-700 transition-colors"
-            title="Cargar plantilla Scrum completa con ejemplos (columnas, fórmulas y tareas de ejemplo)"
-          >
-            🎯 Plantilla Scrum
-          </button>
         <button onClick={agregarFila} className="bg-blue-600 text-white px-3 py-1 rounded">
           ➕ Agregar fila
         </button>
+        <div className="relative">
+        <button
+          onClick={() => setShowMenuConfig(!showMenuConfig)}
+            className="bg-white border border-gray-300 shadow-sm hover:bg-gray-100 px-3 py-1 rounded text-gray-700 transition-colors"
+          title="Más opciones"
+        >
+          <span className="text-lg">⋯</span>
+        </button>
+        {showMenuConfig && (
+          <>
+            <div 
+              className="fixed inset-0 z-30" 
+              onClick={() => setShowMenuConfig(false)}
+            />
+              <div className="absolute right-0 top-full mt-2 bg-white border rounded-lg shadow-xl z-[100] min-w-[200px] py-2" style={{ position: 'absolute' }}>
+              <button
+                onClick={() => {
+                  setShowPropertyVisibilityModal(true);
+                  setShowMenuConfig(false);
+                }}
+                className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-2 text-sm"
+              >
+                <span>👁️</span>
+                <span>Propiedades visibles</span>
+              </button>
+                <button
+                  onClick={() => {
+                    setShowPlantillasModal(true);
+                    setShowMenuConfig(false);
+                  }}
+                  className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-2 text-sm"
+                >
+                  <span>📑</span>
+                  <span>Plantillas</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setShowColumnasSugeridasModal(true);
+                    setColumnasSeleccionadas([]);
+                    setShowMenuConfig(false);
+                  }}
+                  className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-2 text-sm"
+                >
+                  <span>📋</span>
+                  <span>Columnas sugeridas</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setShowVincularModal(true);
+                    setShowMenuConfig(false);
+                  }}
+                  className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-2 text-sm"
+                >
+                  <span>🔗</span>
+                  <span>Vincular Tablas</span>
+                </button>
+                {tablasVinculadas && tablasVinculadas.length > 0 && (
+                  <button
+                    onClick={() => {
+                      setShowGraficasModal(true);
+                      setShowMenuConfig(false);
+                    }}
+                    className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-2 text-sm"
+                  >
+                    <span>📊</span>
+                    <span>Gráficas Combinadas</span>
+                  </button>
+                )}
+                <div className="border-t my-1">
+                  <div className="px-4 py-2 text-xs text-gray-500 font-semibold">
+                    Vista
+                  </div>
+                  <button
+                    onClick={() => {
+                      setTipoVista('table');
+                      setShowMenuConfig(false);
+                    }}
+                    className={`w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-2 text-sm ${
+                      tipoVista === 'table' ? 'bg-gray-50' : ''
+                    }`}
+                  >
+                    <span>⊞</span>
+                    <span>Tabla</span>
+                    {tipoVista === 'table' && <span className="ml-auto text-xs">✓</span>}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setTipoVista('timeline');
+                      setShowMenuConfig(false);
+                    }}
+                    className={`w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-2 text-sm ${
+                      tipoVista === 'timeline' ? 'bg-gray-50' : ''
+                    }`}
+                  >
+                    <span>📄</span>
+                    <span>Timeline</span>
+                    {tipoVista === 'timeline' && <span className="ml-auto text-xs">✓</span>}
+                  </button>
+                </div>
+              {sprintInfo && (
+                <button
+                  onClick={() => {
+                    setShowSprintStatsModal(true);
+                    setShowMenuConfig(false);
+                  }}
+                  className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-2 text-sm"
+                >
+                  <span>📊</span>
+                  <span>Estadísticas del Sprint</span>
+                </button>
+              )}
+              {propiedadesVisibles.length > 0 && (
+                <div className="border-t my-1">
+                  <div className="px-4 py-2 text-xs text-gray-500 font-semibold">
+                    Eliminar Columnas
+                  </div>
+                  {propiedadesVisibles.map((prop) => (
+                    <button
+                      key={prop.name}
+                      onClick={() => {
+                        setColumnaAEliminar(prop.name);
+                        setShowDeleteColumnModal(true);
+                        setShowMenuConfig(false);
+                      }}
+                      className="w-full text-left px-4 py-2 hover:bg-red-50 hover:text-red-600 flex items-center gap-2 text-sm"
+                    >
+                      <span>🗑️</span>
+                      <span>{prop.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+                <div className="border-t my-1">
+        <button
+                    onClick={() => {
+                      setShowEditNombreModal(true);
+                      setShowMenuConfig(false);
+                    }}
+                    className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-2 text-sm"
+                  >
+                    <span>✏️</span>
+                    <span>Editar Nombre</span>
+        </button>
+          <button 
+            onClick={() => {
+                      setShowDeleteTableModal(true);
+                      setShowMenuConfig(false);
+                    }}
+                    className="w-full text-left px-4 py-2 hover:bg-red-50 hover:text-red-600 flex items-center gap-2 text-sm"
+                  >
+                    <span>🗑️</span>
+                    <span>Eliminar Tabla</span>
+        </button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
         </div>
       </div>
 
       {/* Panel de Indicadores del Sprint */}
-      {(tipoVista === 'table' || tipoVista === 'timeline') && (() => {
+      {(comportamiento === 'scrum' || comportamiento === 'mixto') && (tipoVista === 'table' || tipoVista === 'timeline') && (() => {
         // Calcular indicadores del sprint
         const calcularIndicadores = () => {
           const hoy = new Date();
@@ -2555,14 +3668,6 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
             const sumaPorcentajes = porcentajesIndividuales.reduce((sum, p) => sum + p, 0);
             const promedio = sumaPorcentajes / porcentajesIndividuales.length;
             porcentajeCumplimiento = Math.round(promedio);
-            // Debug: mostrar el cálculo
-            console.log('📊 Cálculo de cumplimiento:', {
-              porcentajesIndividuales,
-              sumaPorcentajes,
-              promedio,
-              porcentajeCumplimiento,
-              totalFilas: porcentajesIndividuales.length
-            });
           }
           const porcentajeTareas = totalTareas > 0 ? Math.round((tareasCompletadas / totalTareas) * 100) : 0;
           const porcentajeTiempo = totalTimeEstimated > 0 ? Math.round((totalTimeSpent / totalTimeEstimated) * 100) : 0;
@@ -2866,7 +3971,7 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                       <div 
                         className="w-full cursor-pointer" 
                         onClick={(e) => {
-                          e.stopPropagation();
+                            e.stopPropagation();
                           // Convertir el valor de select a formato tags si es necesario
                           const currentValue = fila.properties?.[prop.name]?.value;
                           let tagsValue = [];
@@ -2974,28 +4079,96 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                         }}
                       />
                     ) : prop.type === "text" ? (
-                      <div
-                        className="group relative w-full border-none outline-none bg-transparent cursor-pointer hover:bg-gray-100 rounded px-1 py-0.5 transition-colors"
-                        style={{
-                          color: 'rgb(55, 53, 47)',
-                          padding: '1px 4px',
-                          fontSize: '0.8125rem',
-                          minHeight: '20px'
-                        }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setTextEditing({
-                            filaIndex: filaIndexOriginal,
-                            propName: prop.name,
-                            value: fila.properties?.[prop.name]?.value || ""
-                          });
-                          setShowTextModal(true);
-                        }}
-                      >
-                        {fila.properties?.[prop.name]?.value || (
-                          <span className="text-gray-400 italic">Clic para editar...</span>
-                        )}
-                      </div>
+                      (() => {
+                        // Columnas financieras numéricas: edición inline con validación
+                        const columnasFinancierasNumericas = ['Ingresos', 'Egresos', 'Deudas'];
+                        const esColumnaFinancieraNumerica = columnasFinancierasNumericas.includes(prop.name);
+                        
+                        if (esColumnaFinancieraNumerica) {
+                          // Si es la tabla de Deudas y la columna es Deudas, mostrar botón de abono
+                          const esTablaDeudas = nombreTabla === 'Deudas';
+                          const esColumnaDeudas = prop.name === 'Deudas';
+                          
+                          return (
+                            <div className="flex items-center gap-1 justify-end">
+                              <div
+                                className="group relative flex-1 border-none outline-none bg-transparent cursor-pointer hover:bg-gray-100 rounded px-1 py-0.5 transition-colors text-right"
+                                style={{
+                                  color: 'rgb(55, 53, 47)',
+                                  padding: '1px 4px',
+                                  fontSize: '0.8125rem',
+                                  minHeight: '20px'
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setNumericEditing({
+                                    filaIndex: filaIndexOriginal,
+                                    propName: prop.name,
+                                    value: fila.properties?.[prop.name]?.value || ""
+                                  });
+                                  setShowNumericModal(true);
+                                }}
+                              >
+                                {fila.properties?.[prop.name]?.value || (
+                                  <span className="text-gray-400 italic">Clic para editar...</span>
+                                )}
+                              </div>
+                              {esTablaDeudas && esColumnaDeudas && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const valorDeuda = parseFloat(fila.properties?.[prop.name]?.value || 0) || 0;
+                                    const hoy = new Date();
+                                    const año = hoy.getFullYear();
+                                    const mes = String(hoy.getMonth() + 1).padStart(2, '0');
+                                    const dia = String(hoy.getDate()).padStart(2, '0');
+                                    setAbonoEditing({
+                                      filaIndex: filaIndexOriginal,
+                                      filaId: fila.id || filaIndexOriginal,
+                                      deudaActual: valorDeuda,
+                                      nombreDeuda: fila.Name || 'Deuda sin nombre',
+                                      value: "",
+                                      fecha: `${año}-${mes}-${dia}`,
+                                      descripcion: ""
+                                    });
+                                    setShowAbonoModal(true);
+                                  }}
+                                  className="px-2 py-0.5 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors flex-shrink-0"
+                                  title="Abonar a esta deuda"
+                                >
+                                  💰 Abonar
+                                </button>
+                              )}
+                            </div>
+                          );
+                        }
+                        
+                        // Para otras columnas de texto, usar el modal
+                        return (
+                          <div
+                            className="group relative w-full border-none outline-none bg-transparent cursor-pointer hover:bg-gray-100 rounded px-1 py-0.5 transition-colors"
+                            style={{
+                              color: 'rgb(55, 53, 47)',
+                              padding: '1px 4px',
+                              fontSize: '0.8125rem',
+                              minHeight: '20px'
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setTextEditing({
+                                filaIndex: filaIndexOriginal,
+                                propName: prop.name,
+                                value: fila.properties?.[prop.name]?.value || ""
+                              });
+                              setShowTextModal(true);
+                            }}
+                          >
+                            {fila.properties?.[prop.name]?.value || (
+                              <span className="text-gray-400 italic">Clic para editar...</span>
+                            )}
+                          </div>
+                        );
+                      })()
                     ) : (
                       <input
                         type="text"
@@ -4041,12 +5214,42 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
             </div>
             <div className="p-4">
               <p className="text-sm text-gray-600 mb-4">Selecciona un icono predefinido o sube una imagen personalizada:</p>
-              <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="grid grid-cols-3 gap-3 mb-4 max-h-[400px] overflow-y-auto">
                 {[
+                  // Iconos Scrum
                   { id: 'hu', label: 'Historia de Usuario', emoji: '📋', color: '#3b82f6' },
                   { id: 'tarea', label: 'Tarea', emoji: '✅', color: '#10b981' },
                   { id: 'bug', label: 'Bug', emoji: '🐛', color: '#ef4444' },
                   { id: 'epica', label: 'Épica', emoji: '🎯', color: '#8b5cf6' },
+                  // Iconos Financieros
+                  { id: 'casa', label: 'Casa', emoji: '🏠', color: '#8b5cf6' },
+                  { id: 'salario', label: 'Salario', emoji: '💰', color: '#10b981' },
+                  { id: 'freelance', label: 'Freelance', emoji: '💼', color: '#3b82f6' },
+                  { id: 'dinero', label: 'Dinero', emoji: '💵', color: '#10b981' },
+                  { id: 'tarjeta', label: 'Tarjeta', emoji: '💳', color: '#3b82f6' },
+                  { id: 'banco', label: 'Banco', emoji: '🏦', color: '#1e40af' },
+                  { id: 'ahorro', label: 'Ahorro', emoji: '🐷', color: '#10b981' },
+                  { id: 'inversion', label: 'Inversión', emoji: '📈', color: '#10b981' },
+                  { id: 'gasto', label: 'Gasto', emoji: '💸', color: '#ef4444' },
+                  { id: 'deuda', label: 'Deuda', emoji: '📉', color: '#ef4444' },
+                  { id: 'factura', label: 'Factura', emoji: '🧾', color: '#f59e0b' },
+                  { id: 'recibo', label: 'Recibo', emoji: '🧾', color: '#3b82f6' },
+                  { id: 'transferencia', label: 'Transferencia', emoji: '🔄', color: '#3b82f6' },
+                  { id: 'pago', label: 'Pago', emoji: '💳', color: '#10b981' },
+                  { id: 'cobro', label: 'Cobro', emoji: '💵', color: '#10b981' },
+                  { id: 'prestamo', label: 'Préstamo', emoji: '📊', color: '#f59e0b' },
+                  { id: 'negocio', label: 'Negocio', emoji: '🏢', color: '#3b82f6' },
+                  { id: 'tienda', label: 'Tienda', emoji: '🏪', color: '#8b5cf6' },
+                  { id: 'servicio', label: 'Servicio', emoji: '🔧', color: '#3b82f6' },
+                  { id: 'producto', label: 'Producto', emoji: '📦', color: '#10b981' },
+                  { id: 'comida', label: 'Comida', emoji: '🍔', color: '#f59e0b' },
+                  { id: 'transporte', label: 'Transporte', emoji: '🚗', color: '#3b82f6' },
+                  { id: 'salud', label: 'Salud', emoji: '🏥', color: '#ef4444' },
+                  { id: 'educacion', label: 'Educación', emoji: '📚', color: '#3b82f6' },
+                  { id: 'entretenimiento', label: 'Entretenimiento', emoji: '🎬', color: '#8b5cf6' },
+                  { id: 'viaje', label: 'Viaje', emoji: '✈️', color: '#06b6d4' },
+                  { id: 'regalo', label: 'Regalo', emoji: '🎁', color: '#ec4899' },
+                  { id: 'subscripcion', label: 'Suscripción', emoji: '📱', color: '#3b82f6' },
                 ].map((icono) => (
                   <button
                     key={icono.id}
@@ -4086,7 +5289,6 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                           nuevas[filaIndexParaIcono].iconType = undefined;
                           setFilas(nuevas);
                         } catch (error) {
-                          console.error("Error subiendo imagen:", error);
                           alert("No se pudo subir la imagen. Verifica que tengas una carpeta configurada.");
                         }
                       };
@@ -4116,9 +5318,12 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
           >
             <div className="flex items-start justify-between p-4 border-b bg-gray-50 flex-shrink-0 gap-3">
               <div className="flex-1 min-w-0">
-                <h2 className="text-lg font-semibold text-gray-900 break-words">📋 Columnas Sugeridas para Metodologías Ágiles</h2>
+                <h2 className="text-lg font-semibold text-gray-900 break-words">📋 Columnas Sugeridas</h2>
                 <p className="text-sm text-gray-600 mt-1 break-words">
-                  Selecciona las columnas que deseas agregar ({obtenerColumnasSugeridas().length} disponibles)
+                  {comportamiento 
+                    ? `Selecciona las columnas que deseas agregar (${obtenerColumnasSugeridas().length} disponibles para plantilla ${comportamiento === 'scrum' ? 'Scrum' : comportamiento === 'financiero' ? 'Financiera' : 'Mixta'})`
+                    : 'Primero debes seleccionar una plantilla para ver las columnas sugeridas'
+                  }
                 </p>
               </div>
               <button
@@ -4132,6 +5337,37 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
               </button>
             </div>
             <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 min-h-0" style={{ maxHeight: 'calc(90vh - 180px)' }}>
+              {!comportamiento ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <div className="text-6xl mb-4">📑</div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                    No hay plantilla aplicada
+                  </h3>
+                  <p className="text-sm text-gray-600 mb-6 max-w-md">
+                    Para ver las columnas sugeridas, primero debes seleccionar una plantilla desde el menú de opciones.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setShowColumnasSugeridasModal(false);
+                      setShowPlantillasModal(true);
+                    }}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                  >
+                    <span>📑</span>
+                    <span>Seleccionar Plantilla</span>
+                  </button>
+                </div>
+              ) : obtenerColumnasSugeridas().length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <div className="text-6xl mb-4">📋</div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                    No hay columnas disponibles
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    Todas las columnas de esta plantilla ya han sido agregadas.
+                  </p>
+                </div>
+              ) : (
               <div className="space-y-2">
                 {obtenerColumnasSugeridas().map((columna, index) => {
                   const existe = propiedades.some(p => p.name === columna.name);
@@ -4197,13 +5433,12 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                   );
                 })}
               </div>
+              )}
             </div>
             <div className="flex items-center justify-between p-4 border-t bg-gray-50 flex-shrink-0 gap-3 overflow-x-hidden">
               <div className="text-sm text-gray-600 min-w-0 flex-1">
-                {columnasSeleccionadas.length > 0 ? (
+                {comportamiento && columnasSeleccionadas.length > 0 && (
                   <span className="font-medium text-blue-600 break-words">{columnasSeleccionadas.length} columna(s) seleccionada(s)</span>
-                ) : (
-                  <span className="text-gray-500 break-words">Ninguna columna seleccionada</span>
                 )}
               </div>
               <div className="flex gap-2 flex-shrink-0">
@@ -4214,14 +5449,80 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                   }}
                   className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors whitespace-nowrap"
                 >
-                  Cancelar
+                  {comportamiento ? 'Cancelar' : 'Cerrar'}
                 </button>
+                {comportamiento && (
                 <button
                   onClick={agregarColumnasSeleccionadas}
                   disabled={columnasSeleccionadas.length === 0}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                 >
                   Agregar ({columnasSeleccionadas.length})
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Plantillas */}
+      {showPlantillasModal && (
+        <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
+          <div 
+            className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between p-4 border-b bg-gray-50 flex-shrink-0 gap-3">
+              <div className="flex-1 min-w-0">
+                <h2 className="text-lg font-semibold text-gray-900 break-words">📑 Seleccionar Plantilla</h2>
+                <p className="text-sm text-gray-600 mt-1 break-words">
+                  Elige una plantilla para agregar columnas predefinidas a tu tabla
+                </p>
+              </div>
+              <button
+                onClick={() => setShowPlantillasModal(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
+              >
+                <span className="text-xl">×</span>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto overflow-x-hidden p-6 min-h-0">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button
+                  onClick={() => aplicarPlantilla('scrum')}
+                  className="p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all text-left"
+                >
+                  <div className="font-semibold text-gray-900 mb-1">🔄 Scrum</div>
+                  <div className="text-sm text-gray-600">Plantilla para gestión de sprints con tareas, puntos de historia, tiempo estimado, etc.</div>
+                </button>
+                <button
+                  onClick={() => aplicarPlantilla('ingresos')}
+                  className="p-4 border-2 border-gray-200 rounded-lg hover:border-green-500 hover:bg-green-50 transition-all text-left"
+                >
+                  <div className="font-semibold text-gray-900 mb-1">💰 Ingresos</div>
+                  <div className="text-sm text-gray-600">Plantilla para registrar y gestionar ingresos financieros.</div>
+                </button>
+                <button
+                  onClick={() => aplicarPlantilla('egresos')}
+                  className="p-4 border-2 border-gray-200 rounded-lg hover:border-red-500 hover:bg-red-50 transition-all text-left"
+                >
+                  <div className="font-semibold text-gray-900 mb-1">💸 Egresos</div>
+                  <div className="text-sm text-gray-600">Plantilla para registrar y gestionar egresos financieros.</div>
+                </button>
+                <button
+                  onClick={() => aplicarPlantilla('deuda')}
+                  className="p-4 border-2 border-gray-200 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-all text-left"
+                >
+                  <div className="font-semibold text-gray-900 mb-1">💳 Deuda</div>
+                  <div className="text-sm text-gray-600">Plantilla para gestionar y analizar deudas.</div>
+                </button>
+                <button
+                  onClick={() => aplicarPlantilla('personalizada')}
+                  className="p-4 border-2 border-gray-200 rounded-lg hover:border-gray-500 hover:bg-gray-50 transition-all text-left"
+                >
+                  <div className="font-semibold text-gray-900 mb-1">✏️ Personalizada</div>
+                  <div className="text-sm text-gray-600">Crea tu tabla desde cero sin plantilla predefinida.</div>
                 </button>
               </div>
             </div>
@@ -4321,7 +5622,63 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
 
       {/* Modal para editar Tags */}
       {showTagsModal && tagsEditando.filaIndex !== null && tagsEditando.propName && (() => {
-        // Definir tags disponibles según el tipo de campo
+        // Función para extraer tags únicos de una columna específica
+        const obtenerTagsUnicosPorColumna = (propName) => {
+          const tagsMap = new Map(); // Usar Map para evitar duplicados
+          
+          filas.forEach(fila => {
+            const propValue = fila.properties?.[propName]?.value;
+            if (!propValue) return;
+            
+            // Si es un array (tipo tags)
+            if (Array.isArray(propValue)) {
+              propValue.forEach(tag => {
+                const label = tag.label || tag.value || tag;
+                if (label && typeof label === 'string' && label.trim()) {
+                  // Si ya existe, mantener el color original si no tiene color
+                  if (!tagsMap.has(label)) {
+                    tagsMap.set(label, {
+                      label: label.trim(),
+                      color: tag.color || getRandomColor()
+                    });
+                  } else {
+                    // Si el tag existente no tiene color pero este sí, actualizar
+                    const existing = tagsMap.get(label);
+                    if (!existing.color && tag.color) {
+                      tagsMap.set(label, { ...existing, color: tag.color });
+                    }
+                  }
+                }
+              });
+            } 
+            // Si es un string (tipo select)
+            else if (typeof propValue === 'string' && propValue.trim()) {
+              const label = propValue.trim();
+              if (!tagsMap.has(label)) {
+                const prop = propiedades.find(p => p.name === propName);
+                const color = fila.properties?.[propName]?.color || prop?.color || getRandomColor();
+                tagsMap.set(label, {
+                  label: label,
+                  color: color
+                });
+              }
+            }
+          });
+          
+          return Array.from(tagsMap.values());
+        };
+
+        // Función auxiliar para generar colores aleatorios
+        const getRandomColor = () => {
+          const colors = [
+            '#60a5fa', '#f87171', '#34d399', '#fbbf24', '#a78bfa', 
+            '#f472b6', '#38bdf8', '#fb923c', '#ef4444', '#10b981',
+            '#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#14b8a6', '#6366f1'
+          ];
+          return colors[Math.floor(Math.random() * colors.length)];
+        };
+
+        // Definir tags disponibles según el tipo de campo (predefinidos)
         const getAvailableTags = (propName) => {
           if (propName === "Priority") {
             return [
@@ -4352,7 +5709,19 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
           return [];
         };
 
-        const availableTags = getAvailableTags(tagsEditando.propName);
+        // Obtener tags predefinidos y tags usados previamente en esta columna
+        const predefinedTags = getAvailableTags(tagsEditando.propName);
+        const usedTags = obtenerTagsUnicosPorColumna(tagsEditando.propName);
+        
+        // Combinar tags predefinidos y usados, evitando duplicados
+        const allTagsMap = new Map();
+        [...predefinedTags, ...usedTags].forEach(tag => {
+          if (!allTagsMap.has(tag.label)) {
+            allTagsMap.set(tag.label, tag);
+          }
+        });
+        
+        const availableTags = Array.from(allTagsMap.values());
         const selectedTagLabels = tagsEditando.tags.map(t => t.label || t.value || t);
         const prop = propiedades.find(p => p.name === tagsEditando.propName);
         const isSelectType = prop && prop.type === "select";
@@ -4376,18 +5745,18 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
             }
           } else {
             // Para tipo tags, permitir múltiples
-            if (isSelected) {
-              // Deseleccionar
-              setTagsEditando({
-                ...tagsEditando,
-                tags: tagsEditando.tags.filter(t => (t.label || t.value || t) !== tag.label)
-              });
-            } else {
-              // Seleccionar
-              setTagsEditando({
-                ...tagsEditando,
-                tags: [...tagsEditando.tags, tag]
-              });
+          if (isSelected) {
+            // Deseleccionar
+            setTagsEditando({
+              ...tagsEditando,
+              tags: tagsEditando.tags.filter(t => (t.label || t.value || t) !== tag.label)
+            });
+          } else {
+            // Seleccionar
+            setTagsEditando({
+              ...tagsEditando,
+              tags: [...tagsEditando.tags, tag]
+            });
             }
           }
         };
@@ -4412,11 +5781,12 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                 <>
                   <div className="mb-4">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Tags disponibles:
+                      Tags disponibles {usedTags.length > 0 && `(${usedTags.length} usados previamente)`}:
                     </label>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2 max-h-[200px] overflow-y-auto p-2 border border-gray-200 rounded bg-gray-50">
                       {availableTags.map((tag, idx) => {
                         const isSelected = selectedTagLabels.includes(tag.label);
+                        const isUsedTag = usedTags.some(t => t.label === tag.label);
                         return (
                           <button
                             key={idx}
@@ -4431,9 +5801,11 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                               color: 'white',
                               opacity: isSelected ? 1 : 0.7
                             }}
+                            title={isUsedTag ? "Tag usado previamente en esta columna" : "Tag predefinido"}
                           >
                             {isSelected && '✓ '}
                             {tag.label}
+                            {isUsedTag && ' 📌'}
                           </button>
                         );
                       })}
@@ -4521,12 +5893,17 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                         // Para tipo select, guardar solo el primer tag como valor string con color
                         if (tagsEditando.tags.length > 0) {
                           const firstTag = tagsEditando.tags[0];
+                          const valorConcepto = firstTag.label || firstTag.value || firstTag;
                           const nuevas = [...filas];
                           nuevas[tagsEditando.filaIndex].properties[tagsEditando.propName] = {
                             ...nuevas[tagsEditando.filaIndex].properties[tagsEditando.propName],
-                            value: firstTag.label || firstTag.value || firstTag,
+                            value: valorConcepto,
                             color: firstTag.color || nuevas[tagsEditando.filaIndex].properties[tagsEditando.propName]?.color || "#3b82f6"
                           };
+                          // Si el campo es "Concepto", actualizar también el campo Name
+                          if (tagsEditando.propName === "Concepto") {
+                            nuevas[tagsEditando.filaIndex].Name = valorConcepto;
+                          }
                           setFilas(nuevas);
                         } else {
                           // Si no hay tags, limpiar el valor
@@ -4536,11 +5913,15 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                             value: "",
                             color: nuevas[tagsEditando.filaIndex].properties[tagsEditando.propName]?.color || "#3b82f6"
                           };
+                          // Si el campo es "Concepto", limpiar también el campo Name
+                          if (tagsEditando.propName === "Concepto") {
+                            nuevas[tagsEditando.filaIndex].Name = "Nueva tarea";
+                          }
                           setFilas(nuevas);
                         }
                       } else {
                         // Para tipo tags, guardar el array completo
-                        actualizarValor(tagsEditando.filaIndex, tagsEditando.propName, tagsEditando.tags);
+                      actualizarValor(tagsEditando.filaIndex, tagsEditando.propName, tagsEditando.tags);
                       }
                     }
                     setShowTagsModal(false);
@@ -4555,6 +5936,213 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
           </div>
         );
       })()}
+
+      {/* Modal para editar valores numéricos (columnas financieras) */}
+      {showNumericModal && numericEditing && (
+        <div className="fixed inset-0 z-[9999] bg-black/50 flex justify-center items-center p-4" style={{ position: 'fixed', zIndex: 9999 }}>
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-800">💰 Ingresar Valor</h2>
+              <button 
+                onClick={() => {
+                  setShowNumericModal(false);
+                  setNumericEditing(null);
+                }}
+                className="text-gray-500 hover:text-gray-700 text-2xl font-bold"
+              >
+                ×
+              </button>
+            </div>
+            <div className="mb-4">
+              <label htmlFor="editNumeric" className="block text-sm font-medium text-gray-700 mb-2">
+                {numericEditing.propName}:
+              </label>
+              <input
+                id="editNumeric"
+                type="text"
+                inputMode="numeric"
+                value={numericEditing.value}
+                onChange={(e) => {
+                  const valor = e.target.value;
+                  // Solo permitir números, punto decimal, coma y signo negativo
+                  const valorValidado = valor.replace(/[^0-9.,-]/g, '');
+                  // Solo permitir un punto decimal o coma
+                  const partes = valorValidado.split(/[.,]/);
+                  let valorFinal = valorValidado;
+                  if (partes.length > 2) {
+                    // Si hay más de un punto/coma, mantener solo el primero
+                    valorFinal = partes[0] + (partes[1] ? '.' + partes.slice(1).join('') : '');
+                  }
+                  setNumericEditing({ ...numericEditing, value: valorFinal });
+                }}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-right text-lg"
+                placeholder="0"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    actualizarValor(numericEditing.filaIndex, numericEditing.propName, numericEditing.value);
+                    setShowNumericModal(false);
+                    setNumericEditing(null);
+                  }
+                }}
+              />
+            </div>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowNumericModal(false);
+                  setNumericEditing(null);
+                }}
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  actualizarValor(numericEditing.filaIndex, numericEditing.propName, numericEditing.value);
+                  setShowNumericModal(false);
+                  setNumericEditing(null);
+                }}
+                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+              >
+                ➕ Agregar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal para abonar a deuda */}
+      {showAbonoModal && abonoEditing && (
+        <div className="fixed inset-0 z-[9999] bg-black/50 flex justify-center items-center p-4" style={{ position: 'fixed', zIndex: 9999 }}>
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-800">💰 Abonar a Deuda</h2>
+              <button 
+                onClick={() => {
+                  setShowAbonoModal(false);
+                  setAbonoEditing(null);
+                }}
+                className="text-gray-500 hover:text-gray-700 text-2xl font-bold"
+              >
+                ×
+              </button>
+            </div>
+            <div className="mb-4 space-y-4">
+              <div className="text-sm text-gray-600">
+                <strong>Deuda:</strong> {abonoEditing.nombreDeuda}
+              </div>
+              <div className="text-sm text-gray-600">
+                <strong>Deuda actual:</strong> {new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'USD' }).format(abonoEditing.deudaActual || 0)}
+              </div>
+              
+              <div>
+                <label htmlFor="abonoMonto" className="block text-sm font-medium text-gray-700 mb-2">
+                  Monto del abono: *
+                </label>
+                <input
+                  id="abonoMonto"
+                  type="text"
+                  inputMode="numeric"
+                  value={abonoEditing.value || ""}
+                  onChange={(e) => {
+                    const valor = e.target.value;
+                    const valorValidado = valor.replace(/[^0-9.,-]/g, '');
+                    const partes = valorValidado.split(/[.,]/);
+                    let valorFinal = valorValidado;
+                    if (partes.length > 2) {
+                      valorFinal = partes[0] + (partes[1] ? '.' + partes.slice(1).join('') : '');
+                    }
+                    setAbonoEditing({ ...abonoEditing, value: valorFinal });
+                  }}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-right text-lg"
+                  placeholder="0"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const inputs = e.target.form?.querySelectorAll('input, textarea');
+                      const currentIndex = Array.from(inputs || []).indexOf(e.target);
+                      if (inputs && currentIndex < inputs.length - 1) {
+                        inputs[currentIndex + 1].focus();
+                      } else {
+                        procesarAbono();
+                      }
+                    }
+                  }}
+                />
+              </div>
+
+              <div>
+                <label htmlFor="abonoFecha" className="block text-sm font-medium text-gray-700 mb-2">
+                  Fecha:
+                </label>
+                <input
+                  id="abonoFecha"
+                  type="date"
+                  value={abonoEditing.fecha || ""}
+                  onChange={(e) => {
+                    setAbonoEditing({ ...abonoEditing, fecha: e.target.value });
+                  }}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const inputs = e.target.form?.querySelectorAll('input, textarea');
+                      const currentIndex = Array.from(inputs || []).indexOf(e.target);
+                      if (inputs && currentIndex < inputs.length - 1) {
+                        inputs[currentIndex + 1].focus();
+                      } else {
+                        procesarAbono();
+                      }
+                    }
+                  }}
+                />
+              </div>
+
+              <div>
+                <label htmlFor="abonoDescripcion" className="block text-sm font-medium text-gray-700 mb-2">
+                  Descripción:
+                </label>
+                <textarea
+                  id="abonoDescripcion"
+                  value={abonoEditing.descripcion || ""}
+                  onChange={(e) => {
+                    setAbonoEditing({ ...abonoEditing, descripcion: e.target.value });
+                  }}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  rows="3"
+                  placeholder="Descripción del abono (opcional)"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && e.ctrlKey) {
+                      e.preventDefault();
+                      procesarAbono();
+                    }
+                  }}
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowAbonoModal(false);
+                  setAbonoEditing(null);
+                }}
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={procesarAbono}
+                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+              >
+                💰 Abonar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal para editar Texto */}
       {showTextModal && textEditing.filaIndex !== null && textEditing.propName && (
@@ -4633,11 +6221,57 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
         </div>
       )}
 
+      {/* Modal para vincular tablas */}
+      <VincularTablasModal
+        isOpen={showVincularModal}
+        onClose={() => setShowVincularModal(false)}
+        tableIdActual={tableId}
+        onVincular={(tableIdVinculada, linkInfo) => {
+          // Validar que la tabla no esté ya vinculada
+          const yaEstaVinculada = tablasVinculadas.some(
+            v => v.tableId === tableIdVinculada
+          );
+          
+          if (yaEstaVinculada) {
+            // Ya está vinculada, no agregar duplicado
+            return;
+          }
+          
+          // Agregar la tabla vinculada a tablasVinculadas
+          const nuevaVinculacion = {
+            tableId: tableIdVinculada,
+            ...linkInfo
+          };
+          const nuevasVinculaciones = [...tablasVinculadas, nuevaVinculacion];
+          setTablasVinculadas(nuevasVinculaciones);
+          
+          // Actualizar el registro
+          const paginaId = PageContext.getCurrentPageId();
+          if (paginaId) {
+            registrarTablaEnRegistro(paginaId);
+          }
+        }}
+      />
+
+      {/* Modal de gráficas combinadas */}
+      <GraficasCombinadas
+        isOpen={showGraficasModal}
+        onClose={() => setShowGraficasModal(false)}
+        tablasVinculadas={tablasVinculadas}
+        tableIdActual={tableId}
+        cacheDatosTablas={cacheDatosTablas.current}
+      />
+
       {/* Modal de confirmación para eliminar tabla */}
       <ConfirmDeleteModal
         isOpen={showDeleteTableModal}
         onClose={() => setShowDeleteTableModal(false)}
         onConfirm={() => {
+          // Eliminar del registro antes de eliminar el nodo
+          if (tableId) {
+            TableRegistryService.unregisterTable(tableId);
+          }
+          
           const pos = getPos?.();
           const view = editor?.view;
 
@@ -4653,4 +6287,8 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
     </NodeViewWrapper>
   );
 }
+
+
+
+
 

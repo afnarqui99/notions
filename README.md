@@ -532,3 +532,7 @@ La función `calcularDiasHabiles(fechaInicio, fechaFin)` calcula los días hábi
 
 5. **Detección automática**: El sistema detecta las columnas base por su nombre (no importa mayúsculas/minúsculas), así que puedes usar cualquier variación de los nombres válidos
 
+
+
+
+

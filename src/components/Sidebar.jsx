@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Star, ChevronDown, Settings, Plus, Trash2, Github, ChevronRight } from 'lucide-react';
+import { Search, Star, ChevronDown, Settings, Plus, Trash2, Github, ChevronRight, Pencil } from 'lucide-react';
 
 export default function Sidebar({ 
   paginas = [], 
@@ -11,7 +11,8 @@ export default function Sidebar({
   setFiltroPagina,
   onSidebarStateChange,
   onEliminarPagina,
-  onReordenarPaginas
+  onReordenarPaginas,
+  onRenombrarPagina
 }) {
   const [favoritos, setFavoritos] = useState(() => {
     try {
@@ -288,6 +289,10 @@ export default function Sidebar({
   // Estado para drag and drop
   const [paginaArrastrando, setPaginaArrastrando] = useState(null);
   const [paginaSobre, setPaginaSobre] = useState(null);
+  
+  // Estado para edición de nombres
+  const [paginaEditando, setPaginaEditando] = useState(null);
+  const [nuevoNombre, setNuevoNombre] = useState('');
 
   // Componente recursivo para renderizar una página y sus hijos
   const PaginaItem = ({ pagina, nivel = 0, todasLasPaginas }) => {
@@ -363,16 +368,25 @@ export default function Sidebar({
         >
           {/* Botón de expansión/colapso */}
           {tieneHijos ? (
-            <button
+            <div
               onClick={(e) => {
                 e.stopPropagation();
                 toggleExpansion(pagina.id);
               }}
-              className="p-0.5 hover:bg-gray-300 rounded transition-colors flex-shrink-0"
+              className="p-0.5 hover:bg-gray-300 rounded transition-colors flex-shrink-0 cursor-pointer"
               title={estaExpandida ? "Colapsar" : "Expandir"}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  toggleExpansion(pagina.id);
+                }
+              }}
             >
               <ChevronRight className={`w-3 h-3 transition-transform ${estaExpandida ? 'rotate-90' : ''}`} />
-            </button>
+            </div>
           ) : (
             <div className="w-4 h-4 flex-shrink-0" />
           )}
@@ -384,48 +398,131 @@ export default function Sidebar({
             </span>
           ) : null}
           
-          {/* Título */}
-          <span className="flex-1 text-left truncate">
-            {pagina.titulo || 'Sin título'}
-          </span>
-          
-          {/* Botones de acción (hover) */}
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100" onClick={(e) => e.stopPropagation()}>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                if (onNuevaPagina) {
-                  onNuevaPagina(pagina.id); // Crear página hija
+          {/* Título o Input de edición */}
+          {paginaEditando === pagina.id ? (
+            <input
+              type="text"
+              value={nuevoNombre}
+              onChange={(e) => setNuevoNombre(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  if (onRenombrarPagina && nuevoNombre.trim()) {
+                    onRenombrarPagina(pagina.id, nuevoNombre.trim());
+                  }
+                  setPaginaEditando(null);
+                  setNuevoNombre('');
+                } else if (e.key === 'Escape') {
+                  setPaginaEditando(null);
+                  setNuevoNombre('');
                 }
               }}
-              className="p-0.5 hover:bg-blue-100 rounded transition-colors"
-              title="Crear página hija"
-            >
-              <Plus className="w-3 h-3 text-gray-400 hover:text-blue-600" />
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleFavorito(pagina.id);
+              onBlur={() => {
+                if (onRenombrarPagina && nuevoNombre.trim()) {
+                  onRenombrarPagina(pagina.id, nuevoNombre.trim());
+                }
+                setPaginaEditando(null);
+                setNuevoNombre('');
               }}
-              className="p-0.5 hover:bg-gray-300 rounded transition-colors"
-              title={favoritos.includes(pagina.id) ? "Quitar de favoritos" : "Agregar a favoritos"}
-            >
-              <Star className={`w-3 h-3 ${favoritos.includes(pagina.id) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-400'}`} />
-            </button>
-            {onEliminarPagina && (
-              <button
+              onClick={(e) => e.stopPropagation()}
+              className="flex-1 text-left bg-white border border-blue-500 rounded px-1 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+              autoFocus
+            />
+          ) : (
+            <span className="flex-1 text-left truncate">
+              {pagina.titulo || 'Sin título'}
+            </span>
+          )}
+          
+          {/* Botones de acción (hover) */}
+          {paginaEditando !== pagina.id && (
+            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100" onClick={(e) => e.stopPropagation()}>
+              <div
                 onClick={(e) => {
                   e.stopPropagation();
-                  onEliminarPagina(pagina);
+                  setPaginaEditando(pagina.id);
+                  setNuevoNombre(pagina.titulo || '');
                 }}
-                className="p-0.5 hover:bg-red-100 rounded transition-colors"
-                title="Eliminar página"
+                className="p-0.5 hover:bg-blue-100 rounded transition-colors cursor-pointer"
+                title="Editar nombre"
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setPaginaEditando(pagina.id);
+                    setNuevoNombre(pagina.titulo || '');
+                  }
+                }}
               >
-                <Trash2 className="w-3 h-3 text-gray-400 hover:text-red-600" />
-              </button>
-            )}
-          </div>
+                <Pencil className="w-3 h-3 text-gray-400 hover:text-blue-600" />
+              </div>
+              <div
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onNuevaPagina) {
+                    onNuevaPagina(pagina.id); // Crear página hija
+                  }
+                }}
+                className="p-0.5 hover:bg-blue-100 rounded transition-colors cursor-pointer"
+                title="Crear página hija"
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (onNuevaPagina) {
+                      onNuevaPagina(pagina.id);
+                    }
+                  }
+                }}
+              >
+                <Plus className="w-3 h-3 text-gray-400 hover:text-blue-600" />
+              </div>
+              <div
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleFavorito(pagina.id);
+                }}
+                className="p-0.5 hover:bg-gray-300 rounded transition-colors cursor-pointer"
+                title={favoritos.includes(pagina.id) ? "Quitar de favoritos" : "Agregar a favoritos"}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    toggleFavorito(pagina.id);
+                  }
+                }}
+              >
+                <Star className={`w-3 h-3 ${favoritos.includes(pagina.id) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-400'}`} />
+              </div>
+              {onEliminarPagina && (
+                <div
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEliminarPagina(pagina);
+                  }}
+                  className="p-0.5 hover:bg-red-100 rounded transition-colors cursor-pointer"
+                  title="Eliminar página"
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onEliminarPagina(pagina);
+                    }
+                  }}
+                >
+                  <Trash2 className="w-3 h-3 text-gray-400 hover:text-red-600" />
+                </div>
+              )}
+            </div>
+          )}
         </button>
         
         {/* Renderizar hijos si está expandida */}
