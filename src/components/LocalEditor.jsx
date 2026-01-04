@@ -32,6 +32,7 @@ import Sidebar from "./Sidebar";
 import TagSelector from "./TagSelector";
 import TagService from "../services/TagService";
 import PageTagsDisplay from "./PageTagsDisplay";
+import GlobalSearch from "./GlobalSearch";
 import { PageContext } from '../utils/pageContext';
 
 export default function LocalEditor({ onShowConfig }) {
@@ -96,6 +97,7 @@ export default function LocalEditor({ onShowConfig }) {
   const [guardando, setGuardando] = useState(false);
   const ultimoContenidoRef = useRef(null);
   const [sidebarColapsado, setSidebarColapsado] = useState(false);
+  const [showGlobalSearch, setShowGlobalSearch] = useState(false);
   const [favoritos, setFavoritos] = useState(() => {
     try {
       const saved = localStorage.getItem('notion-favoritos');
@@ -599,6 +601,43 @@ export default function LocalEditor({ onShowConfig }) {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, [hayCambiosSinGuardar, guardando, editor, paginaSeleccionada, guardarContenido]);
+
+  // Atajo de teclado para búsqueda global (Ctrl+K / Cmd+K)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Ctrl+K (Windows/Linux) o Cmd+K (Mac)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setShowGlobalSearch(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
+  // Manejar selección de resultado de búsqueda global
+  const handleSearchResultSelect = async (result) => {
+    if (result.type === 'page') {
+      // Seleccionar la página
+      seleccionarPagina(result.id);
+    } else if (result.type === 'event') {
+      // Para eventos, necesitamos navegar a la página que contiene el calendario
+      // Por ahora, simplemente cerramos la búsqueda
+      // TODO: Implementar navegación a eventos del calendario
+      setToast({
+        message: 'Navegación a eventos próximamente',
+        type: 'info'
+      });
+    } else if (result.type === 'table') {
+      // Para tablas, navegar a la página que contiene la tabla
+      if (result.pageId) {
+        seleccionarPagina(result.pageId);
+      }
+    }
+  };
 
   const crearPagina = async (titulo, emoji = null, parentId = null, tags = []) => {
     if (!titulo || !titulo.trim()) return;
@@ -1133,6 +1172,13 @@ export default function LocalEditor({ onShowConfig }) {
         onEliminarPagina={abrirModalEliminar}
         onReordenarPaginas={setPaginas}
         onRenombrarPagina={renombrarPagina}
+      />
+
+      {/* Búsqueda Global */}
+      <GlobalSearch
+        isOpen={showGlobalSearch}
+        onClose={() => setShowGlobalSearch(false)}
+        onSelectResult={handleSearchResultSelect}
       />
 
       {/* Modal de selección */}

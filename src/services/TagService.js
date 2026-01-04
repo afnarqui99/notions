@@ -13,32 +13,16 @@ class TagService {
   // Cargar todos los tags
   async loadTags() {
     try {
-      console.log('🔍 Intentando cargar tags desde:', this.tagsStorageKey);
-      
-      // Verificar si el archivo existe en la lista de archivos
-      try {
-        const files = await LocalStorageService.listFiles('data');
-        console.log('📁 Archivos en data:', files);
-        const tagFileExists = files.includes(this.tagsStorageKey);
-        console.log('📄 Archivo notion-tags.json existe:', tagFileExists);
-      } catch (listError) {
-        console.warn('⚠️ Error listando archivos:', listError);
-      }
-      
       const tagsData = await LocalStorageService.readJSONFile(this.tagsStorageKey, 'data');
-      console.log('📄 Datos crudos del archivo:', tagsData);
       
       if (!tagsData) {
-        console.warn('⚠️ tagsData es null o undefined - el archivo no existe o no se pudo leer');
         // Intentar cargar desde localStorage como fallback
         return this.loadTagsFromFallback();
       }
       
       const tags = tagsData?.tags || [];
-      console.log('✅ Tags cargados:', tags.length, 'tags', tags);
       return tags;
     } catch (error) {
-      console.error('❌ Error cargando tags desde archivo:', error);
       // Intentar cargar desde localStorage como fallback
       return this.loadTagsFromFallback();
     }
@@ -51,15 +35,13 @@ class TagService {
         const backup = localStorage.getItem('notion-tags-backup');
         if (backup) {
           const backupData = JSON.parse(backup);
-          console.log('🔄 Tags cargados desde backup:', backupData.tags?.length || 0, 'tags');
           return backupData.tags || [];
         }
       }
     } catch (fallbackError) {
-      console.error('❌ Error en fallback de localStorage:', fallbackError);
+      // Error en fallback
     }
     // Si no existe, retornar array vacío
-    console.warn('⚠️ No se encontraron tags, retornando array vacío');
     return [];
   }
 
@@ -77,7 +59,6 @@ class TagService {
         'data'
       );
       
-      console.log('Tags guardados correctamente:', tags.length, 'tags');
       return true;
     } catch (error) {
       console.error('Error guardando tags:', error);
