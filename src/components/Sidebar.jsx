@@ -255,15 +255,9 @@ export default function Sidebar({
     
     // Aplicar filtro por tag
     if (tagFiltro) {
-      console.log('🔍 Filtrando por tag:', tagFiltro, 'Total páginas:', paginasList.length);
       const paginasConTag = paginasFiltradas.filter(p => {
-        const hasTag = p.tags && Array.isArray(p.tags) && p.tags.includes(tagFiltro);
-        if (hasTag) {
-          console.log('✅ Página encontrada:', p.titulo, 'Tags:', p.tags);
-        }
-        return hasTag;
+        return p.tags && Array.isArray(p.tags) && p.tags.includes(tagFiltro);
       });
-      console.log('📊 Páginas con tag:', paginasConTag.length);
       
       // Si hay filtro de tag, incluir también los ancestros e hijos de las páginas con tag
       const paginasFiltradasSet = new Set();
@@ -293,7 +287,6 @@ export default function Sidebar({
       });
       
       paginasFiltradas = paginasList.filter(p => paginasFiltradasSet.has(p.id));
-      console.log('📊 Páginas filtradas (con jerarquía):', paginasFiltradas.length);
     }
     
     // Aplicar filtro por texto
