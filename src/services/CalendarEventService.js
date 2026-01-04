@@ -1,228 +1,25 @@
 /**
- * Servicio para gestionar eventos de calendario
- * Maneja la persistencia y CRUD de eventos
+ * Servicio para gestionar eventos de calendario y categorías
+ * Permite crear, listar, actualizar y eliminar eventos y categorías
  */
 
 import LocalStorageService from './LocalStorageService';
 
 class CalendarEventService {
   constructor() {
-    this.eventsFileName = 'calendar-events.json';
-    this.settingsFileName = 'calendar-settings.json';
+    this.eventsStorageKey = 'calendar-events.json';
+    this.categoriesStorageKey = 'calendar-categories.json';
   }
 
-  // Generar UUID
-  generateUUID() {
-    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-      return crypto.randomUUID();
-    }
-    // Fallback para navegadores que no soportan crypto.randomUUID
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-      const r = Math.random() * 16 | 0;
-      const v = c === 'x' ? r : (r & 0x3 | 0x8);
-      return v.toString(16);
-    });
-  }
+  // ========== CATEGORÍAS ==========
 
-  // Cargar todos los eventos
-  async loadEvents() {
-    try {
-      const data = await LocalStorageService.readJSONFile(this.eventsFileName);
-      return data?.events || [];
-    } catch (error) {
-      return [];
-    }
-  }
-
-  // Guardar todos los eventos
-  async saveEvents(events) {
-    try {
-      await LocalStorageService.saveJSONFile(this.eventsFileName, {
-        events: events,
-        updatedAt: new Date().toISOString()
-      });
-      return true;
-    } catch (error) {
-      console.error('Error guardando eventos:', error);
-      return false;
-    }
-  }
-
-  // Obtener evento por ID
-  async getEvent(eventId) {
-    const events = await this.loadEvents();
-    return events.find(e => e.id === eventId) || null;
-  }
-
-  // Guardar un nuevo evento
-  async saveEvent(event) {
-    const events = await this.loadEvents();
-    
-    const newEvent = {
-      ...event,
-      id: event.id || this.generateUUID(),
-      createdAt: event.createdAt || new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-
-    events.push(newEvent);
-    await this.saveEvents(events);
-    return newEvent;
-  }
-
-  // Actualizar un evento existente
-  async updateEvent(eventId, updates) {
-    const events = await this.loadEvents();
-    const index = events.findIndex(e => e.id === eventId);
-    
-    if (index === -1) {
-      throw new Error('Evento no encontrado');
-    }
-
-    events[index] = {
-      ...events[index],
-      ...updates,
-      updatedAt: new Date().toISOString()
-    };
-
-    await this.saveEvents(events);
-    return events[index];
-  }
-
-  // Eliminar un evento
-  async deleteEvent(eventId) {
-    const events = await this.loadEvents();
-    const filteredEvents = events.filter(e => e.id !== eventId);
-    await this.saveEvents(filteredEvents);
-    return true;
-  }
-
-  // Obtener eventos por calendario
-  async getEventsByCalendar(calendarId) {
-    const events = await this.loadEvents();
-    return events.filter(e => e.calendarId === calendarId);
-  }
-
-  // Obtener eventos por rango de fechas
-  async getEventsByDateRange(startDate, endDate) {
-    const events = await this.loadEvents();
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-
-    return events.filter(event => {
-      const eventStart = new Date(event.startDate);
-      return eventStart >= start && eventStart <= end;
-    });
-  }
-
-  // Obtener eventos próximos (para notificaciones)
-  async getUpcomingEvents(currentDate, lookAheadMinutes = 60) {
-    const events = await this.loadEvents();
-    const now = new Date(currentDate);
-    const lookAhead = new Date(now.getTime() + lookAheadMinutes * 60 * 1000);
-
-    return events.filter(event => {
-      if (!event.startDate || !event.startTime) return false;
-      
-      const eventDateTime = new Date(`${event.startDate}T${event.startTime}`);
-      return eventDateTime >= now && eventDateTime <= lookAhead;
-    });
-  }
-
-  // Buscar eventos por texto
-  async searchEvents(query) {
-    const events = await this.loadEvents();
-    const queryLower = query.toLowerCase();
-    
-    return events.filter(event => {
-      const titleMatch = event.title?.toLowerCase().includes(queryLower);
-      const descMatch = event.description?.toLowerCase().includes(queryLower);
-      return titleMatch || descMatch;
-    });
-  }
-
-  // Obtener eventos de un día específico
-  async getEventsByDate(date) {
-    const events = await this.loadEvents();
-    const targetDate = new Date(date).toISOString().split('T')[0];
-    
-    return events.filter(event => {
-      if (!event.startDate) return false;
-      return event.startDate === targetDate;
-    });
-  }
-
-  // Cargar configuración de calendarios
-  async loadSettings() {
-    try {
-      const data = await LocalStorageService.readJSONFile(this.settingsFileName);
-      return data || {};
-    } catch (error) {
-      return {};
-    }
-  }
-
-  // Guardar configuración de calendarios
-  async saveSettings(settings) {
-    try {
-      await LocalStorageService.saveJSONFile(this.settingsFileName, settings);
-      return true;
-    } catch (error) {
-      console.error('Error guardando configuración:', error);
-      return false;
-    }
-  }
-
-  // Obtener configuración de un calendario específico
-  async getCalendarSettings(calendarId) {
-    const settings = await this.loadSettings();
-    return settings[calendarId] || {
-      defaultView: 'month',
-      firstDayOfWeek: 1,
-      workingHours: {
-        start: '09:00',
-        end: '18:00'
-      },
-      notifications: {
-        enabled: true,
-        soundEnabled: true,
-        soundFile: 'default',
-        showInApp: true,
-        showSystem: true
-      }
-    };
-  }
-
-  // Guardar configuración de un calendario
-  async saveCalendarSettings(calendarId, calendarSettings) {
-    const settings = await this.loadSettings();
-    settings[calendarId] = calendarSettings;
-    await this.saveSettings(settings);
-    return true;
-  }
-
-  // Categorías por defecto
-  getDefaultCategories() {
-    return [
-      { id: 'work', name: 'Trabajo', color: '#3B82F6' },
-      { id: 'personal', name: 'Personal', color: '#10B981' },
-      { id: 'important', name: 'Importante', color: '#EF4444' },
-      { id: 'meeting', name: 'Reunión', color: '#8B5CF6' },
-      { id: 'reminder', name: 'Recordatorio', color: '#F59E0B' },
-      { id: 'study', name: 'Estudio', color: '#EC4899' },
-    ];
-  }
-
-  // Cargar categorías
+  // Cargar todas las categorías
   async loadCategories() {
     try {
-      const settings = await this.loadSettings();
-      if (settings.categories && settings.categories.length > 0) {
-        return settings.categories;
-      }
-      // Si no hay categorías guardadas, retornar las por defecto
-      return this.getDefaultCategories();
+      const data = await LocalStorageService.readJSONFile(this.categoriesStorageKey, 'data');
+      return data?.categories || [];
     } catch (error) {
+      // Si no existe, retornar categorías por defecto
       return this.getDefaultCategories();
     }
   }
@@ -230,9 +27,11 @@ class CalendarEventService {
   // Guardar categorías
   async saveCategories(categories) {
     try {
-      const settings = await this.loadSettings();
-      settings.categories = categories;
-      await this.saveSettings(settings);
+      await LocalStorageService.saveJSONFile(
+        this.categoriesStorageKey,
+        { categories, updatedAt: new Date().toISOString() },
+        'data'
+      );
       return true;
     } catch (error) {
       console.error('Error guardando categorías:', error);
@@ -240,38 +39,163 @@ class CalendarEventService {
     }
   }
 
-  // Agregar categoría
-  async addCategory(category) {
-    const categories = await this.loadCategories();
-    const newCategory = {
-      ...category,
-      id: category.id || this.generateUUID()
-    };
-    categories.push(newCategory);
-    await this.saveCategories(categories);
-    return newCategory;
+  // Obtener categorías por defecto
+  getDefaultCategories() {
+    return [
+      { id: 'cat-1', name: 'Trabajo', color: '#3B82F6' },
+      { id: 'cat-2', name: 'Personal', color: '#10B981' },
+      { id: 'cat-3', name: 'Importante', color: '#EF4444' },
+      { id: 'cat-4', name: 'Reunión', color: '#8B5CF6' },
+      { id: 'cat-5', name: 'Recordatorio', color: '#F59E0B' },
+      { id: 'cat-6', name: 'Estudio', color: '#06B6D4' },
+    ];
   }
 
-  // Actualizar categoría
-  async updateCategory(categoryId, updates) {
-    const categories = await this.loadCategories();
-    const index = categories.findIndex(c => c.id === categoryId);
-    if (index === -1) return null;
-    
-    categories[index] = { ...categories[index], ...updates };
-    await this.saveCategories(categories);
-    return categories[index];
+  // ========== EVENTOS ==========
+
+  // Cargar todos los eventos
+  async loadEvents() {
+    try {
+      const data = await LocalStorageService.readJSONFile(this.eventsStorageKey, 'data');
+      return data?.events || [];
+    } catch (error) {
+      return [];
+    }
   }
 
-  // Eliminar categoría
-  async deleteCategory(categoryId) {
-    const categories = await this.loadCategories();
-    const filtered = categories.filter(c => c.id !== categoryId);
-    await this.saveCategories(filtered);
-    return true;
+  // Guardar eventos
+  async saveEvents(events) {
+    try {
+      await LocalStorageService.saveJSONFile(
+        this.eventsStorageKey,
+        { events, updatedAt: new Date().toISOString() },
+        'data'
+      );
+      return true;
+    } catch (error) {
+      console.error('Error guardando eventos:', error);
+      return false;
+    }
+  }
+
+  // Obtener eventos por calendario
+  async getEventsByCalendar(calendarId) {
+    try {
+      const allEvents = await this.loadEvents();
+      return allEvents.filter(event => event.calendarId === calendarId);
+    } catch (error) {
+      console.error('Error obteniendo eventos por calendario:', error);
+      return [];
+    }
+  }
+
+  // Agregar evento (alias para saveEvent)
+  async addEvent(event) {
+    return this.saveEvent(event);
+  }
+
+  // Guardar evento (agregar o actualizar según si tiene ID)
+  async saveEvent(event) {
+    try {
+      const allEvents = await this.loadEvents();
+      
+      if (event.id) {
+        // Actualizar evento existente
+        const index = allEvents.findIndex(e => e.id === event.id);
+        if (index !== -1) {
+          allEvents[index] = {
+            ...allEvents[index],
+            ...event,
+            updatedAt: new Date().toISOString(),
+          };
+          await this.saveEvents(allEvents);
+          return allEvents[index];
+        }
+      }
+      
+      // Agregar nuevo evento
+      const newEvent = {
+        ...event,
+        id: event.id || this.generateUUID(),
+        createdAt: event.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      allEvents.push(newEvent);
+      await this.saveEvents(allEvents);
+      return newEvent;
+    } catch (error) {
+      console.error('Error guardando evento:', error);
+      throw error;
+    }
+  }
+
+  // Actualizar evento
+  async updateEvent(eventId, updates) {
+    try {
+      const allEvents = await this.loadEvents();
+      const index = allEvents.findIndex(e => e.id === eventId);
+      
+      if (index === -1) {
+        throw new Error('Evento no encontrado');
+      }
+
+      allEvents[index] = {
+        ...allEvents[index],
+        ...updates,
+        updatedAt: new Date().toISOString(),
+      };
+
+      await this.saveEvents(allEvents);
+      return allEvents[index];
+    } catch (error) {
+      console.error('Error actualizando evento:', error);
+      throw error;
+    }
+  }
+
+  // Eliminar evento
+  async deleteEvent(eventId) {
+    try {
+      const allEvents = await this.loadEvents();
+      const filtered = allEvents.filter(e => e.id !== eventId);
+      await this.saveEvents(filtered);
+      return true;
+    } catch (error) {
+      console.error('Error eliminando evento:', error);
+      return false;
+    }
+  }
+
+  // Obtener eventos próximos (para notificaciones)
+  async getUpcomingEvents(minutesAhead = 60) {
+    try {
+      const allEvents = await this.loadEvents();
+      const now = new Date();
+      const futureTime = new Date(now.getTime() + minutesAhead * 60000);
+
+      return allEvents.filter(event => {
+        if (!event.startDate || !event.startTime) return false;
+        
+        const eventDateTime = new Date(`${event.startDate}T${event.startTime}`);
+        return eventDateTime >= now && eventDateTime <= futureTime;
+      });
+    } catch (error) {
+      console.error('Error obteniendo eventos próximos:', error);
+      return [];
+    }
+  }
+
+  // ========== UTILIDADES ==========
+
+  // Generar UUID
+  generateUUID() {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+    // Fallback para navegadores sin crypto.randomUUID
+    return `event-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
   }
 }
 
 // Exportar instancia singleton
 export default new CalendarEventService();
-

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Search, Star, ChevronDown, Settings, Plus, Trash2, Github, ChevronRight, Pencil } from 'lucide-react';
+import { Search, Star, ChevronDown, Settings, Plus, Trash2, Github, ChevronRight, Pencil, Tag as TagIcon, X } from 'lucide-react';
+import TagService from '../services/TagService';
 
 export default function Sidebar({ 
   paginas = [], 
@@ -32,8 +33,11 @@ export default function Sidebar({
   });
   const [seccionesAbiertas, setSeccionesAbiertas] = useState({
     favoritos: true,
-    paginas: true
+    paginas: true,
+    tags: true
   });
+  const [filtroTag, setFiltroTag] = useState(null);
+  const [tags, setTags] = useState([]);
   
   // Estado para páginas expandidas/colapsadas en el árbol
   const [paginasExpandidas, setPaginasExpandidas] = useState(() => {
@@ -65,6 +69,42 @@ export default function Sidebar({
       console.error('Error guardando estado de expansión:', error);
     }
   }, [paginasExpandidas]);
+
+  // Cargar tags
+  useEffect(() => {
+    const loadTags = async () => {
+      try {
+        const allTags = await TagService.loadTags();
+        setTags(allTags);
+      } catch (error) {
+        console.error('Error cargando tags:', error);
+        setTags([]);
+      }
+    };
+    
+    // Esperar un poco para que el handle del directorio esté listo
+    // También escuchar el evento de cambio de handle
+    const handleDirectoryReady = () => {
+      loadTags();
+    };
+    
+    // Cargar inmediatamente
+    loadTags();
+    
+    // También escuchar cuando el handle del directorio cambia
+    window.addEventListener('directoryHandleChanged', handleDirectoryReady);
+    
+    // Escuchar eventos de actualización de tags
+    const handleTagsUpdated = () => {
+      loadTags();
+    };
+
+    window.addEventListener('tagsUpdated', handleTagsUpdated);
+    return () => {
+      window.removeEventListener('directoryHandleChanged', handleDirectoryReady);
+      window.removeEventListener('tagsUpdated', handleTagsUpdated);
+    };
+  }, []);
 
   const toggleFavorito = (paginaId) => {
     setFavoritos(prev => {
@@ -209,26 +249,72 @@ export default function Sidebar({
     window.dispatchEvent(new Event('paginasReordenadas'));
   };
 
-  // Filtrar páginas según el buscador (manteniendo la jerarquía)
-  const filtrarPaginasConJerarquia = (paginasList, filtro) => {
-    if (!filtro) return paginasList;
+  // Filtrar páginas según el buscador y tags (manteniendo la jerarquía)
+  const filtrarPaginasConJerarquia = (paginasList, filtro, tagFiltro) => {
+    let paginasFiltradas = paginasList;
+    
+    // Aplicar filtro por tag
+    if (tagFiltro) {
+      console.log('🔍 Filtrando por tag:', tagFiltro, 'Total páginas:', paginasList.length);
+      const paginasConTag = paginasFiltradas.filter(p => {
+        const hasTag = p.tags && Array.isArray(p.tags) && p.tags.includes(tagFiltro);
+        if (hasTag) {
+          console.log('✅ Página encontrada:', p.titulo, 'Tags:', p.tags);
+        }
+        return hasTag;
+      });
+      console.log('📊 Páginas con tag:', paginasConTag.length);
+      
+      // Si hay filtro de tag, incluir también los ancestros e hijos de las páginas con tag
+      const paginasFiltradasSet = new Set();
+      paginasConTag.forEach(pagina => {
+        paginasFiltradasSet.add(pagina.id);
+        
+        // Agregar todos los ancestros
+        let parentId = pagina.parentId;
+        while (parentId) {
+          const parent = paginasList.find(p => p.id === parentId);
+          if (parent) {
+            paginasFiltradasSet.add(parent.id);
+            parentId = parent.parentId;
+          } else {
+            break;
+          }
+        }
+        
+        // Agregar todos los hijos recursivamente
+        const agregarHijos = (paginaId) => {
+          obtenerHijos(paginaId, paginasList).forEach(hijo => {
+            paginasFiltradasSet.add(hijo.id);
+            agregarHijos(hijo.id);
+          });
+        };
+        agregarHijos(pagina.id);
+      });
+      
+      paginasFiltradas = paginasList.filter(p => paginasFiltradasSet.has(p.id));
+      console.log('📊 Páginas filtradas (con jerarquía):', paginasFiltradas.length);
+    }
+    
+    // Aplicar filtro por texto
+    if (!filtro) return paginasFiltradas;
     
     const filtroLower = filtro.toLowerCase();
-    const paginasFiltradas = new Set();
-    const paginasQueCoinciden = paginasList.filter(p => 
+    const paginasFiltradasSet = new Set();
+    const paginasQueCoinciden = paginasFiltradas.filter(p => 
       (p.titulo || '').toLowerCase().includes(filtroLower)
     );
     
     // Agregar páginas que coinciden y todos sus ancestros e hijos
     paginasQueCoinciden.forEach(pagina => {
-      paginasFiltradas.add(pagina.id);
+      paginasFiltradasSet.add(pagina.id);
       
       // Agregar todos los ancestros
       let parentId = pagina.parentId;
       while (parentId) {
-        const parent = paginasList.find(p => p.id === parentId);
+        const parent = paginasFiltradas.find(p => p.id === parentId);
         if (parent) {
-          paginasFiltradas.add(parent.id);
+          paginasFiltradasSet.add(parent.id);
           parentId = parent.parentId;
         } else {
           break;
@@ -237,15 +323,15 @@ export default function Sidebar({
       
       // Agregar todos los hijos recursivamente
       const agregarHijos = (paginaId) => {
-        obtenerHijos(paginaId, paginasList).forEach(hijo => {
-          paginasFiltradas.add(hijo.id);
+        obtenerHijos(paginaId, paginasFiltradas).forEach(hijo => {
+          paginasFiltradasSet.add(hijo.id);
           agregarHijos(hijo.id);
         });
       };
       agregarHijos(pagina.id);
     });
     
-    return paginasList.filter(p => paginasFiltradas.has(p.id));
+    return paginasFiltradas.filter(p => paginasFiltradasSet.has(p.id));
   };
 
   // Estado para forzar re-render cuando cambia el orden
@@ -263,7 +349,7 @@ export default function Sidebar({
     };
   }, []);
 
-  const paginasFiltradas = filtrarPaginasConJerarquia(paginas, filtroPagina);
+  const paginasFiltradas = filtrarPaginasConJerarquia(paginas, filtroPagina, filtroTag);
   const arbolPaginas = construirArbol(paginasFiltradas);
   
   // Separar favoritos y normales
@@ -399,40 +485,64 @@ export default function Sidebar({
           ) : null}
           
           {/* Título o Input de edición */}
-          {paginaEditando === pagina.id ? (
-            <input
-              type="text"
-              value={nuevoNombre}
-              onChange={(e) => setNuevoNombre(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
+          <div className="flex-1 min-w-0">
+            {paginaEditando === pagina.id ? (
+              <input
+                type="text"
+                value={nuevoNombre}
+                onChange={(e) => setNuevoNombre(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (onRenombrarPagina && nuevoNombre.trim()) {
+                      onRenombrarPagina(pagina.id, nuevoNombre.trim());
+                    }
+                    setPaginaEditando(null);
+                    setNuevoNombre('');
+                  } else if (e.key === 'Escape') {
+                    setPaginaEditando(null);
+                    setNuevoNombre('');
+                  }
+                }}
+                onBlur={() => {
                   if (onRenombrarPagina && nuevoNombre.trim()) {
                     onRenombrarPagina(pagina.id, nuevoNombre.trim());
                   }
                   setPaginaEditando(null);
                   setNuevoNombre('');
-                } else if (e.key === 'Escape') {
-                  setPaginaEditando(null);
-                  setNuevoNombre('');
-                }
-              }}
-              onBlur={() => {
-                if (onRenombrarPagina && nuevoNombre.trim()) {
-                  onRenombrarPagina(pagina.id, nuevoNombre.trim());
-                }
-                setPaginaEditando(null);
-                setNuevoNombre('');
-              }}
-              onClick={(e) => e.stopPropagation()}
-              className="flex-1 text-left bg-white border border-blue-500 rounded px-1 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-              autoFocus
-            />
-          ) : (
-            <span className="flex-1 text-left truncate">
-              {pagina.titulo || 'Sin título'}
-            </span>
-          )}
+                }}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full text-left bg-white border border-blue-500 rounded px-1 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                autoFocus
+              />
+            ) : (
+              <>
+                <span className="block text-left truncate">
+                  {pagina.titulo || 'Sin título'}
+                </span>
+                {/* Tags de la página */}
+                {pagina.tags && Array.isArray(pagina.tags) && pagina.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-0.5 mt-0.5">
+                    {pagina.tags.slice(0, 2).map(tagId => {
+                      const tag = tags.find(t => t.id === tagId);
+                      if (!tag) return null;
+                      return (
+                        <span
+                          key={tagId}
+                          className="inline-block w-1.5 h-1.5 rounded-full"
+                          style={{ backgroundColor: tag.color }}
+                          title={tag.name}
+                        />
+                      );
+                    })}
+                    {pagina.tags.length > 2 && (
+                      <span className="text-xs text-gray-400">+{pagina.tags.length - 2}</span>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
           
           {/* Botones de acción (hover) */}
           {paginaEditando !== pagina.id && (
@@ -621,6 +731,52 @@ export default function Sidebar({
           </div>
         )}
 
+        {/* Tags */}
+        {tags.length > 0 && (
+          <div className="mt-4 px-2">
+            <button
+              onClick={() => setSeccionesAbiertas(prev => ({ ...prev, tags: !prev.tags }))}
+              className="w-full flex items-center gap-1 px-2 py-1 text-xs font-semibold text-gray-500 hover:text-gray-700 transition-colors"
+            >
+              <ChevronDown className={`w-3 h-3 transition-transform ${seccionesAbiertas.tags ? '' : '-rotate-90'}`} />
+              <span>Tags</span>
+            </button>
+            {seccionesAbiertas.tags && (
+              <div className="mt-1 space-y-1">
+                {filtroTag && (
+                  <button
+                    onClick={() => setFiltroTag(null)}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-gray-600 hover:bg-gray-200 rounded transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                    <span>Limpiar filtro</span>
+                  </button>
+                )}
+                <div className="flex flex-wrap gap-1 px-2">
+                  {tags.map(tag => (
+                    <button
+                      key={tag.id}
+                      onClick={() => setFiltroTag(filtroTag === tag.id ? null : tag.id)}
+                      className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium transition-all ${
+                        filtroTag === tag.id ? 'ring-2 ring-blue-500' : ''
+                      }`}
+                      style={{
+                        backgroundColor: filtroTag === tag.id ? tag.color : `${tag.color}20`,
+                        color: filtroTag === tag.id ? 'white' : tag.color,
+                        border: `1px solid ${tag.color}40`
+                      }}
+                      title={tag.name}
+                    >
+                      <TagIcon className="w-3 h-3" />
+                      <span>{tag.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Todas las páginas */}
         <div className="mt-4 px-2">
           <div className="flex items-center justify-between mb-1">
@@ -646,7 +802,7 @@ export default function Sidebar({
               ))}
               {arbolPaginas.length === 0 && (
                 <div className="px-2 py-4 text-xs text-gray-400 text-center">
-                  {filtroPagina ? 'No se encontraron páginas' : 'No hay páginas'}
+                  {filtroPagina || filtroTag ? 'No se encontraron páginas' : 'No hay páginas'}
                 </div>
               )}
             </div>

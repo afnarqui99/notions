@@ -20,7 +20,7 @@ import lowlight from "../extensions/lowlightInstance";
 import { SlashCommand } from "../extensions/SlashCommand";
 import Link from "@tiptap/extension-link";
 import { Toggle } from "../extensions/Toggle";
-import { Settings, Plus, Image as ImageIcon, Paperclip, Download, Trash2 } from "lucide-react";
+import { Settings, Plus, Image as ImageIcon, Paperclip, Download, Trash2, Tag as TagIcon } from "lucide-react";
 import LocalStorageService from "../services/LocalStorageService";
 import Modal from "./Modal";
 import ConfigModal from "./ConfigModal";
@@ -29,6 +29,9 @@ import PageLinkModal from "./PageLinkModal";
 import StorageWarning from "./StorageWarning";
 import Toast from "./Toast";
 import Sidebar from "./Sidebar";
+import TagSelector from "./TagSelector";
+import TagService from "../services/TagService";
+import PageTagsDisplay from "./PageTagsDisplay";
 import { PageContext } from '../utils/pageContext';
 
 export default function LocalEditor({ onShowConfig }) {
@@ -84,6 +87,9 @@ export default function LocalEditor({ onShowConfig }) {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [paginaAEliminar, setPaginaAEliminar] = useState(null);
   const [eliminando, setEliminando] = useState(false);
+  const [showTagEditor, setShowTagEditor] = useState(false);
+  const [pageTags, setPageTags] = useState([]);
+  const pageTagsRef = useRef([]); // Ref para mantener los tags originales cuando se abre el modal
   const [handleVersion, setHandleVersion] = useState(0);
   const [toast, setToast] = useState(null);
   const [hayCambiosSinGuardar, setHayCambiosSinGuardar] = useState(false);
@@ -337,6 +343,7 @@ export default function LocalEditor({ onShowConfig }) {
           contenido: contenidoParaGuardar,
           titulo: tituloLimpio,
           emoji: data.emoji || null, // Preservar el emoji existente
+          tags: data.tags || [], // Preservar tags existentes
           actualizadoEn: new Date().toISOString(),
           creadoEn: data.creadoEn || new Date().toISOString()
         },
@@ -502,6 +509,9 @@ export default function LocalEditor({ onShowConfig }) {
           setTitulo(data.titulo || "");
           setTituloPaginaActual(data.titulo || "");
           
+          // Cargar tags de la página
+          setPageTags(data.tags || []);
+          
           // Convertir referencias de archivo a URLs blob antes de cargar
           const contenidoConBlobs = await convertirReferenciasABlobs(data.contenido);
           editor.commands.setContent(contenidoConBlobs);
@@ -509,11 +519,19 @@ export default function LocalEditor({ onShowConfig }) {
           // Guardar el contenido procesado como referencia
           ultimoContenidoRef.current = JSON.stringify(contenidoConBlobs);
         } else {
+          // Si no hay datos, inicializar valores por defecto
+          setTitulo("");
+          setTituloPaginaActual("");
+          setPageTags([]);
           editor.commands.setContent({ type: "doc", content: [{ type: "paragraph" }] });
           ultimoContenidoRef.current = JSON.stringify({ type: "doc", content: [{ type: "paragraph" }] });
         }
         setHayCambiosSinGuardar(false);
       } catch (error) {
+        // En caso de error, inicializar valores por defecto
+        setTitulo("");
+        setTituloPaginaActual("");
+        setPageTags([]);
         editor.commands.setContent({ type: "doc", content: [{ type: "paragraph" }] });
         ultimoContenidoRef.current = JSON.stringify({ type: "doc", content: [{ type: "paragraph" }] });
       }
@@ -582,7 +600,7 @@ export default function LocalEditor({ onShowConfig }) {
     };
   }, [hayCambiosSinGuardar, guardando, editor, paginaSeleccionada, guardarContenido]);
 
-  const crearPagina = async (titulo, emoji = null, parentId = null) => {
+  const crearPagina = async (titulo, emoji = null, parentId = null, tags = []) => {
     if (!titulo || !titulo.trim()) return;
 
     // Extraer emoji si no se pasó explícitamente
@@ -600,6 +618,7 @@ export default function LocalEditor({ onShowConfig }) {
       titulo: tituloSinEmoji,
       emoji: emojiFinal || null,
       parentId: parentId || null, // ID de la página padre (null para páginas raíz)
+      tags: tags || [], // IDs de tags
       contenido: {
         type: "doc",
         content: [{ type: "paragraph" }],
@@ -862,6 +881,7 @@ export default function LocalEditor({ onShowConfig }) {
         setPaginaSeleccionada(null);
         PageContext.clearCurrentPageId();
         setTituloPaginaActual('');
+        setPageTags([]);
         editor?.commands.setContent({ type: "doc", content: [{ type: "paragraph" }] });
       }
       
@@ -900,6 +920,36 @@ export default function LocalEditor({ onShowConfig }) {
   const abrirModalEliminar = (pagina) => {
     setPaginaAEliminar(pagina);
     setShowDeleteModal(true);
+  };
+
+  // Guardar tags de la página actual
+  const handleSaveTags = async (newTags) => {
+    if (!paginaSeleccionada) return;
+    
+    try {
+      const data = await LocalStorageService.readJSONFile(`${paginaSeleccionada}.json`, 'data') || {};
+      data.tags = newTags || [];
+      await LocalStorageService.saveJSONFile(`${paginaSeleccionada}.json`, data, 'data');
+      setPageTags(newTags || []);
+      
+      // Actualizar la lista de páginas para reflejar los cambios
+      const updatedPaginas = paginas.map(p => 
+        p.id === paginaSeleccionada ? { ...p, tags: newTags || [] } : p
+      );
+      setPaginas(updatedPaginas);
+      
+      setToast({
+        message: 'Tags guardados correctamente',
+        type: 'success'
+      });
+    } catch (error) {
+      console.error('Error al guardar tags:', error);
+      setModalError({
+        isOpen: true,
+        message: `Error al guardar tags: ${error.message}`,
+        title: "Error"
+      });
+    }
   };
 
   const insertarImagen = async () => {
@@ -1183,15 +1233,32 @@ export default function LocalEditor({ onShowConfig }) {
             </button>
           </div>
 
-          {/* Título compacto */}
-          <input
-            type="text"
-            value={tituloPaginaActual}
-            onChange={(e) => setTituloPaginaActual(e.target.value)}
-            onBlur={actualizarTitulo}
-            placeholder="Título de la página"
-            className="border-b px-4 py-2 text-xl font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
-          />
+          {/* Título compacto con tags */}
+          <PageTagsDisplay tags={pageTags} />
+          <div className="border-b bg-white">
+            <div className="flex items-center gap-2 px-4 py-2">
+              <input
+                type="text"
+                value={tituloPaginaActual}
+                onChange={(e) => setTituloPaginaActual(e.target.value)}
+                onBlur={actualizarTitulo}
+                placeholder="Título de la página"
+                className="flex-1 text-xl font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 bg-transparent"
+              />
+              <button
+                onClick={() => {
+                  // Guardar los tags actuales antes de abrir el modal
+                  pageTagsRef.current = [...pageTags];
+                  setShowTagEditor(true);
+                }}
+                className="px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 transition-colors flex items-center gap-1"
+                title="Editar tags"
+              >
+                <TagIcon className="w-4 h-4" />
+                <span>Tags</span>
+              </button>
+            </div>
+          </div>
 
           {/* Área de edición */}
           <div className="flex-1 overflow-y-auto bg-white">
@@ -1316,8 +1383,8 @@ export default function LocalEditor({ onShowConfig }) {
           setShowNewPageModal(false);
           setPaginaPadreParaNueva(null);
         }}
-        onCreate={(titulo, emoji) => {
-          crearPagina(titulo, emoji, paginaPadreParaNueva);
+        onCreate={(titulo, emoji, tags) => {
+          crearPagina(titulo, emoji, paginaPadreParaNueva, tags);
           setPaginaPadreParaNueva(null);
         }}
       />
@@ -1329,6 +1396,42 @@ export default function LocalEditor({ onShowConfig }) {
         paginas={paginas}
         onSelectPage={handleSelectPageForLink}
       />
+
+      {/* Modal de Tags */}
+      <Modal
+        isOpen={showTagEditor}
+        onClose={() => setShowTagEditor(false)}
+        title="Editar Tags"
+      >
+        <TagSelector
+          selectedTags={pageTags}
+          onChange={(newTags) => {
+            setPageTags(newTags);
+          }}
+          allowCreate={true}
+        />
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            onClick={() => {
+              // Restaurar tags originales al cancelar
+              setPageTags([...pageTagsRef.current]);
+              setShowTagEditor(false);
+            }}
+            className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={async () => {
+              await handleSaveTags(pageTags);
+              setShowTagEditor(false);
+            }}
+            className="px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors font-medium"
+          >
+            Guardar
+          </button>
+        </div>
+      </Modal>
 
       {/* Modal de Confirmación para Eliminar */}
       {showDeleteModal && paginaAEliminar && (
