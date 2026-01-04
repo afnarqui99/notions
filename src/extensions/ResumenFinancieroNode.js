@@ -24,3 +24,6 @@ export const ResumenFinancieroNode = Node.create({
   }
 });
 
+
+
+

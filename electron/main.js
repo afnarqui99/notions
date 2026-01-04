@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell } from 'electron';
+import { app, BrowserWindow, shell, Tray, Menu, nativeImage, Notification } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import AutoLaunch from 'auto-launch';
@@ -23,8 +23,87 @@ try {
 }
 
 let mainWindow;
+let tray = null;
+let isQuitting = false;
+
+// Prevenir múltiples instancias
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  // Si ya hay una instancia corriendo, enfocar esa ventana y salir
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    // Si se intenta abrir otra instancia, enfocar la ventana existente
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    } else {
+      createWindow();
+    }
+  });
+}
+
+function createTray() {
+  const iconPath = path.join(__dirname, '../build/icon.ico');
+  const icon = nativeImage.createFromPath(iconPath);
+  
+  // Redimensionar el icono para la bandeja (16x16 o 32x32)
+  const trayIcon = icon.resize({ width: 16, height: 16 });
+  
+  tray = new Tray(trayIcon);
+  
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: 'Mostrar',
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.focus();
+        } else {
+          createWindow();
+        }
+      }
+    },
+    {
+      label: 'Ocultar',
+      click: () => {
+        if (mainWindow) {
+          mainWindow.hide();
+        }
+      }
+    },
+    { type: 'separator' },
+    {
+      label: 'Salir',
+      click: () => {
+        isQuitting = true;
+        app.quit();
+      }
+    }
+  ]);
+  
+  tray.setToolTip('Notion Local Editor');
+  tray.setContextMenu(contextMenu);
+  
+  // Mostrar ventana al hacer doble clic en el icono
+  tray.on('double-click', () => {
+    if (mainWindow) {
+      mainWindow.show();
+      mainWindow.focus();
+    } else {
+      createWindow();
+    }
+  });
+}
 
 function createWindow() {
+  // Si ya existe una ventana, solo enfocarla
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+    return;
+  }
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -80,25 +159,82 @@ function createWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+  
+  // Minimizar a la bandeja en lugar de cerrar
+  mainWindow.on('close', (event) => {
+    if (!isQuitting) {
+      event.preventDefault();
+      mainWindow.hide();
+    }
+  });
+  
+  // Escuchar mensajes del renderer para mostrar notificaciones nativas
+  mainWindow.webContents.on('ipc-message', (event, channel, ...args) => {
+    if (channel === 'show-native-notification') {
+      const [title, body, eventId] = args;
+      showNativeNotification(title, body, eventId);
+    }
+  });
+}
+
+// Función para mostrar notificación nativa del sistema
+function showNativeNotification(title, body, eventId = null) {
+  if (!Notification.isSupported()) {
+    console.log('Las notificaciones no están soportadas en este sistema');
+    return;
+  }
+  
+  const notification = new Notification({
+    title: title,
+    body: body,
+    icon: path.join(__dirname, '../build/icon.ico'),
+    silent: false
+  });
+  
+  notification.show();
+  
+  // Si hay un evento asociado, guardar el ID para referencia
+  if (eventId) {
+    notification.on('click', () => {
+      if (mainWindow) {
+        mainWindow.show();
+        mainWindow.focus();
+        // Enviar mensaje al renderer para abrir el evento
+        mainWindow.webContents.send('notification-clicked', eventId);
+      }
+    });
+  }
 }
 
 // Este método se llamará cuando Electron haya terminado de inicializarse
 app.whenReady().then(() => {
+  // Solicitar permisos para notificaciones
+  if (process.platform === 'win32') {
+    app.setAppUserModelId('com.notionlocaleditor.app');
+  }
+  
   createWindow();
+  createTray();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
+    } else if (mainWindow) {
+      mainWindow.show();
+      mainWindow.focus();
     }
   });
 });
 
 // Salir cuando todas las ventanas estén cerradas
 app.on('window-all-closed', () => {
-  // En macOS, las aplicaciones normalmente permanecen activas hasta que el usuario cierra explícitamente
-  if (process.platform !== 'darwin') {
+  // NO cerrar la aplicación, mantenerla en segundo plano para notificaciones
+  // Solo cerrar si isQuitting es true (usuario eligió "Salir" desde el menú)
+  if (isQuitting) {
     app.quit();
   }
+  // En macOS, las aplicaciones normalmente permanecen activas
+  // En Windows/Linux, mantenemos la app corriendo en segundo plano
 });
 
 // Manejar el protocolo de archivos (opcional, para abrir archivos con la app)

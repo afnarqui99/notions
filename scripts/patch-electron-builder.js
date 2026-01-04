@@ -26,3 +26,6 @@ console.log('El error de enlaces simbólicos no debería afectar la generación 
 
 
 
+
+
+

@@ -12,6 +12,7 @@ import { TablaNotionNode } from "../extensions/TablaNotionNode";
 import { GaleriaImagenesNode } from "../extensions/GaleriaImagenesNode";
 import { GaleriaArchivosNode } from "../extensions/GaleriaArchivosNode";
 import { ResumenFinancieroNode } from "../extensions/ResumenFinancieroNode";
+import { CalendarNode } from "../extensions/CalendarNode";
 import TableHeader from "@tiptap/extension-table-header";
 import { ImageExtended } from "../extensions/ImageExtended";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -377,6 +378,7 @@ export default function LocalEditor({ onShowConfig }) {
       GaleriaImagenesNode,
       GaleriaArchivosNode,
       ResumenFinancieroNode,
+      CalendarNode,
       Heading.configure({ levels: [1, 2, 3, 4, 5, 6] }),
       Underline,
       TextStyle,

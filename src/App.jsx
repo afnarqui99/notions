@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import ConfigDashboard from './components/ConfigDashboard';
 import LocalEditor from './components/LocalEditor';
+import NotificationContainer from './components/NotificationContainer';
 import LocalStorageService from './services/LocalStorageService';
+import NotificationService from './services/NotificationService';
 
 function App() {
   const [showConfig, setShowConfig] = useState(false);
@@ -49,16 +51,25 @@ function App() {
   }, []);
 
   // Renderizar directamente sin Router para simplificar
-  if (showConfig) {
-    return <ConfigDashboard onConfigSaved={handleConfigSaved} />;
-  } else if (configReady) {
-    return <LocalEditor onShowConfig={handleShowConfig} />;
-  } else {
-    return <ConfigDashboard onConfigSaved={handleConfigSaved} />;
-  }
+  return (
+    <>
+      {showConfig ? (
+        <ConfigDashboard onConfigSaved={handleConfigSaved} />
+      ) : configReady ? (
+        <>
+          <LocalEditor onShowConfig={handleShowConfig} />
+          <NotificationContainer />
+        </>
+      ) : (
+        <ConfigDashboard onConfigSaved={handleConfigSaved} />
+      )}
+    </>
+  );
 }
 
 export default App;
+
+
 
 
 
