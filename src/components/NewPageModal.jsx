@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { FileText, X, Plus, Smile } from 'lucide-react';
 import EmojiPicker from './EmojiPicker';
+import TagSelector from './TagSelector';
 
 export default function NewPageModal({ isOpen, onClose, onCreate }) {
   const [titulo, setTitulo] = useState('');
   const [mostrarEmojiPicker, setMostrarEmojiPicker] = useState(false);
+  const [selectedTags, setSelectedTags] = useState([]);
   const emojiPickerRef = useRef(null);
   const emojiButtonRef = useRef(null);
 
@@ -12,6 +14,7 @@ export default function NewPageModal({ isOpen, onClose, onCreate }) {
     if (isOpen) {
       setTitulo('');
       setMostrarEmojiPicker(false);
+      setSelectedTags([]);
     }
   }, [isOpen]);
 
@@ -86,8 +89,9 @@ export default function NewPageModal({ isOpen, onClose, onCreate }) {
     e.preventDefault();
     if (titulo.trim()) {
       const emojiExtraido = extraerEmojiDelTitulo(titulo.trim());
-      onCreate(titulo.trim(), emojiExtraido);
+      onCreate(titulo.trim(), emojiExtraido, selectedTags);
       setTitulo('');
+      setSelectedTags([]);
       onClose();
     }
   };
@@ -165,6 +169,18 @@ export default function NewPageModal({ isOpen, onClose, onCreate }) {
             <p className="mt-2 text-xs text-gray-500">
               Presiona <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-300 rounded text-xs">Ctrl + Enter</kbd> para crear rápidamente
             </p>
+          </div>
+
+          {/* Tags */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Tags
+            </label>
+            <TagSelector
+              selectedTags={selectedTags}
+              onChange={setSelectedTags}
+              allowCreate={true}
+            />
           </div>
 
           {/* Footer */}

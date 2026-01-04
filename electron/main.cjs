@@ -6,7 +6,7 @@ const AutoLaunch = require('auto-launch');
 let autoLauncher;
 try {
   autoLauncher = new AutoLaunch({
-    name: 'Notion Local Editor',
+    name: 'Notas afnarqui',
     path: app.getPath('exe'),
   });
 
@@ -112,7 +112,7 @@ function createTray() {
     }
   ]);
   
-  tray.setToolTip('Notion Local Editor');
+  tray.setToolTip('Notas afnarqui');
   tray.setContextMenu(contextMenu);
   
   // Mostrar ventana al hacer doble clic en el icono

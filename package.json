@@ -52,7 +52,7 @@
   },
   "build": {
     "appId": "com.notion.local.editor",
-    "productName": "Notion Local Editor",
+    "productName": "Notas afnarqui",
     "directories": {
       "output": "release",
       "buildResources": "build"
@@ -91,7 +91,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Notion afn",
+      "shortcutName": "Notas afnarqui",
       "include": "build/installer.nsh",
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico"
