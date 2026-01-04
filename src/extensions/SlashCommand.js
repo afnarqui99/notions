@@ -216,6 +216,26 @@ export const SlashCommand = Extension.create({
   },
 },
           {
+  label: "Calendario",
+  description: "Insertar calendario interactivo con eventos y notificaciones",
+  icon: "📅",
+  keywords: ["calendar", "calendario", "eventos", "fechas", "notificaciones"],
+  command: ({ editor, range }) => {
+    // Generar UUID para el calendario
+    const calendarId = typeof crypto !== 'undefined' && crypto.randomUUID 
+      ? crypto.randomUUID()
+      : 'cal-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+    
+    editor.chain().focus().deleteRange(range).insertContent({
+      type: 'calendar',
+      attrs: {
+        calendarId: calendarId,
+        viewMode: 'month'
+      }
+    }).run();
+  },
+},
+          {
   label: 'Lista numerada',
   description: '1. Item numerado',
   icon: '🔢',
@@ -624,6 +644,8 @@ function updatePopupPosition(popup, clientRect) {
   popup.style.top = `${rect.top + rect.height + window.scrollY + 6}px`;
   popup.style.zIndex = '9999';
 }
+
+
 
 
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { NodeViewWrapper } from "@tiptap/react";
 import {
   Chart as ChartJS,
@@ -31,7 +31,7 @@ ChartJS.register(
   ArcElement
 );
 
-export default function ResumenFinancieroStyle({ node, updateAttributes }) {
+export default function ResumenFinancieroStyle({ node, updateAttributes, editor }) {
   const [datosTablas, setDatosTablas] = useState({});
   const [cargando, setCargando] = useState(true);
   const [graficasExpandidas, setGraficasExpandidas] = useState(false); // Por defecto colapsadas
@@ -41,28 +41,26 @@ export default function ResumenFinancieroStyle({ node, updateAttributes }) {
     cargarDatosTablas();
     
     // Escuchar cambios en las tablas
-    const handler = () => {
-      // Agregar un delay para dar tiempo al guardado automático (cada 30 segundos)
-      // Intentar múltiples veces para asegurar que los datos se hayan guardado
-      let intentos = 0;
-      const maxIntentos = 3;
-      const intervalo = 500; // 500ms entre intentos
-      
-      const intentarCargar = () => {
-        intentos++;
+    let timeoutId = null;
+    const handler = (event) => {
+      // Cancelar timeout anterior si existe para evitar múltiples ejecuciones
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      // Agregar un delay pequeño para evitar recargas excesivas
+      timeoutId = setTimeout(() => {
         cargarDatosTablas();
-        
-        if (intentos < maxIntentos) {
-          setTimeout(intentarCargar, intervalo);
-        }
-      };
-      
-      // Primer intento inmediato
-      setTimeout(intentarCargar, 100);
+        timeoutId = null;
+      }, 500);
     };
     window.addEventListener('tablaActualizada', handler);
-    return () => window.removeEventListener('tablaActualizada', handler);
-  }, []);
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      window.removeEventListener('tablaActualizada', handler);
+    };
+  }, [editor]);
 
   const cargarDatosTablas = async () => {
     setCargando(true);
@@ -71,14 +69,6 @@ export default function ResumenFinancieroStyle({ node, updateAttributes }) {
       const paginaId = PageContext.getCurrentPageId();
       
       if (!paginaId) {
-        setCargando(false);
-        return;
-      }
-
-      // Primero cargar el contenido de la página para verificar qué tablas realmente existen
-      const paginaData = await LocalStorageService.readJSONFile(`${paginaId}.json`, 'data');
-      if (!paginaData || !paginaData.contenido) {
-        setDatosTablas({});
         setCargando(false);
         return;
       }
@@ -105,82 +95,181 @@ export default function ResumenFinancieroStyle({ node, updateAttributes }) {
         return tablasEncontradas;
       };
 
-      // Obtener todas las tablas que realmente existen en el contenido
-      const tablasEnContenido = encontrarTodasLasTablasEnContenido(paginaData.contenido);
-      const tableIdsEnContenido = new Set(tablasEnContenido.map(t => t.tableId));
+      // Intentar obtener el contenido del editor directamente (estado actual)
+      let contenidoEditor = null;
+      if (editor) {
+        try {
+          contenidoEditor = editor.getJSON();
+        } catch (error) {
+          // Si falla, usar el JSON guardado como respaldo
+        }
+      }
 
-      // Obtener todas las tablas financieras de esta página del registro
-      const todasLasTablas = TableRegistryService.getTablesByPage(paginaId);
-      const tablasFinancieras = todasLasTablas.filter(t => 
-        t.comportamiento === 'financiero' && 
-        ['Ingresos', 'Egresos', 'Deudas'].includes(t.nombre) &&
-        tableIdsEnContenido.has(t.tableId) // Solo considerar tablas que realmente existen en el contenido
-      );
+      // Si no hay editor o falló, cargar desde el JSON guardado
+      if (!contenidoEditor) {
+        const paginaData = await LocalStorageService.readJSONFile(`${paginaId}.json`, 'data');
+        contenidoEditor = paginaData?.contenido || null;
+      }
+
+      if (!contenidoEditor) {
+        setDatosTablas({});
+        setCargando(false);
+        return;
+      }
+
+      // Obtener todas las tablas que realmente existen en el contenido
+      const tablasEnContenido = encontrarTodasLasTablasEnContenido(contenidoEditor);
+      const tableIdsEnContenido = new Set(tablasEnContenido.map(t => t.tableId));
+      
+      // Log simplificado - solo para debugging si es necesario
+      // console.log('🔍 Tablas encontradas en contenido:', tablasEnContenido.map(t => t.nombre));
+
+      // Filtrar directamente desde las tablas encontradas en el contenido
+      // Esto es más confiable que depender del registro
+      const tablasFinancierasEnContenido = tablasEnContenido.filter(t => {
+        const esFinanciera = t.comportamiento === 'financiero';
+        const nombreValido = ['Ingresos', 'Egresos', 'Deudas'].includes(t.nombre);
+        
+        
+        return esFinanciera && nombreValido;
+      });
+      
+      // Log de tablas que NO pasaron el filtro pero podrían ser relevantes
+      const tablasNoFiltradas = tablasEnContenido.filter(t => {
+        const esFinanciera = t.comportamiento === 'financiero';
+        const nombreValido = ['Ingresos', 'Egresos', 'Deudas'].includes(t.nombre);
+        return (esFinanciera || nombreValido) && !(esFinanciera && nombreValido);
+      });
+      if (tablasNoFiltradas.length > 0) {
+        console.log('⚠️ Tablas que no pasaron el filtro pero podrían ser relevantes:', tablasNoFiltradas.map(t => ({
+          nombre: t.nombre,
+          comportamiento: t.comportamiento,
+          tableId: t.tableId
+        })));
+      }
+      
+      // Usar las tablas del contenido como fuente de verdad
+      const tablasFinancieras = tablasFinancierasEnContenido;
 
       const datos = {};
       for (const tabla of tablasFinancieras) {
         try {
-          // Buscar la tabla en el contenido (ya sabemos que existe porque está en tableIdsEnContenido)
-          const tablaEnContenido = tablasEnContenido.find(t => t.tableId === tabla.tableId);
-          if (tablaEnContenido && tablaEnContenido.attrs) {
+          // La tabla ya viene del contenido, así que podemos usar directamente sus attrs
+          if (tabla.attrs) {
             datos[tabla.nombre] = {
-              filas: tablaEnContenido.attrs.filas || [],
-              propiedades: tablaEnContenido.attrs.propiedades || []
+              filas: tabla.attrs.filas || [],
+              propiedades: tabla.attrs.propiedades || []
             };
+            console.log(`✅ Tabla "${tabla.nombre}" cargada:`, {
+              numFilas: datos[tabla.nombre].filas.length,
+              numPropiedades: datos[tabla.nombre].propiedades?.length || 0
+            });
           }
         } catch (error) {
-          // Error cargando tabla
+          console.error(`Error cargando tabla ${tabla.nombre}:`, error);
         }
       }
-      
+      console.log('📊 DATOS FINALES cargados en setDatosTablas:', Object.keys(datos));
+      console.log('📊 DATOS COMPLETOS:', datos);
       setDatosTablas(datos);
     } catch (error) {
-      // Error cargando datos
+      console.error('❌ Error cargando datos de tablas:', error);
     } finally {
       setCargando(false);
     }
   };
 
-  // Calcular totales
-  const calcularTotal = (nombreTabla, nombreColumna) => {
-    const tabla = datosTablas[nombreTabla];
-    if (!tabla || !tabla.filas || !Array.isArray(tabla.filas)) return 0;
+  // Función auxiliar para obtener un valor numérico de una propiedad
+  const obtenerValorNumerico = (fila, nombrePropiedad) => {
+    if (!fila || !nombrePropiedad) return 0;
     
-    return tabla.filas.reduce((suma, fila) => {
-      // Intentar diferentes formas de acceder al valor
-      let valor = null;
-      
-      // Forma 1: fila.properties[nombreColumna].value
-      if (fila.properties && fila.properties[nombreColumna]) {
-        valor = fila.properties[nombreColumna].value;
+    // Intentar diferentes formas de acceder al valor
+    let valor = null;
+    
+    // Forma 1: fila.properties[nombrePropiedad].value
+    if (fila.properties && fila.properties[nombrePropiedad]) {
+      valor = fila.properties[nombrePropiedad].value;
+    }
+    
+    // Forma 2: fila[nombrePropiedad] (por si está en el nivel superior)
+    if (valor === null || valor === undefined || valor === '') {
+      valor = fila[nombrePropiedad];
+    }
+    
+    // Si el valor es un string, intentar parsearlo
+    if (typeof valor === 'string') {
+      // Si está vacío, retornar 0
+      if (valor.trim() === '') {
+        return 0;
       }
-      
-      // Forma 2: fila[nombreColumna] (por si está en el nivel superior)
-      if (valor === null || valor === undefined) {
-        valor = fila[nombreColumna];
-      }
-      
-      // Si el valor es un string, intentar parsearlo
-      if (typeof valor === 'string') {
-        // Limpiar el string de caracteres no numéricos excepto punto, coma y signo negativo
-        const valorLimpio = valor.replace(/[^\d.,-]/g, '').replace(',', '.');
-        valor = parseFloat(valorLimpio);
-      }
-      
-      if (typeof valor === 'number' && !isNaN(valor)) {
-        return suma + valor;
-      }
-      
-      return suma;
-    }, 0);
+      // Limpiar el string de caracteres no numéricos excepto punto, coma y signo negativo
+      const valorLimpio = valor.replace(/[^\d.,-]/g, '').replace(',', '.');
+      valor = parseFloat(valorLimpio);
+    }
+    
+    // Si el valor es un número válido, retornarlo
+    if (typeof valor === 'number' && !isNaN(valor)) {
+      return valor;
+    }
+    
+    return 0;
   };
 
-  const totalIngresos = calcularTotal('Ingresos', 'Ingresos');
-  const totalEgresos = calcularTotal('Egresos', 'Egresos');
-  const totalDeudas = calcularTotal('Deudas', 'Deudas');
-  const saldoTotal = totalIngresos - totalEgresos;
+  // Calcular totales usando useMemo para que solo se recalculen cuando datosTablas cambie
+  const totales = useMemo(() => {
+    const calcularTotal = (nombreTabla, nombreColumna) => {
+      const tabla = datosTablas[nombreTabla];
+      if (!tabla || !tabla.filas || !Array.isArray(tabla.filas)) {
+        // Si la tabla no existe, retornar 0 (esto es normal si la tabla aún no se ha creado)
+        return 0;
+      }
+      
+      const total = tabla.filas.reduce((suma, fila) => {
+        const valor = obtenerValorNumerico(fila, nombreColumna);
+        return suma + valor;
+      }, 0);
+      
+      return total;
+    };
+
+    // Calcular totales exactamente igual para todas las tablas
+    console.log('💰 Calculando totales. datosTablas disponible:', Object.keys(datosTablas));
+    console.log('💰 Tabla Ingresos en datosTablas:', datosTablas['Ingresos'] ? 'EXISTE' : 'NO EXISTE');
+    console.log('💰 Tabla Egresos en datosTablas:', datosTablas['Egresos'] ? 'EXISTE' : 'NO EXISTE');
+    console.log('💰 Tabla Deudas en datosTablas:', datosTablas['Deudas'] ? 'EXISTE' : 'NO EXISTE');
+    
+    const totalIngresos = calcularTotal('Ingresos', 'Ingresos');
+    const totalEgresos = calcularTotal('Egresos', 'Egresos');
+    const totalDeudas = calcularTotal('Deudas', 'Deudas');
+    
+    console.log('💰 TOTALES calculados:', {
+      ingresos: totalIngresos,
+      egresos: totalEgresos,
+      deudas: totalDeudas,
+      saldo: totalIngresos - totalEgresos
+    });
+    
+    return {
+      ingresos: totalIngresos,
+      egresos: totalEgresos,
+      deudas: totalDeudas,
+      saldo: totalIngresos - totalEgresos
+    };
+  }, [datosTablas]);
+
+  const totalIngresos = totales.ingresos;
+  const totalEgresos = totales.egresos;
+  const totalDeudas = totales.deudas;
+  const saldoTotal = totales.saldo;
 
   // Datos para gráfica de barras
+  console.log('📊 DATOS PARA GRÁFICAS:', {
+    totalIngresos,
+    totalEgresos,
+    totalDeudas,
+    datosBarra: [totalIngresos, totalEgresos, totalDeudas]
+  });
+  
   const datosBarra = {
     labels: ['Ingresos', 'Egresos', 'Deudas'],
     datasets: [{
@@ -356,9 +445,14 @@ export default function ResumenFinancieroStyle({ node, updateAttributes }) {
               tablaDeudas.filas.forEach((fila) => {
                 const personas = fila.properties?.Persona?.value || [];
                 const nombreDeuda = fila.Name || 'Deuda sin nombre';
-                const deudaActual = parseFloat(fila.properties?.Deudas?.value || 0) || 0;
+                const deudaActual = obtenerValorNumerico(fila, 'Deudas');
                 const abonos = fila.abonos || [];
-                const totalAbonado = abonos.reduce((suma, abono) => suma + (parseFloat(abono.monto) || 0), 0);
+                const totalAbonado = abonos.reduce((suma, abono) => {
+                  const montoAbono = typeof abono.monto === 'string' 
+                    ? parseFloat(abono.monto.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0
+                    : (parseFloat(abono.monto) || 0);
+                  return suma + montoAbono;
+                }, 0);
 
                 // Si no hay personas, usar "Sin persona"
                 if (!Array.isArray(personas) || personas.length === 0) {

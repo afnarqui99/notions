@@ -54,12 +54,19 @@
     "appId": "com.notion.local.editor",
     "productName": "Notion Local Editor",
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "build"
     },
     "files": [
       "dist/**/*",
       "electron/**/*",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build/icon.ico",
+        "to": "build/icon.ico"
+      }
     ],
     "win": {
       "target": [
@@ -71,20 +78,23 @@
         }
       ],
       "icon": "build/icon.ico",
-      "sign": false,
+      "sign": null,
       "signingHashAlgorithms": [],
       "verifyUpdateCodeSignature": false,
       "certificateFile": null,
       "certificatePassword": null,
-      "publisherName": null
+      "publisherName": null,
+      "signAndEditExecutable": false
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Notion Local Editor",
-      "include": "build/installer.nsh"
+      "shortcutName": "Notion afn",
+      "include": "build/installer.nsh",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico"
     }
   }
 }

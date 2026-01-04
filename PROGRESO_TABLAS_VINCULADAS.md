@@ -116,3 +116,6 @@ useEffect(() => {
 ## Compilación
 ✅ El código compila correctamente sin errores
 
+
+
+
