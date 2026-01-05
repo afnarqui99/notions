@@ -17,16 +17,16 @@ Seguimiento del progreso de implementación de las mejoras del roadmap.
 - [ ] Tests y validación (opcional)
 - **Progreso: 100%** ✅
 
-### 2. Plantillas (Templates) ⏳
-- [ ] Crear estructura de datos para plantillas
-- [ ] Crear carpeta `templates/` con plantillas JSON
-- [ ] Crear componente `TemplateSelector.jsx`
-- [ ] Crear modal para seleccionar plantilla
-- [ ] Implementar comando `/template` en el editor
-- [ ] Agregar función "Guardar como plantilla"
-- [ ] Implementar exportar/importar plantillas
-- [ ] Tests y validación
-- **Progreso: 0%**
+### 2. Plantillas (Templates) ✅ COMPLETADO
+- [x] Crear estructura de datos para plantillas
+- [x] Crear carpeta `templates/` con plantillas JSON
+- [x] Crear componente `TemplateSelector.jsx`
+- [x] Crear modal para seleccionar plantilla
+- [x] Implementar comando `/template` en el editor
+- [x] Agregar función "Guardar como plantilla"
+- [x] Implementar exportar/importar plantillas
+- [ ] Tests y validación (opcional)
+- **Progreso: 100%** ✅
 
 ### 3. Sistema de Tags/Labels ✅ COMPLETADO
 - [x] Extender estructura de datos de páginas con campo `tags`
@@ -41,15 +41,15 @@ Seguimiento del progreso de implementación de las mejoras del roadmap.
 - [ ] Tests y validación (opcional)
 - **Progreso: 100%** ✅
 
-### 4. Modo Oscuro/Claro ⏳
-- [ ] Configurar variables CSS para temas
-- [ ] Crear contexto `ThemeContext.jsx`
-- [ ] Implementar toggle de tema
-- [ ] Agregar preferencia persistente en localStorage
-- [ ] Agregar transición suave entre temas
-- [ ] Aplicar tema a todos los componentes
-- [ ] Tests y validación
-- **Progreso: 0%**
+### 4. Modo Oscuro/Claro ✅ COMPLETADO
+- [x] Configurar variables CSS para temas
+- [x] Crear contexto `ThemeContext.jsx`
+- [x] Implementar toggle de tema
+- [x] Agregar preferencia persistente en localStorage
+- [x] Agregar transición suave entre temas
+- [x] Aplicar tema a todos los componentes
+- [ ] Tests y validación (opcional)
+- **Progreso: 100%** ✅
 
 ---
 
@@ -132,11 +132,11 @@ Seguimiento del progreso de implementación de las mejoras del roadmap.
 
 ## 📊 Resumen de Progreso
 
-**Fase 1:** 2/4 completadas (50%)  
+**Fase 1:** 4/4 completadas (100%) ✅  
 **Fase 2:** 0/4 completadas (0%)  
 **Fase 3:** 0/4 completadas (0%)  
 
-**Total General:** 2/12 funcionalidades completadas (17%)
+**Total General:** 4/12 funcionalidades completadas (33%)
 
 ---
 
