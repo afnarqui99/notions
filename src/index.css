@@ -663,3 +663,102 @@ tabla-notion {
   background-color: #f0f0f0;
 }
 
+/* Estilos para drag & drop de bloques */
+.ProseMirror [data-type] {
+  position: relative;
+}
+
+.ProseMirror [data-type]:hover::before {
+  content: '⋮⋮';
+  position: absolute;
+  left: -24px;
+  top: 0;
+  color: #9ca3af;
+  font-size: 18px;
+  line-height: 1.5;
+  cursor: grab;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.ProseMirror [data-type]:hover::before {
+  opacity: 1;
+}
+
+.ProseMirror [data-type]:active {
+  cursor: grabbing;
+}
+
+/* Estilo para bloques siendo arrastrados */
+.ProseMirror .ProseMirror-selectednode {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Indicador de drop zone */
+.ProseMirror .drop-indicator {
+  position: relative;
+}
+
+.ProseMirror .drop-indicator::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background-color: #3b82f6;
+  top: -1px;
+  pointer-events: none;
+}
+
+/* Estilos para comentarios */
+.comment-mark {
+  background-color: #fef3c7;
+  border-bottom: 2px solid #f59e0b;
+  padding: 2px 4px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.dark .comment-mark {
+  background-color: #78350f;
+  border-bottom-color: #f59e0b;
+}
+
+.comment-mark:hover {
+  background-color: #fde68a;
+}
+
+.dark .comment-mark:hover {
+  background-color: #92400e;
+}
+
+.comment-mark.comment-resolved {
+  background-color: #d1fae5;
+  border-bottom-color: #10b981;
+  opacity: 0.7;
+}
+
+.dark .comment-mark.comment-resolved {
+  background-color: #064e3b;
+  border-bottom-color: #10b981;
+}
+
+/* Estilos para comentarios */
+.comment-marker-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.comment-marker {
+  user-select: none;
+}
+
+.comment-thread {
+  position: absolute;
+  z-index: 1000;
+  margin-top: 4px;
+}
+

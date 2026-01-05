@@ -213,16 +213,23 @@ class LocalStorageService {
     });
   }
 
-  // Obtener o crear subdirectorio
-  async getOrCreateSubdirectory(name) {
+  // Obtener o crear subdirectorio (soporta rutas anidadas como 'data/comments')
+  async getOrCreateSubdirectory(path) {
     if (!this.baseDirectoryHandle) {
       throw new Error('No hay directorio base seleccionado');
     }
 
     try {
-      return await this.baseDirectoryHandle.getDirectoryHandle(name, { create: true });
+      const parts = path.split('/').filter(p => p);
+      let currentDir = this.baseDirectoryHandle;
+      
+      for (const part of parts) {
+        currentDir = await currentDir.getDirectoryHandle(part, { create: true });
+      }
+      
+      return currentDir;
     } catch (error) {
-      throw new Error(`Error al crear subdirectorio ${name}: ${error.message}`);
+      throw new Error(`Error al crear subdirectorio ${path}: ${error.message}`);
     }
   }
 
