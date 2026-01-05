@@ -20,7 +20,8 @@ import lowlight from "../extensions/lowlightInstance";
 import { SlashCommand } from "../extensions/SlashCommand";
 import Link from "@tiptap/extension-link";
 import { Toggle } from "../extensions/Toggle";
-import { Settings, Plus, Image as ImageIcon, Paperclip, Download, Trash2, Tag as TagIcon, FileText, Save } from "lucide-react";
+import { Comment } from "../extensions/Comment";
+import { Settings, Plus, Image as ImageIcon, Paperclip, Download, Trash2, Tag as TagIcon, FileText, Save, Clock, MessageSquare, MoreVertical } from "lucide-react";
 import LocalStorageService from "../services/LocalStorageService";
 import Modal from "./Modal";
 import ConfigModal from "./ConfigModal";
@@ -37,6 +38,13 @@ import SaveTemplateModal from "./SaveTemplateModal";
 import TemplateSelector from "./TemplateSelector";
 import templateService from "../services/TemplateService";
 import { PageContext } from '../utils/pageContext';
+import ExportModal from "./ExportModal";
+import VersionHistory from "./VersionHistory";
+import VersionService from "../services/VersionService";
+import CommentPanel from "./CommentPanel";
+import QuickNote from "./QuickNote";
+import QuickNotesHistory from "./QuickNotesHistory";
+import KeyboardShortcuts from "./KeyboardShortcuts";
 
 export default function LocalEditor({ onShowConfig }) {
   // Función helper para extraer emoji del título
@@ -105,6 +113,14 @@ export default function LocalEditor({ onShowConfig }) {
   const [showTemplateSelectorForSlash, setShowTemplateSelectorForSlash] = useState(false);
   const templateInsertRange = useRef(null);
   const templateInsertEditor = useRef(null);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [showCommentPanel, setShowCommentPanel] = useState(false);
+  const [showQuickNote, setShowQuickNote] = useState(false);
+  const [showQuickNotesHistory, setShowQuickNotesHistory] = useState(false);
+  const [quickNoteToLoad, setQuickNoteToLoad] = useState(null);
+  const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
+  const ultimoContenidoGuardadoRef = useRef(null);
   const [favoritos, setFavoritos] = useState(() => {
     try {
       const saved = localStorage.getItem('notion-favoritos');
@@ -345,6 +361,33 @@ export default function LocalEditor({ onShowConfig }) {
         ? quitarEmojiDelTitulo(tituloPaginaActual) 
         : (data.titulo || 'Sin título');
       
+      const contenidoSerializado = JSON.stringify(contenidoParaGuardar);
+      
+      // Crear snapshot si hay cambios significativos
+      if (ultimoContenidoGuardadoRef.current !== contenidoSerializado) {
+        try {
+          // Solo crear snapshot si el contenido cambió significativamente
+          const contenidoAnterior = ultimoContenidoGuardadoRef.current;
+          if (!contenidoAnterior || contenidoAnterior !== contenidoSerializado) {
+            await VersionService.createSnapshot(paginaSeleccionada, {
+              ...data,
+              contenido: contenidoParaGuardar,
+              titulo: tituloLimpio,
+              tags: data.tags || [],
+              emoji: data.emoji || null,
+            });
+            
+            // Limpiar versiones antiguas periódicamente
+            if (Math.random() < 0.1) { // 10% de probabilidad en cada guardado
+              await VersionService.cleanupOldVersions(paginaSeleccionada);
+            }
+          }
+        } catch (error) {
+          console.error('Error creando snapshot:', error);
+          // No fallar el guardado si falla el snapshot
+        }
+      }
+      
       await LocalStorageService.saveJSONFile(
         `${paginaSeleccionada}.json`,
         {
@@ -359,6 +402,7 @@ export default function LocalEditor({ onShowConfig }) {
         'data'
       );
 
+      ultimoContenidoGuardadoRef.current = contenidoSerializado;
       setHayCambiosSinGuardar(false);
       
       if (mostrarToast) {
@@ -403,6 +447,7 @@ export default function LocalEditor({ onShowConfig }) {
       TableHeader,
       TableCellExtended,
       ImageExtended,
+      Comment,
       Link.configure({
         openOnClick: false, // Manejar clics manualmente para enlaces internos
         linkOnPaste: true,
@@ -440,9 +485,13 @@ export default function LocalEditor({ onShowConfig }) {
         
         const paginasData = await Promise.all(
           files
-            .filter(f => f.endsWith('.json'))
+            .filter(f => f.endsWith('.json') && !f.startsWith('quick-note-')) // Excluir notas rápidas
             .map(async (file) => {
               const data = await LocalStorageService.readJSONFile(file, 'data');
+              // Verificar que no sea una nota rápida por su estructura
+              if (data && data.id && data.id.startsWith('quick-note-')) {
+                return null; // Excluir notas rápidas
+              }
               return { 
                 id: file.replace('.json', ''), 
                 parentId: data.parentId || null, // Asegurar que parentId existe (null para páginas raíz)
@@ -450,15 +499,18 @@ export default function LocalEditor({ onShowConfig }) {
               };
             })
         );
+        
+        // Filtrar valores nulos (notas rápidas excluidas)
+        const paginasValidas = paginasData.filter(p => p !== null);
 
         // Ordenar por fecha de creación descendente
-        paginasData.sort((a, b) => {
+        paginasValidas.sort((a, b) => {
           const fechaA = new Date(a.creadoEn || 0);
           const fechaB = new Date(b.creadoEn || 0);
           return fechaB - fechaA;
         });
 
-        setPaginas(paginasData);
+        setPaginas(paginasValidas);
       } catch (error) {
         // Error cargando páginas
       }
@@ -514,6 +566,13 @@ export default function LocalEditor({ onShowConfig }) {
     const cargarContenido = async () => {
       try {
         const data = await LocalStorageService.readJSONFile(`${paginaSeleccionada}.json`, 'data');
+        
+        // Verificar que no sea una nota rápida
+        if (data && (data.id?.startsWith('quick-note-') || paginaSeleccionada.startsWith('quick-note-'))) {
+          console.warn('Intento de cargar una nota rápida como página');
+          return; // No cargar notas rápidas como páginas
+        }
+        
         if (data && data.contenido) {
           setTitulo(data.titulo || "");
           setTituloPaginaActual(data.titulo || "");
@@ -609,19 +668,32 @@ export default function LocalEditor({ onShowConfig }) {
     };
   }, [hayCambiosSinGuardar, guardando, editor, paginaSeleccionada, guardarContenido]);
 
-  // Atajo de teclado para búsqueda global (Ctrl+K / Cmd+K)
+  // Atajos de teclado globales
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Ctrl+K (Windows/Linux) o Cmd+K (Mac)
-      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+      // Ctrl+K (Windows/Linux) o Cmd+K (Mac) - Búsqueda global
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k' && !e.shiftKey) {
         e.preventDefault();
         setShowGlobalSearch(true);
+        return;
+      }
+      // Ctrl+Q - Nota rápida (solo Ctrl, no Cmd, para evitar conflictos en Mac)
+      if (e.ctrlKey && !e.metaKey && e.key.toLowerCase() === 'q' && !e.shiftKey) {
+        // Solo prevenir si no estamos en un input/textarea real (no el editor)
+        const target = e.target;
+        const isRealInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
+        if (!isRealInput) {
+          e.preventDefault();
+          e.stopPropagation();
+          setShowQuickNote(true);
+        }
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
+    // Usar capture phase para capturar el evento antes que otros listeners
+    window.addEventListener('keydown', handleKeyDown, true);
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keydown', handleKeyDown, true);
     };
   }, []);
 
@@ -1191,6 +1263,17 @@ export default function LocalEditor({ onShowConfig }) {
       <div className="absolute top-0 left-0 right-0 z-50">
         <StorageWarning onOpenConfig={() => setShowConfigModal(true)} />
       </div>
+
+      {/* Botón de menú en la parte superior derecha */}
+      <div className="absolute top-4 right-4 z-40">
+        <button
+          onClick={() => setShowKeyboardShortcuts(true)}
+          className="p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
+          title="Ver atajos de teclado"
+        >
+          <MoreVertical className="w-5 h-5" />
+        </button>
+      </div>
       
       {/* Sidebar */}
       <Sidebar
@@ -1234,6 +1317,94 @@ export default function LocalEditor({ onShowConfig }) {
           templateInsertEditor.current = null;
         }}
         onSelectTemplate={handleTemplateInsert}
+      />
+
+      {/* Modal de Exportación */}
+      <ExportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        pageTitle={tituloPaginaActual}
+        pageContent={editor?.getJSON()}
+        editor={editor}
+      />
+
+      {/* Panel de Comentarios */}
+      <CommentPanel
+        isOpen={showCommentPanel}
+        onClose={() => setShowCommentPanel(false)}
+        pageId={paginaSeleccionada}
+        editor={editor}
+        onShowToast={setToast}
+      />
+
+      {/* Nota Rápida */}
+      <QuickNote
+        isOpen={showQuickNote}
+        onClose={() => {
+          setShowQuickNote(false);
+          setQuickNoteToLoad(null);
+        }}
+        onShowHistory={() => setShowQuickNotesHistory(true)}
+        initialNote={quickNoteToLoad}
+      />
+
+      {/* Historial de Notas Rápidas */}
+      <QuickNotesHistory
+        isOpen={showQuickNotesHistory}
+        onClose={() => setShowQuickNotesHistory(false)}
+        onOpenNote={(note) => {
+          setQuickNoteToLoad(note);
+          setShowQuickNote(true);
+        }}
+      />
+
+      {/* Atajos de Teclado */}
+      <KeyboardShortcuts
+        isOpen={showKeyboardShortcuts}
+        onClose={() => setShowKeyboardShortcuts(false)}
+        onExecuteAction={(actionId) => {
+          switch (actionId) {
+            case 'globalSearch':
+              setShowGlobalSearch(true);
+              break;
+            case 'quickNote':
+              setShowQuickNote(true);
+              break;
+            case 'quickNotesHistory':
+              setShowQuickNotesHistory(true);
+              break;
+            default:
+              break;
+          }
+        }}
+      />
+
+      {/* Modal de Historial de Versiones */}
+      <VersionHistory
+        isOpen={showVersionHistory}
+        onClose={() => setShowVersionHistory(false)}
+        pageId={paginaSeleccionada}
+        onRestore={async () => {
+          // Recargar la página después de restaurar
+          if (paginaSeleccionada && editor) {
+            try {
+              const data = await LocalStorageService.readJSONFile(`${paginaSeleccionada}.json`, 'data');
+              if (data) {
+                setTituloPaginaActual(data.titulo || '');
+                setPageTags(data.tags || []);
+                
+                // Cargar contenido procesado
+                const contenidoProcesado = await procesarContenidoParaEditor(data.contenido);
+                editor.commands.setContent(contenidoProcesado);
+                ultimoContenidoRef.current = JSON.stringify(contenidoProcesado);
+                ultimoContenidoGuardadoRef.current = JSON.stringify(data.contenido);
+                setHayCambiosSinGuardar(false);
+              }
+            } catch (error) {
+              console.error('Error recargando página:', error);
+            }
+          }
+        }}
       />
 
       {/* Modal de selección */}
@@ -1325,12 +1496,28 @@ export default function LocalEditor({ onShowConfig }) {
               Imagen
             </button>
             <button
-              onClick={exportarAPDF}
+              onClick={() => setShowExportModal(true)}
               className="px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 flex items-center gap-1 text-xs"
-              title="Exportar PDF"
+              title="Exportar página"
             >
               <Download className="w-3 h-3" />
-              PDF
+              Exportar
+            </button>
+            <button
+              onClick={() => setShowCommentPanel(true)}
+              className="px-2 py-1 bg-orange-600 text-white rounded hover:bg-orange-700 flex items-center gap-1 text-xs"
+              title="Comentarios"
+            >
+              <MessageSquare className="w-3 h-3" />
+              Comentarios
+            </button>
+            <button
+              onClick={() => setShowVersionHistory(true)}
+              className="px-2 py-1 bg-gray-600 text-white rounded hover:bg-gray-700 flex items-center gap-1 text-xs"
+              title="Historial de versiones"
+            >
+              <Clock className="w-3 h-3" />
+              Versiones
             </button>
             <button
               onClick={() => setShowSaveTemplateModal(true)}

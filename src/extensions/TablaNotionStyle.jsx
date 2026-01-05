@@ -11,6 +11,10 @@ import GraficasCombinadas from '../components/GraficasCombinadas';
 import LocalStorageService from '../services/LocalStorageService';
 import TableRegistryService from '../services/TableRegistryService';
 import { PageContext } from '../utils/pageContext';
+import TableViewSelector from '../components/TableViewSelector';
+import KanbanView from '../components/KanbanView';
+import TimelineView from '../components/TimelineView';
+import GalleryView from '../components/GalleryView';
 
 // Componente auxiliar para cargar imagen desde filename
 function ImagenDesdeFilename({ fila, className, alt }) {
@@ -460,10 +464,12 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
   // Estado para controlar si la tabla está colapsada
   const [tablaColapsada, setTablaColapsada] = useState(false);
   
-  // Estado para el tipo de vista (table o timeline)
+  // Estado para el tipo de vista (table, kanban, timeline, gallery)
   const [tipoVista, setTipoVista] = useState(() => {
     try {
-      const saved = localStorage.getItem('notion-table-view-type');
+      // Guardar preferencia por tabla usando tableId
+      const key = tableId ? `notion-table-view-type-${tableId}` : 'notion-table-view-type';
+      const saved = localStorage.getItem(key);
       return saved || 'table';
     } catch {
       return 'table';
@@ -479,14 +485,15 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
     }
   }, [usarAnchoCompleto]);
 
-  // Guardar preferencia de tipo de vista
+  // Guardar preferencia de tipo de vista (por tabla)
   useEffect(() => {
     try {
-      localStorage.setItem('notion-table-view-type', tipoVista);
+      const key = tableId ? `notion-table-view-type-${tableId}` : 'notion-table-view-type';
+      localStorage.setItem(key, tipoVista);
     } catch (error) {
       // Error guardando preferencia de vista
     }
-  }, [tipoVista]);
+  }, [tipoVista, tableId]);
 
   // Función para procesar un abono a deuda
   const procesarAbono = async () => {
@@ -3372,7 +3379,7 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
         );
       })()}
       
-      <div className="flex justify-between items-center mb-2 gap-2">
+      <div className="flex justify-between items-center mb-2 gap-2 flex-wrap">
         <input
           type="text"
           placeholder="🔍 Filtrar..."
@@ -3380,7 +3387,11 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
           value={filtro}
           onChange={(e) => setFiltro(e.target.value)}
         />
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          <TableViewSelector
+            currentView={tipoVista}
+            onViewChange={setTipoVista}
+          />
           <button 
             onClick={() => {
               setTablaColapsada(!tablaColapsada);
@@ -3505,6 +3516,32 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                     <span>📄</span>
                     <span>Timeline</span>
                     {tipoVista === 'timeline' && <span className="ml-auto text-xs">✓</span>}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setTipoVista('kanban');
+                      setShowMenuConfig(false);
+                    }}
+                    className={`w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-2 text-sm ${
+                      tipoVista === 'kanban' ? 'bg-gray-50' : ''
+                    }`}
+                  >
+                    <span>📋</span>
+                    <span>Kanban</span>
+                    {tipoVista === 'kanban' && <span className="ml-auto text-xs">✓</span>}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setTipoVista('gallery');
+                      setShowMenuConfig(false);
+                    }}
+                    className={`w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-2 text-sm ${
+                      tipoVista === 'gallery' ? 'bg-gray-50' : ''
+                    }`}
+                  >
+                    <span>🖼️</span>
+                    <span>Galería</span>
+                    {tipoVista === 'gallery' && <span className="ml-auto text-xs">✓</span>}
                   </button>
                 </div>
               {sprintInfo && (
@@ -3775,7 +3812,51 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
       {/* Vista Timeline */}
       {tipoVista === 'timeline' && (
         <div className="w-full overflow-x-auto">
-          {renderTimelineView()}
+          <TimelineView
+            filas={filasFiltradas}
+            propiedades={propiedadesVisibles}
+            onSelectFila={(index) => {
+              const fila = filasFiltradas[index];
+              setFilaSeleccionada(fila);
+              setShowDrawer(true);
+            }}
+          />
+        </div>
+      )}
+
+      {/* Vista Kanban */}
+      {tipoVista === 'kanban' && (
+        <div className="w-full overflow-x-auto">
+          <KanbanView
+            filas={filasFiltradas}
+            propiedades={propiedadesVisibles}
+            onUpdateFila={(index, updatedFila) => {
+              const nuevasFilas = [...filas];
+              nuevasFilas[index] = updatedFila;
+              setFilas(nuevasFilas);
+              guardarFilas(nuevasFilas);
+            }}
+            onSelectFila={(index) => {
+              const fila = filasFiltradas[index];
+              setFilaSeleccionada(fila);
+              setShowDrawer(true);
+            }}
+          />
+        </div>
+      )}
+
+      {/* Vista Gallery */}
+      {tipoVista === 'gallery' && (
+        <div className="w-full">
+          <GalleryView
+            filas={filasFiltradas}
+            propiedades={propiedadesVisibles}
+            onSelectFila={(index) => {
+              const fila = filasFiltradas[index];
+              setFilaSeleccionada(fila);
+              setShowDrawer(true);
+            }}
+          />
         </div>
       )}
 

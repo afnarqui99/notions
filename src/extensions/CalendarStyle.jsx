@@ -6,6 +6,7 @@ import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import CategoryManagerModal from '../components/CategoryManagerModal';
 import EventSelectorModal from '../components/EventSelectorModal';
 import NotificationSettingsModal from '../components/NotificationSettingsModal';
+import CalendarImportExport from '../components/CalendarImportExport';
 import ColombianHolidays from '../services/ColombianHolidays';
 
 // Meses y días de la semana
@@ -402,6 +403,7 @@ export default function CalendarStyle({ node, updateAttributes }) {
   const [eventsForDay, setEventsForDay] = useState([]);
   const [selectedDayForEvents, setSelectedDayForEvents] = useState(null);
   const [showNotificationSettings, setShowNotificationSettings] = useState(false);
+  const [showImportExport, setShowImportExport] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef(null);
   
@@ -1106,6 +1108,16 @@ export default function CalendarStyle({ node, updateAttributes }) {
                     <Settings className="w-4 h-4 text-green-600" />
                     <span>Configurar Notificaciones</span>
                   </button>
+                  <button
+                    onClick={() => {
+                      setShowImportExport(true);
+                      setShowMenu(false);
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    <CalendarIcon className="w-4 h-4 text-blue-600" />
+                    <span>Importar/Exportar</span>
+                  </button>
                 </div>
               )}
             </div>
@@ -1141,6 +1153,11 @@ export default function CalendarStyle({ node, updateAttributes }) {
         />
 
         {/* Modal de configuración de notificaciones */}
+        <CalendarImportExport
+          isOpen={showImportExport}
+          onClose={() => setShowImportExport(false)}
+          calendarId={calendarId}
+        />
         <NotificationSettingsModal
           isOpen={showNotificationSettings}
           onClose={() => setShowNotificationSettings(false)}
