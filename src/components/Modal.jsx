@@ -30,19 +30,19 @@ export default function Modal({
       onClick={onClose}
     >
       <div 
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-hidden"
+        className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-hidden transition-colors"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className={`${bgColorMap[type]} px-6 py-4 flex items-center justify-between border-b`}>
+        <div className={`${bgColorMap[type]} dark:opacity-90 px-6 py-4 flex items-center justify-between border-b border-gray-200 dark:border-gray-700`}>
           <div className="flex items-center gap-3">
             {iconMap[type]}
-            <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{title}</h3>
           </div>
           {showCloseButton && (
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
+              className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
@@ -50,7 +50,7 @@ export default function Modal({
         </div>
 
         {/* Content */}
-        <div className="p-6">
+        <div className="p-6 text-gray-900 dark:text-gray-100">
           {children}
         </div>
       </div>

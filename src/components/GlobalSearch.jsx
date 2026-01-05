@@ -130,12 +130,12 @@ export default function GlobalSearch({ isOpen, onClose, onSelectResult }) {
       
       {/* Modal */}
       <div 
-        className="relative bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-2xl mx-4"
+        className="relative bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-2xl mx-4 transition-colors"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-          <Search className="w-5 h-5 text-gray-400" />
+          <Search className="w-5 h-5 text-gray-400 dark:text-gray-500" />
           <input
             ref={inputRef}
             type="text"
@@ -143,7 +143,7 @@ export default function GlobalSearch({ isOpen, onClose, onSelectResult }) {
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Buscar en páginas, eventos y tablas..."
-            className="flex-1 bg-transparent outline-none text-gray-900 dark:text-gray-100 placeholder-gray-400"
+            className="flex-1 bg-transparent outline-none text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
           />
           <div className="flex items-center gap-2 text-xs text-gray-400">
             <kbd className="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded">Esc</kbd>

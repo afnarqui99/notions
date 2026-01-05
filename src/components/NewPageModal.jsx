@@ -1,12 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
-import { FileText, X, Plus, Smile } from 'lucide-react';
+import { FileText, X, Plus, Smile, LayoutTemplate } from 'lucide-react';
 import EmojiPicker from './EmojiPicker';
 import TagSelector from './TagSelector';
+import TemplateSelector from './TemplateSelector';
+import templateService from '../services/TemplateService';
 
 export default function NewPageModal({ isOpen, onClose, onCreate }) {
   const [titulo, setTitulo] = useState('');
   const [mostrarEmojiPicker, setMostrarEmojiPicker] = useState(false);
   const [selectedTags, setSelectedTags] = useState([]);
+  const [showTemplateSelector, setShowTemplateSelector] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
   const emojiPickerRef = useRef(null);
   const emojiButtonRef = useRef(null);
 
@@ -15,8 +19,24 @@ export default function NewPageModal({ isOpen, onClose, onCreate }) {
       setTitulo('');
       setMostrarEmojiPicker(false);
       setSelectedTags([]);
+      setSelectedTemplate(null);
     }
   }, [isOpen]);
+
+  const handleTemplateSelect = (template) => {
+    setSelectedTemplate(template);
+    if (template.name) {
+      setTitulo(template.name);
+    }
+  };
+
+  const handleCreateWithTemplate = () => {
+    if (selectedTemplate) {
+      onCreate(titulo.trim(), selectedTemplate.icon || null, selectedTags, selectedTemplate.content);
+    } else {
+      onCreate(titulo.trim(), null, selectedTags, null);
+    }
+  };
 
   // Cerrar emoji picker al hacer clic fuera
   useEffect(() => {
@@ -89,9 +109,14 @@ export default function NewPageModal({ isOpen, onClose, onCreate }) {
     e.preventDefault();
     if (titulo.trim()) {
       const emojiExtraido = extraerEmojiDelTitulo(titulo.trim());
-      onCreate(titulo.trim(), emojiExtraido, selectedTags);
+      if (selectedTemplate) {
+        onCreate(titulo.trim(), emojiExtraido || selectedTemplate.icon || null, selectedTags, selectedTemplate.content);
+      } else {
+        onCreate(titulo.trim(), emojiExtraido, selectedTags, null);
+      }
       setTitulo('');
       setSelectedTags([]);
+      setSelectedTemplate(null);
       onClose();
     }
   };
@@ -110,7 +135,7 @@ export default function NewPageModal({ isOpen, onClose, onCreate }) {
       onClick={onClose}
     >
       <div 
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-md"
+        className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md transition-colors"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -130,7 +155,7 @@ export default function NewPageModal({ isOpen, onClose, onCreate }) {
         {/* Content */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div className="relative">
-            <label htmlFor="titulo" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="titulo" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Título de la nueva página
             </label>
             <div className="relative">
@@ -141,7 +166,7 @@ export default function NewPageModal({ isOpen, onClose, onCreate }) {
                 onChange={(e) => setTitulo(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Escribe el título aquí..."
-                className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                className="w-full pl-12 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
                 autoFocus
               />
               <button
@@ -166,14 +191,14 @@ export default function NewPageModal({ isOpen, onClose, onCreate }) {
                 />
               </div>
             )}
-            <p className="mt-2 text-xs text-gray-500">
-              Presiona <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-300 rounded text-xs">Ctrl + Enter</kbd> para crear rápidamente
+            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+              Presiona <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-xs text-gray-900 dark:text-gray-100">Ctrl + Enter</kbd> para crear rápidamente
             </p>
           </div>
 
           {/* Tags */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Tags
             </label>
             <TagSelector
@@ -203,6 +228,13 @@ export default function NewPageModal({ isOpen, onClose, onCreate }) {
           </div>
         </form>
       </div>
+
+      {/* Template Selector Modal */}
+      <TemplateSelector
+        isOpen={showTemplateSelector}
+        onClose={() => setShowTemplateSelector(false)}
+        onSelectTemplate={handleTemplateSelect}
+      />
     </div>
   );
 }

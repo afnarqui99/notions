@@ -29,7 +29,7 @@ export default function PageTagsDisplay({ tags = [] }) {
   if (tagsInfo.length === 0) return null;
 
   return (
-    <div className="px-4 pt-2 pb-1 flex flex-wrap gap-1.5 border-b bg-gray-50">
+    <div className="px-4 pt-2 pb-1 flex flex-wrap gap-1.5 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 transition-colors">
       {tagsInfo.map(tag => (
         <span
           key={tag.id}

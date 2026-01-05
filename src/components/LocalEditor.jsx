@@ -20,7 +20,7 @@ import lowlight from "../extensions/lowlightInstance";
 import { SlashCommand } from "../extensions/SlashCommand";
 import Link from "@tiptap/extension-link";
 import { Toggle } from "../extensions/Toggle";
-import { Settings, Plus, Image as ImageIcon, Paperclip, Download, Trash2, Tag as TagIcon } from "lucide-react";
+import { Settings, Plus, Image as ImageIcon, Paperclip, Download, Trash2, Tag as TagIcon, FileText, Save } from "lucide-react";
 import LocalStorageService from "../services/LocalStorageService";
 import Modal from "./Modal";
 import ConfigModal from "./ConfigModal";
@@ -33,6 +33,9 @@ import TagSelector from "./TagSelector";
 import TagService from "../services/TagService";
 import PageTagsDisplay from "./PageTagsDisplay";
 import GlobalSearch from "./GlobalSearch";
+import SaveTemplateModal from "./SaveTemplateModal";
+import TemplateSelector from "./TemplateSelector";
+import templateService from "../services/TemplateService";
 import { PageContext } from '../utils/pageContext';
 
 export default function LocalEditor({ onShowConfig }) {
@@ -98,6 +101,10 @@ export default function LocalEditor({ onShowConfig }) {
   const ultimoContenidoRef = useRef(null);
   const [sidebarColapsado, setSidebarColapsado] = useState(false);
   const [showGlobalSearch, setShowGlobalSearch] = useState(false);
+  const [showSaveTemplateModal, setShowSaveTemplateModal] = useState(false);
+  const [showTemplateSelectorForSlash, setShowTemplateSelectorForSlash] = useState(false);
+  const templateInsertRange = useRef(null);
+  const templateInsertEditor = useRef(null);
   const [favoritos, setFavoritos] = useState(() => {
     try {
       const saved = localStorage.getItem('notion-favoritos');
@@ -639,7 +646,31 @@ export default function LocalEditor({ onShowConfig }) {
     }
   };
 
-  const crearPagina = async (titulo, emoji = null, parentId = null, tags = []) => {
+  // Escuchar evento para abrir selector de plantillas desde slash command
+  useEffect(() => {
+    const handleOpenTemplateSelector = (e) => {
+      templateInsertRange.current = e.detail.range;
+      templateInsertEditor.current = e.detail.editor;
+      setShowTemplateSelectorForSlash(true);
+    };
+
+    window.addEventListener('open-template-selector', handleOpenTemplateSelector);
+    return () => {
+      window.removeEventListener('open-template-selector', handleOpenTemplateSelector);
+    };
+  }, []);
+
+  // Manejar inserción de plantilla desde slash command
+  const handleTemplateInsert = (template) => {
+    if (templateInsertEditor.current && template.content) {
+      templateInsertEditor.current.chain().focus().insertContent(template.content).run();
+      templateInsertRange.current = null;
+      templateInsertEditor.current = null;
+    }
+    setShowTemplateSelectorForSlash(false);
+  };
+
+  const crearPagina = async (titulo, emoji = null, parentId = null, tags = [], templateContent = null) => {
     if (!titulo || !titulo.trim()) return;
 
     // Extraer emoji si no se pasó explícitamente
@@ -652,16 +683,19 @@ export default function LocalEditor({ onShowConfig }) {
       ? crypto.randomUUID() 
       : `pagina-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     
+    // Usar contenido de plantilla si está disponible, sino contenido vacío
+    const contenido = templateContent || {
+      type: "doc",
+      content: [{ type: "paragraph" }],
+    };
+    
     const nuevaPagina = {
       id,
       titulo: tituloSinEmoji,
       emoji: emojiFinal || null,
       parentId: parentId || null, // ID de la página padre (null para páginas raíz)
       tags: tags || [], // IDs de tags
-      contenido: {
-        type: "doc",
-        content: [{ type: "paragraph" }],
-      },
+      contenido: contenido,
       creadoEn: new Date().toISOString(),
       actualizadoEn: new Date().toISOString(),
     };
@@ -673,7 +707,9 @@ export default function LocalEditor({ onShowConfig }) {
       setPaginaSeleccionada(id);
       setTitulo(tituloSinEmoji);
       setTituloPaginaActual(tituloSinEmoji);
-      editor?.commands.setContent({ type: "doc", content: [{ type: "paragraph" }] });
+      
+      // Cargar el contenido en el editor (incluyendo contenido de plantilla si existe)
+      editor?.commands.setContent(contenido);
     } catch (error) {
       setModalError({ 
         isOpen: true, 
@@ -1150,7 +1186,7 @@ export default function LocalEditor({ onShowConfig }) {
   }, [sidebarColapsado]);
 
   return (
-    <div className="w-full h-screen flex bg-gray-50 relative">
+    <div className="w-full h-screen flex bg-gray-50 dark:bg-gray-900 relative transition-colors">
       {/* Advertencia de almacenamiento - Posicionada de forma absoluta */}
       <div className="absolute top-0 left-0 right-0 z-50">
         <StorageWarning onOpenConfig={() => setShowConfigModal(true)} />
@@ -1181,6 +1217,25 @@ export default function LocalEditor({ onShowConfig }) {
         onSelectResult={handleSearchResultSelect}
       />
 
+      {/* Guardar como Plantilla */}
+      <SaveTemplateModal
+        isOpen={showSaveTemplateModal}
+        onClose={() => setShowSaveTemplateModal(false)}
+        pageTitle={tituloPaginaActual}
+        pageContent={editor?.getJSON() || null}
+      />
+
+      {/* Selector de Plantillas para Slash Command */}
+      <TemplateSelector
+        isOpen={showTemplateSelectorForSlash}
+        onClose={() => {
+          setShowTemplateSelectorForSlash(false);
+          templateInsertRange.current = null;
+          templateInsertEditor.current = null;
+        }}
+        onSelectTemplate={handleTemplateInsert}
+      />
+
       {/* Modal de selección */}
       {selectorAbierto && (
         <div 
@@ -1188,7 +1243,7 @@ export default function LocalEditor({ onShowConfig }) {
           onClick={() => setSelectorAbierto(false)}
         >
           <div 
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[80vh] overflow-hidden" 
+            className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[80vh] overflow-hidden transition-colors" 
             onClick={(e) => e.stopPropagation()}
           >
             <div className="bg-blue-600 text-white p-6 flex items-center justify-between">
@@ -1252,7 +1307,7 @@ export default function LocalEditor({ onShowConfig }) {
         {paginaSeleccionada ? (
           <div className="flex-1 flex flex-col overflow-hidden">
           {/* Barra de herramientas compacta */}
-          <div className="bg-white border-b px-3 py-1 flex gap-1.5 items-center">
+          <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-3 py-1 flex gap-1.5 items-center transition-colors">
             <button
               onClick={insertarArchivo}
               className="px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-1 text-xs"
@@ -1277,11 +1332,19 @@ export default function LocalEditor({ onShowConfig }) {
               <Download className="w-3 h-3" />
               PDF
             </button>
+            <button
+              onClick={() => setShowSaveTemplateModal(true)}
+              className="px-2 py-1 bg-purple-600 text-white rounded hover:bg-purple-700 flex items-center gap-1 text-xs"
+              title="Guardar como plantilla"
+            >
+              <Save className="w-3 h-3" />
+              Plantilla
+            </button>
           </div>
 
           {/* Título compacto con tags */}
           <PageTagsDisplay tags={pageTags} />
-          <div className="border-b bg-white">
+          <div className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 transition-colors">
             <div className="flex items-center gap-2 px-4 py-2">
               <input
                 type="text"
@@ -1289,7 +1352,7 @@ export default function LocalEditor({ onShowConfig }) {
                 onChange={(e) => setTituloPaginaActual(e.target.value)}
                 onBlur={actualizarTitulo}
                 placeholder="Título de la página"
-                className="flex-1 text-xl font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 bg-transparent"
+                className="flex-1 text-xl font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400 bg-transparent text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
               />
               <button
                 onClick={() => {
@@ -1307,14 +1370,14 @@ export default function LocalEditor({ onShowConfig }) {
           </div>
 
           {/* Área de edición */}
-          <div className="flex-1 overflow-y-auto bg-white">
+          <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-900 transition-colors">
             <div className="max-w-4xl mx-auto px-4 py-4">
               <EditorContent editor={editor} className="tiptap" ref={editorRef} />
             </div>
           </div>
         </div>
         ) : (
-          <div className="flex-1 overflow-y-auto bg-gray-50">
+          <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900 transition-colors">
             {/* Mostrar páginas favoritas como cards */}
             {(() => {
               const paginasFavoritas = paginas.filter(p => favoritos.includes(p.id));
@@ -1366,7 +1429,7 @@ export default function LocalEditor({ onShowConfig }) {
                             </button>
                           </div>
                           {pagina.actualizadoEn && (
-                            <p className="text-xs text-gray-500 mt-2">
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
                               Actualizado: {new Date(pagina.actualizadoEn).toLocaleDateString('es-ES', {
                                 year: 'numeric',
                                 month: 'short',
@@ -1375,7 +1438,7 @@ export default function LocalEditor({ onShowConfig }) {
                             </p>
                           )}
                           {pagina.creadoEn && (
-                            <p className="text-xs text-gray-400 mt-1">
+                            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                               Creado: {new Date(pagina.creadoEn).toLocaleDateString('es-ES', {
                                 year: 'numeric',
                                 month: 'short',
@@ -1396,7 +1459,7 @@ export default function LocalEditor({ onShowConfig }) {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                       </svg>
                       <p className="text-lg mb-2">No hay páginas favoritas</p>
-                      <p className="text-sm text-gray-400">Marca páginas como favoritas desde el sidebar para verlas aquí</p>
+                      <p className="text-sm text-gray-400 dark:text-gray-500">Marca páginas como favoritas desde el sidebar para verlas aquí</p>
                     </div>
                   </div>
                 );
@@ -1429,8 +1492,8 @@ export default function LocalEditor({ onShowConfig }) {
           setShowNewPageModal(false);
           setPaginaPadreParaNueva(null);
         }}
-        onCreate={(titulo, emoji, tags) => {
-          crearPagina(titulo, emoji, paginaPadreParaNueva, tags);
+        onCreate={(titulo, emoji, tags, templateContent) => {
+          crearPagina(titulo, emoji, paginaPadreParaNueva, tags, templateContent);
           setPaginaPadreParaNueva(null);
         }}
       />
@@ -1547,14 +1610,14 @@ export default function LocalEditor({ onShowConfig }) {
               {(() => {
                 const paginasHijas = paginaAEliminar ? obtenerPaginasHijas(paginaAEliminar.id, paginas) : [];
                 return (
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                  <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
                     <div className="flex items-start gap-2">
-                      <svg className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
-                      <div className="text-sm text-yellow-800">
+                      <div className="text-sm text-yellow-800 dark:text-yellow-200">
                         <p className="font-medium mb-1">Se eliminará permanentemente:</p>
-                        <ul className="list-disc list-inside space-y-0.5 text-yellow-700">
+                        <ul className="list-disc list-inside space-y-0.5 text-yellow-700 dark:text-yellow-300">
                           <li>La página y todo su contenido</li>
                           {paginasHijas.length > 0 && (
                             <li className="font-semibold">{paginasHijas.length} página(s) hija(s) y su contenido</li>

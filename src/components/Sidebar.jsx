@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Search, Star, ChevronDown, Settings, Plus, Trash2, Github, ChevronRight, Pencil, Tag as TagIcon, X } from 'lucide-react';
+import { Search, Star, ChevronDown, Settings, Plus, Trash2, Github, ChevronRight, Pencil, Tag as TagIcon, X, Moon, Sun } from 'lucide-react';
 import TagService from '../services/TagService';
+import { useTheme } from '../contexts/ThemeContext';
 
 export default function Sidebar({ 
   paginas = [], 
@@ -15,6 +16,7 @@ export default function Sidebar({
   onReordenarPaginas,
   onRenombrarPagina
 }) {
+  const { theme, toggleTheme } = useTheme();
   const [favoritos, setFavoritos] = useState(() => {
     try {
       const saved = localStorage.getItem('notion-favoritos');
@@ -440,8 +442,8 @@ export default function Sidebar({
           onClick={() => onSeleccionarPagina(pagina.id)}
           className={`w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded transition-colors group ${
             paginaSeleccionada === pagina.id
-              ? 'bg-blue-100 text-blue-700'
-              : 'text-gray-700 hover:bg-gray-200'
+              ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+              : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
           } ${estaArrastrando ? 'opacity-50' : ''} ${estaSobre ? 'bg-blue-50 border-t-2 border-blue-500' : ''}`}
           style={{ paddingLeft: `${8 + nivel * 16}px`, cursor: filtroPagina ? 'default' : 'grab' }}
         >
@@ -452,7 +454,7 @@ export default function Sidebar({
                 e.stopPropagation();
                 toggleExpansion(pagina.id);
               }}
-              className="p-0.5 hover:bg-gray-300 rounded transition-colors flex-shrink-0 cursor-pointer"
+              className="p-0.5 hover:bg-gray-300 dark:hover:bg-gray-700 rounded transition-colors flex-shrink-0 cursor-pointer"
               title={estaExpandida ? "Colapsar" : "Expandir"}
               role="button"
               tabIndex={0}
@@ -505,7 +507,7 @@ export default function Sidebar({
                   setNuevoNombre('');
                 }}
                 onClick={(e) => e.stopPropagation()}
-                className="w-full text-left bg-white border border-blue-500 rounded px-1 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full text-left bg-white dark:bg-gray-800 border border-blue-500 dark:border-blue-400 rounded px-1 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400 text-gray-900 dark:text-gray-100"
                 autoFocus
               />
             ) : (
@@ -582,7 +584,7 @@ export default function Sidebar({
                   }
                 }}
               >
-                <Plus className="w-3 h-3 text-gray-400 hover:text-blue-600" />
+                <Plus className="w-3 h-3 text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400" />
               </div>
               <div
                 onClick={(e) => {
@@ -601,7 +603,7 @@ export default function Sidebar({
                   }
                 }}
               >
-                <Star className={`w-3 h-3 ${favoritos.includes(pagina.id) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-400'}`} />
+                <Star className={`w-3 h-3 ${favoritos.includes(pagina.id) ? 'fill-yellow-400 text-yellow-400 dark:fill-yellow-500 dark:text-yellow-500' : 'text-gray-400 dark:text-gray-500'}`} />
               </div>
               {onEliminarPagina && (
                 <div
@@ -621,7 +623,7 @@ export default function Sidebar({
                     }
                   }}
                 >
-                  <Trash2 className="w-3 h-3 text-gray-400 hover:text-red-600" />
+                  <Trash2 className="w-3 h-3 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400" />
                 </div>
               )}
             </div>
@@ -642,7 +644,7 @@ export default function Sidebar({
 
   if (sidebarColapsado) {
     return (
-      <div className="w-16 bg-gray-50 border-r border-gray-200 flex flex-col items-center py-2 gap-2">
+      <div className="w-16 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 flex flex-col items-center py-2 gap-2 transition-colors">
         <button
           onClick={() => setSidebarColapsado(false)}
           className="p-2 hover:bg-gray-200 rounded transition-colors"
@@ -669,7 +671,7 @@ export default function Sidebar({
   }
 
   return (
-    <div className="w-64 bg-gray-50 border-r border-gray-200 flex flex-col h-screen overflow-hidden">
+    <div className="w-64 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 flex flex-col h-screen overflow-hidden transition-colors">
       {/* Header con perfil */}
       <div className="p-3 border-b border-gray-200">
         <div className="flex items-center gap-2 mb-2">
@@ -677,10 +679,10 @@ export default function Sidebar({
             A
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium text-gray-900 truncate">afnarqui job</div>
+            <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">afnarqui job</div>
           </div>
           <button
-            className="p-1 hover:bg-gray-200 rounded transition-colors"
+            className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
             title="Opciones"
           >
             <ChevronDown className="w-4 h-4 text-gray-500" />
@@ -697,7 +699,7 @@ export default function Sidebar({
             placeholder="Search"
             value={filtroPagina}
             onChange={(e) => setFiltroPagina(e.target.value)}
-            className="w-full pl-8 pr-2 py-1.5 text-sm bg-white border border-gray-300 rounded hover:border-gray-400 focus:outline-none focus:border-blue-500"
+            className="w-full pl-8 pr-2 py-1.5 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded hover:border-gray-400 dark:hover:border-gray-500 focus:outline-none focus:border-blue-500 dark:focus:border-blue-400 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
           />
         </div>
       </div>
@@ -709,7 +711,7 @@ export default function Sidebar({
           <div className="mt-4 px-2">
             <button
               onClick={() => setSeccionesAbiertas(prev => ({ ...prev, favoritos: !prev.favoritos }))}
-              className="w-full flex items-center gap-1 px-2 py-1 text-xs font-semibold text-gray-500 hover:text-gray-700 transition-colors"
+              className="w-full flex items-center gap-1 px-2 py-1 text-xs font-semibold text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
             >
               <ChevronDown className={`w-3 h-3 transition-transform ${seccionesAbiertas.favoritos ? '' : '-rotate-90'}`} />
               <span>Favorites</span>
@@ -729,7 +731,7 @@ export default function Sidebar({
           <div className="mt-4 px-2">
             <button
               onClick={() => setSeccionesAbiertas(prev => ({ ...prev, tags: !prev.tags }))}
-              className="w-full flex items-center gap-1 px-2 py-1 text-xs font-semibold text-gray-500 hover:text-gray-700 transition-colors"
+              className="w-full flex items-center gap-1 px-2 py-1 text-xs font-semibold text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
             >
               <ChevronDown className={`w-3 h-3 transition-transform ${seccionesAbiertas.tags ? '' : '-rotate-90'}`} />
               <span>Tags</span>
@@ -739,7 +741,7 @@ export default function Sidebar({
                 {filtroTag && (
                   <button
                     onClick={() => setFiltroTag(null)}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-gray-600 hover:bg-gray-200 rounded transition-colors"
+                    className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
                   >
                     <X className="w-3 h-3" />
                     <span>Limpiar filtro</span>
@@ -782,7 +784,7 @@ export default function Sidebar({
             </button>
             <button
               onClick={() => onNuevaPagina && onNuevaPagina(null)}
-              className="p-1 hover:bg-gray-200 rounded transition-colors"
+              className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
               title="Nueva página"
             >
               <Plus className="w-3 h-3 text-gray-500" />
@@ -804,26 +806,34 @@ export default function Sidebar({
       </div>
 
       {/* Footer con configuración */}
-      <div className="p-2 border-t border-gray-200">
+      <div className="p-2 border-t border-gray-200 dark:border-gray-700">
+        <button
+          onClick={toggleTheme}
+          className="w-full flex items-center gap-2 px-2 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+          title={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+        >
+          {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          <span>{theme === 'dark' ? 'Modo Claro' : 'Modo Oscuro'}</span>
+        </button>
         <a
           href="https://github.com/afnarqui99/notions"
           target="_blank"
           rel="noopener noreferrer"
-          className="w-full flex items-center gap-2 px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-200 rounded transition-colors"
+          className="w-full flex items-center gap-2 px-2 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors mt-1"
         >
           <Github className="w-4 h-4" />
           <span>Repository</span>
         </a>
         <button
           onClick={onShowConfig}
-          className="w-full flex items-center gap-2 px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-200 rounded transition-colors mt-1"
+          className="w-full flex items-center gap-2 px-2 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors mt-1"
         >
           <Settings className="w-4 h-4" />
           <span>Settings</span>
         </button>
         <button
           onClick={() => setSidebarColapsado(true)}
-          className="w-full flex items-center gap-2 px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-200 rounded transition-colors mt-1"
+          className="w-full flex items-center gap-2 px-2 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors mt-1"
         >
           <ChevronDown className="w-4 h-4 rotate-90" />
           <span>Collapse</span>

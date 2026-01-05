@@ -1,6 +1,7 @@
 import { Extension } from '@tiptap/core';
 import Suggestion from '@tiptap/suggestion';
 import LocalStorageService from '../services/LocalStorageService';
+import templateService from '../services/TemplateService';
 
 export const SlashCommand = Extension.create({
   name: 'slash-command',
@@ -233,6 +234,20 @@ export const SlashCommand = Extension.create({
         viewMode: 'month'
       }
     }).run();
+  },
+},
+          {
+  label: "Plantilla",
+  description: "Insertar contenido de una plantilla",
+  icon: "📄",
+  keywords: ["template", "plantilla", "template"],
+  command: ({ editor, range }) => {
+    // Disparar evento para abrir el selector de plantillas
+    window.dispatchEvent(new CustomEvent('open-template-selector', {
+      detail: { editor, range }
+    }));
+    // Eliminar el comando slash
+    editor.chain().focus().deleteRange(range).run();
   },
 },
           {
