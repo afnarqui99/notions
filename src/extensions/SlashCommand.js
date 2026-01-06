@@ -385,6 +385,181 @@ export const SlashCommand = Extension.create({
   },
 },
 {
+  label: 'Lista de tareas',
+  description: '☑ Lista con checkboxes interactivos',
+  icon: '☑',
+  keywords: ['todo', 'task', 'tarea', 'checkbox', 'checklist'],
+  command: ({ editor, range }) => {
+    editor.chain().focus().deleteRange(range).run();
+    
+    // Si estamos dentro de una lista, salir de ella primero
+    const { state } = editor;
+    const { $from } = state.selection;
+    
+    // Verificar si estamos dentro de un listItem
+    let isInList = false;
+    for (let depth = $from.depth; depth > 0; depth--) {
+      const node = $from.node(depth);
+      if (node.type.name === 'listItem' || node.type.name === 'taskItem') {
+        isInList = true;
+        break;
+      }
+    }
+    
+    if (isInList) {
+      // Salir de la lista: insertar un párrafo después de la lista actual
+      editor.chain().focus().command(({ tr, dispatch }) => {
+        const { $from } = tr.selection;
+        let targetPos = $from.pos;
+        
+        // Buscar hacia arriba para encontrar el final de la lista
+        for (let depth = $from.depth; depth > 0; depth--) {
+          const node = $from.node(depth);
+          if (node.type.name === 'bulletList' || node.type.name === 'orderedList' || node.type.name === 'taskList') {
+            // Encontrar el final de esta lista
+            const listStart = $from.start(depth);
+            const listEnd = listStart + node.nodeSize;
+            targetPos = listEnd;
+            break;
+          }
+        }
+        
+        if (dispatch && targetPos !== $from.pos) {
+          tr.setSelection(tr.doc.resolve(targetPos));
+        }
+        return true;
+      }).run();
+      
+      // Insertar un párrafo vacío para separar
+      editor.chain().focus().insertContent({ type: 'paragraph', content: [] }).run();
+    }
+    
+    // Insertar una lista de tareas directamente
+    editor.chain().focus().insertContent({
+      type: 'taskList',
+      content: [
+        {
+          type: 'taskItem',
+          attrs: { checked: false },
+          content: [
+            {
+              type: 'paragraph',
+              content: []
+            }
+          ]
+        }
+      ]
+    }).run();
+  },
+},
+{
+  label: 'Convertir a lista de tareas',
+  description: 'Convertir texto con [x] y [ ] en checkboxes interactivos',
+  icon: '☑',
+  keywords: ['convertir', 'checkbox', 'task', 'todo'],
+  command: ({ editor, range }) => {
+    const { state } = editor;
+    const { $from, $to } = state.selection;
+    
+    // Obtener el texto seleccionado o el párrafo completo
+    let text = '';
+    let startPos = $from.pos;
+    let endPos = $to.pos;
+    
+    if (startPos === endPos) {
+      // Si no hay selección, obtener el párrafo actual
+      const paragraph = $from.node(-1);
+      if (paragraph) {
+        text = paragraph.textContent;
+        startPos = $from.start(-1);
+        endPos = $from.end(-1);
+      }
+    } else {
+      text = state.doc.textBetween(startPos, endPos);
+    }
+    
+    // Buscar líneas que contengan [x] o [ ]
+    const lines = text.split('\n');
+    const taskItems = [];
+    
+    lines.forEach((line, index) => {
+      const trimmedLine = line.trim();
+      const checkboxMatch = trimmedLine.match(/^\[([ x])\]\s*(.+)$/);
+      
+      if (checkboxMatch) {
+        const isChecked = checkboxMatch[1] === 'x';
+        const taskText = checkboxMatch[2];
+        taskItems.push({
+          checked: isChecked,
+          text: taskText
+        });
+      } else if (trimmedLine) {
+        // Si no tiene checkbox pero tiene texto, crear un task item sin marcar
+        taskItems.push({
+          checked: false,
+          text: trimmedLine
+        });
+      }
+    });
+    
+    if (taskItems.length === 0) {
+      // Si no se encontraron checkboxes, simplemente insertar una lista de tareas vacía
+      editor.chain().focus().deleteRange(range).insertContent({
+        type: 'taskList',
+        content: [
+          {
+            type: 'taskItem',
+            attrs: { checked: false },
+            content: [
+              {
+                type: 'paragraph',
+                content: []
+              }
+            ]
+          }
+        ]
+      }).run();
+      return;
+    }
+    
+    // Crear la lista de tareas con los items encontrados
+    const taskListContent = taskItems.map(item => ({
+      type: 'taskItem',
+      attrs: { checked: item.checked },
+      content: [
+        {
+          type: 'paragraph',
+          content: item.text ? [{ type: 'text', text: item.text }] : []
+        }
+      ]
+    }));
+    
+    // Reemplazar el texto seleccionado con la lista de tareas
+    editor.chain()
+      .focus()
+      .deleteRange({ from: startPos, to: endPos })
+      .insertContent({
+        type: 'taskList',
+        content: taskListContent
+      })
+      .run();
+  },
+},
+{
+  label: 'Iconos',
+  description: 'Insertar emoji o icono en el texto',
+  icon: '😀',
+  keywords: ['emoji', 'icono', 'icon', 'smile', 'emoticon'],
+  command: ({ editor, range }) => {
+    // Disparar evento para abrir el selector de iconos
+    window.dispatchEvent(new CustomEvent('open-emoji-picker', {
+      detail: { editor, range }
+    }));
+    // Eliminar el comando slash
+    editor.chain().focus().deleteRange(range).run();
+  },
+},
+{
   label: 'To List',
   description: 'Convertir el bloque actual en una lista con viñetas',
   icon: '📝',
@@ -659,6 +834,8 @@ function updatePopupPosition(popup, clientRect) {
   popup.style.top = `${rect.top + rect.height + window.scrollY + 6}px`;
   popup.style.zIndex = '9999';
 }
+
+
 
 
 

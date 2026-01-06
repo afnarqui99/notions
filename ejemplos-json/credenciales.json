@@ -1,0 +1,155 @@
+{
+  "titulo": "Credenciales",
+  "emoji": "🔑",
+  "contenido": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "heading",
+        "attrs": { "level": 1 },
+        "content": [{ "type": "text", "text": "🔑 Credenciales" }]
+      },
+      {
+        "type": "paragraph",
+        "content": [
+          { "type": "text", "text": "IMPORTANTE: Usa bloques desplegables para TODA la información sensible." }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 2 },
+        "content": [{ "type": "text", "text": "🗄️ Bases de Datos" }]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 3 },
+        "content": [{ "type": "text", "text": "PostgreSQL Local" }]
+      },
+      {
+        "type": "bulletList",
+        "content": [
+          {
+            "type": "listItem",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  { "type": "text", "text": "Host: " },
+                  { "type": "text", "marks": [{ "type": "code" }], "text": "localhost" }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "listItem",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  { "type": "text", "text": "Puerto: " },
+                  { "type": "text", "marks": [{ "type": "code" }], "text": "5432" }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "listItem",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  { "type": "text", "text": "Usuario: " },
+                  { "type": "text", "marks": [{ "type": "code" }], "text": "postgres" }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "toggle",
+        "attrs": {
+          "abierto": false,
+          "titulo": "🔒 Contraseña PostgreSQL"
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [
+              { "type": "text", "text": "mi-contraseña-segura-123" }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 2 },
+        "content": [{ "type": "text", "text": "🔌 APIs Externas" }]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 3 },
+        "content": [{ "type": "text", "text": "Stripe" }]
+      },
+      {
+        "type": "toggle",
+        "attrs": {
+          "abierto": false,
+          "titulo": "🔒 API Key Stripe"
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [
+              { "type": "text", "text": "sk_live_..." }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "toggle",
+        "attrs": {
+          "abierto": false,
+          "titulo": "🔒 Webhook Secret Stripe"
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [
+              { "type": "text", "text": "whsec_..." }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "tags": [],
+  "parentId": "credenciales-y-accesos",
+  "creadoEn": "2025-01-20T00:00:00.000Z",
+  "actualizadoEn": "2025-01-20T00:00:00.000Z"
+}
+

@@ -1,0 +1,122 @@
+{
+  "titulo": "Sistema Financiero - Ejemplo",
+  "emoji": "💰",
+  "contenido": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "heading",
+        "attrs": { "level": 1 },
+        "content": [{ "type": "text", "text": "💰 Sistema Financiero - Ejemplo" }]
+      },
+      {
+        "type": "paragraph",
+        "content": [
+          { "type": "text", "text": "Este es un ejemplo del sistema financiero completo con Ingresos, Egresos y Deudas interconectadas." }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": [
+          { "type": "text", "text": "Para crear este sistema desde cero, escribe '/' y busca 'Plantilla Financiero'." }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 2 },
+        "content": [{ "type": "text", "text": "📊 Resumen Financiero" }]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "resumenFinanciero"
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 2 },
+        "content": [{ "type": "text", "text": "💰 Ingresos" }]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "tablaNotion",
+        "attrs": {
+          "nombreTabla": "Ingresos",
+          "comportamiento": "financiero"
+        }
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 2 },
+        "content": [{ "type": "text", "text": "💸 Egresos" }]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "tablaNotion",
+        "attrs": {
+          "nombreTabla": "Egresos",
+          "comportamiento": "financiero"
+        }
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 2 },
+        "content": [{ "type": "text", "text": "💳 Deudas" }]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "tablaNotion",
+        "attrs": {
+          "nombreTabla": "Deudas",
+          "comportamiento": "financiero"
+        }
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 2 },
+        "content": [{ "type": "text", "text": "📝 Notas" }]
+      },
+      {
+        "type": "paragraph",
+        "content": [
+          { "type": "text", "text": "Las tablas financieras están interconectadas. Los cambios en una tabla se reflejan automáticamente en el resumen financiero." }
+        ]
+      }
+    ]
+  },
+  "tags": [],
+  "parentId": null,
+  "creadoEn": "2025-01-20T00:00:00.000Z",
+  "actualizadoEn": "2025-01-20T00:00:00.000Z"
+}
+

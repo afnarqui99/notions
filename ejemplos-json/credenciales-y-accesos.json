@@ -1,0 +1,67 @@
+{
+  "titulo": "Credenciales y Accesos",
+  "emoji": "🔐",
+  "contenido": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "heading",
+        "attrs": { "level": 1 },
+        "content": [{ "type": "text", "text": "🔐 Credenciales y Accesos" }]
+      },
+      {
+        "type": "paragraph",
+        "content": [
+          { "type": "text", "text": "Gestión centralizada de credenciales, URLs y accesos a servicios." }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "bulletList",
+        "content": [
+          {
+            "type": "listItem",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  { "type": "text", "text": "🔑 Credenciales - Contraseñas y tokens" }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "listItem",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  { "type": "text", "text": "🌐 Accesos Web - URLs de Jira, Wiki, etc." }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "listItem",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  { "type": "text", "text": "☁️ AWS y Azure DevOps - Información de servicios en la nube" }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "tags": [],
+  "parentId": "dashboard-personal",
+  "creadoEn": "2025-01-20T00:00:00.000Z",
+  "actualizadoEn": "2025-01-20T00:00:00.000Z"
+}
+

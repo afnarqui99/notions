@@ -512,7 +512,16 @@ export default function Sidebar({
               />
             ) : (
               <>
-                <span className="block text-left truncate">
+                <span 
+                  className="block text-left break-words overflow-hidden"
+                  style={{
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                    wordBreak: 'break-word'
+                  }}
+                  title={pagina.titulo || 'Sin título'}
+                >
                   {pagina.titulo || 'Sin título'}
                 </span>
                 {/* Tags de la página */}
@@ -671,9 +680,9 @@ export default function Sidebar({
   }
 
   return (
-    <div className="w-64 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 flex flex-col h-screen overflow-hidden transition-colors">
+    <div className="w-72 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 flex flex-col h-screen transition-colors">
       {/* Header con perfil */}
-      <div className="p-3 border-b border-gray-200">
+      <div className="p-3 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
         <div className="flex items-center gap-2 mb-2">
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold text-sm">
             A
@@ -691,7 +700,7 @@ export default function Sidebar({
       </div>
 
       {/* Búsqueda */}
-      <div className="p-2 border-b border-gray-200">
+      <div className="p-2 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
         <div className="relative">
           <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
@@ -705,7 +714,7 @@ export default function Sidebar({
       </div>
 
       {/* Navegación principal */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto min-h-0">
         {/* Favoritos */}
         {arbolFavoritos.length > 0 && (
           <div className="mt-4 px-2">
@@ -791,7 +800,7 @@ export default function Sidebar({
             </button>
           </div>
           {seccionesAbiertas.paginas && (
-            <div className="mt-1 space-y-0.5 max-h-[400px] overflow-y-auto">
+            <div className="mt-1 space-y-0.5">
               {arbolNormales.map((nodo) => (
                 <PaginaItem key={nodo.id} pagina={nodo} nivel={0} todasLasPaginas={paginasFiltradas} />
               ))}
@@ -806,38 +815,39 @@ export default function Sidebar({
       </div>
 
       {/* Footer con configuración */}
-      <div className="p-2 border-t border-gray-200 dark:border-gray-700">
-        <button
-          onClick={toggleTheme}
-          className="w-full flex items-center gap-2 px-2 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
-          title={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
-        >
-          {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-          <span>{theme === 'dark' ? 'Modo Claro' : 'Modo Oscuro'}</span>
-        </button>
-        <a
-          href="https://github.com/afnarqui99/notions"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="w-full flex items-center gap-2 px-2 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors mt-1"
-        >
-          <Github className="w-4 h-4" />
-          <span>Repository</span>
-        </a>
-        <button
-          onClick={onShowConfig}
-          className="w-full flex items-center gap-2 px-2 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors mt-1"
-        >
-          <Settings className="w-4 h-4" />
-          <span>Settings</span>
-        </button>
-        <button
-          onClick={() => setSidebarColapsado(true)}
-          className="w-full flex items-center gap-2 px-2 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors mt-1"
-        >
-          <ChevronDown className="w-4 h-4 rotate-90" />
-          <span>Collapse</span>
-        </button>
+      <div className="p-2 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
+        <div className="flex items-center gap-1">
+          <button
+            onClick={toggleTheme}
+            className="flex-1 flex items-center justify-center px-2 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+            title={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+          >
+            {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+          </button>
+          <a
+            href="https://github.com/afnarqui99/notions"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-1 flex items-center justify-center px-2 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+            title="Repositorio en GitHub"
+          >
+            <Github className="w-5 h-5" />
+          </a>
+          <button
+            onClick={onShowConfig}
+            className="flex-1 flex items-center justify-center px-2 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+            title="Configuración"
+          >
+            <Settings className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => setSidebarColapsado(true)}
+            className="flex-1 flex items-center justify-center px-2 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+            title="Colapsar sidebar"
+          >
+            <ChevronDown className="w-5 h-5 rotate-90" />
+          </button>
+        </div>
       </div>
     </div>
   );

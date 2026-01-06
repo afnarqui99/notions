@@ -1,0 +1,35 @@
+{
+  "titulo": "Proyectos",
+  "emoji": "🏗️",
+  "contenido": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "heading",
+        "attrs": { "level": 1 },
+        "content": [{ "type": "text", "text": "🏗️ Proyectos" }]
+      },
+      {
+        "type": "paragraph",
+        "content": [
+          { "type": "text", "text": "Información y documentación de proyectos activos." }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "paragraph",
+        "content": [
+          { "type": "text", "text": "Crea páginas hijas para cada proyecto con información como rutas, repositorios, comandos y documentación." }
+        ]
+      }
+    ]
+  },
+  "tags": [],
+  "parentId": "dashboard-personal",
+  "creadoEn": "2025-01-20T00:00:00.000Z",
+  "actualizadoEn": "2025-01-20T00:00:00.000Z"
+}
+

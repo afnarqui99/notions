@@ -106,6 +106,50 @@ html.dark body {
   padding-left: 1rem;
 }
 
+/* Estilos para listas de tareas (task lists) */
+.ProseMirror ul[data-type="taskList"] {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0;
+}
+
+.ProseMirror ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  margin: 0.25rem 0;
+}
+
+.ProseMirror ul[data-type="taskList"] li > label {
+  flex: 0 0 auto;
+  margin-right: 0.5rem;
+  user-select: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding-top: 0.125rem;
+}
+
+.ProseMirror ul[data-type="taskList"] li > label > input[type="checkbox"] {
+  cursor: pointer;
+  width: 1.125rem;
+  height: 1.125rem;
+  margin: 0;
+  accent-color: #2563eb;
+}
+
+.dark .ProseMirror ul[data-type="taskList"] li > label > input[type="checkbox"] {
+  accent-color: #3b82f6;
+}
+
+.ProseMirror ul[data-type="taskList"] li > div {
+  flex: 1 1 auto;
+}
+
+.ProseMirror ul[data-type="taskList"] li[data-checked="true"] > div {
+  opacity: 0.6;
+  text-decoration: line-through;
+}
+
 /* Estilos para código */
 .ProseMirror pre {
   background: #0d1117;

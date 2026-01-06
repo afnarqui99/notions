@@ -1,0 +1,67 @@
+{
+  "titulo": "Archivos y Recursos",
+  "emoji": "📁",
+  "contenido": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "heading",
+        "attrs": { "level": 1 },
+        "content": [{ "type": "text", "text": "📁 Archivos y Recursos" }]
+      },
+      {
+        "type": "paragraph",
+        "content": [
+          { "type": "text", "text": "Organización de imágenes, documentos, videos y entregas de compañeros." }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "bulletList",
+        "content": [
+          {
+            "type": "listItem",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  { "type": "text", "text": "🖼️ Imágenes y Capturas - Galería de imágenes y capturas de pantalla" }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "listItem",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  { "type": "text", "text": "📄 Documentos y PDFs - Documentos y archivos PDF" }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "listItem",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  { "type": "text", "text": "📦 Entregas de Compañeros - Código, documentación y videos de entregas" }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "tags": [],
+  "parentId": "dashboard-personal",
+  "creadoEn": "2025-01-20T00:00:00.000Z",
+  "actualizadoEn": "2025-01-20T00:00:00.000Z"
+}
+

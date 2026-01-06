@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
-import { Settings, FolderOpen, Save, AlertCircle, CheckCircle, X } from 'lucide-react';
+import { Settings, FolderOpen, Save, AlertCircle, CheckCircle, X, Upload } from 'lucide-react';
 import LocalStorageService from '../services/LocalStorageService';
 import DirectorySelectorModal from './DirectorySelectorModal';
+import ImportPagesModal from './ImportPagesModal';
 import Modal from './Modal';
 
 export default function ConfigModal({ isOpen, onClose }) {
   const [useLocalStorage, setUseLocalStorage] = useState(false);
   const [selectedPath, setSelectedPath] = useState('');
   const [showDirectoryModal, setShowDirectoryModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [showMessageModal, setShowMessageModal] = useState(false);
 
@@ -62,7 +64,7 @@ export default function ConfigModal({ isOpen, onClose }) {
         onClick={onClose}
       >
         <div 
-          className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+          className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto transition-colors"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
@@ -82,7 +84,7 @@ export default function ConfigModal({ isOpen, onClose }) {
           {/* Content */}
           <div className="p-6 space-y-6">
             {/* Almacenamiento Local */}
-            <div className="border rounded-lg p-6">
+            <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-6">
               <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
                 <FolderOpen className="w-5 h-5 text-blue-600" />
                 Almacenamiento Local
@@ -101,7 +103,7 @@ export default function ConfigModal({ isOpen, onClose }) {
                     }}
                     className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
                   />
-                  <span className="text-gray-700">
+                  <span className="text-gray-700 dark:text-gray-300">
                     Guardar archivos localmente en el sistema de archivos
                   </span>
                 </label>
@@ -151,10 +153,43 @@ export default function ConfigModal({ isOpen, onClose }) {
               </div>
             </div>
 
+            {/* Importar Páginas */}
+            <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-6">
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <Upload className="w-5 h-5 text-blue-600" />
+                Importar Páginas
+              </h3>
+
+              <div className="space-y-4">
+                <p className="text-sm text-gray-700 dark:text-gray-300">
+                  Importa páginas desde archivos JSON. Se generarán UUIDs únicos automáticamente y se mantendrán las relaciones entre páginas.
+                </p>
+
+                <button
+                  onClick={() => setShowImportModal(true)}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 transition-colors shadow-md hover:shadow-lg"
+                >
+                  <Upload className="w-4 h-4" />
+                  Importar Archivos JSON
+                </button>
+
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                  <p className="text-sm text-blue-800 dark:text-blue-200 mb-2">
+                    <strong>Formato esperado:</strong>
+                  </p>
+                  <ul className="text-xs text-blue-700 dark:text-blue-300 space-y-1 list-disc list-inside">
+                    <li>Archivos JSON con estructura de página válida</li>
+                    <li>Los IDs pueden ser simples (se convertirán a UUIDs)</li>
+                    <li>Los parentId se actualizarán automáticamente</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
             {/* Información adicional */}
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-              <h4 className="text-sm font-semibold text-gray-900 mb-2">Información</h4>
-              <ul className="text-xs text-gray-600 space-y-1">
+            <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+              <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">Información</h4>
+              <ul className="text-xs text-gray-600 dark:text-gray-400 space-y-1">
                 <li>• Los cambios se aplicarán inmediatamente después de guardar</li>
                 <li>• Los archivos existentes no se moverán automáticamente</li>
                 <li>• Puedes cambiar la ubicación en cualquier momento</li>
@@ -163,7 +198,7 @@ export default function ConfigModal({ isOpen, onClose }) {
           </div>
 
           {/* Footer */}
-          <div className="px-6 py-4 bg-gray-50 border-t flex justify-end gap-3 rounded-b-2xl sticky bottom-0">
+          <div className="px-6 py-4 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3 rounded-b-2xl sticky bottom-0 transition-colors">
             <button
               onClick={onClose}
               className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors font-medium"
@@ -188,17 +223,33 @@ export default function ConfigModal({ isOpen, onClose }) {
         onDirectorySelected={handleDirectorySelected}
       />
 
+      <ImportPagesModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        onImportComplete={() => {
+          // Disparar evento para recargar páginas
+          window.dispatchEvent(new Event('paginasReordenadas'));
+          setMessage({
+            type: 'success',
+            text: 'Páginas importadas correctamente. Recarga la página para ver los cambios.'
+          });
+          setShowMessageModal(true);
+        }}
+      />
+
       <Modal
         isOpen={showMessageModal}
         onClose={() => setShowMessageModal(false)}
         title={message.type === 'success' ? 'Éxito' : message.type === 'error' ? 'Error' : 'Información'}
         type={message.type || 'info'}
       >
-        <p className="text-gray-700">{message.text}</p>
+        <p className="text-gray-700 dark:text-gray-300">{message.text}</p>
       </Modal>
     </>
   );
 }
+
+
 
 
 

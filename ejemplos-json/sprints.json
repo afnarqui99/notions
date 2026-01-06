@@ -1,0 +1,40 @@
+{
+  "titulo": "Sprints",
+  "emoji": "🎯",
+  "contenido": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "heading",
+        "attrs": { "level": 1 },
+        "content": [{ "type": "text", "text": "🎯 Sprints" }]
+      },
+      {
+        "type": "paragraph",
+        "content": [
+          { "type": "text", "text": "Gestión de sprints y tareas del equipo." }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 2 },
+        "content": [{ "type": "text", "text": "Sprints Activos" }]
+      },
+      {
+        "type": "paragraph",
+        "content": [
+          { "type": "text", "text": "Cada sprint tiene una tabla con tareas organizadas usando la plantilla Scrum." }
+        ]
+      }
+    ]
+  },
+  "tags": [],
+  "parentId": "dashboard-personal",
+  "creadoEn": "2025-01-20T00:00:00.000Z",
+  "actualizadoEn": "2025-01-20T00:00:00.000Z"
+}
+
