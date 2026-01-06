@@ -19,6 +19,8 @@ import Placeholder from "@tiptap/extension-placeholder";
 import lowlight from "../extensions/lowlightInstance";
 import { SlashCommand } from "../extensions/SlashCommand";
 import Link from "@tiptap/extension-link";
+import TaskList from "@tiptap/extension-task-list";
+import TaskItem from "@tiptap/extension-task-item";
 import { Toggle } from "../extensions/Toggle";
 import { Comment } from "../extensions/Comment";
 import { Settings, Plus, Image as ImageIcon, Paperclip, Download, Trash2, Tag as TagIcon, FileText, Save, Clock, MessageSquare, MoreVertical } from "lucide-react";
@@ -45,6 +47,7 @@ import CommentPanel from "./CommentPanel";
 import QuickNote from "./QuickNote";
 import QuickNotesHistory from "./QuickNotesHistory";
 import KeyboardShortcuts from "./KeyboardShortcuts";
+import EmojiPicker from "./EmojiPicker";
 
 export default function LocalEditor({ onShowConfig }) {
   // Función helper para extraer emoji del título
@@ -120,6 +123,9 @@ export default function LocalEditor({ onShowConfig }) {
   const [showQuickNotesHistory, setShowQuickNotesHistory] = useState(false);
   const [quickNoteToLoad, setQuickNoteToLoad] = useState(null);
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [emojiPickerPosition, setEmojiPickerPosition] = useState({ top: 0, left: 0 });
+  const emojiPickerRef = useRef(null);
   const ultimoContenidoGuardadoRef = useRef(null);
   const [favoritos, setFavoritos] = useState(() => {
     try {
@@ -448,6 +454,17 @@ export default function LocalEditor({ onShowConfig }) {
       TableCellExtended,
       ImageExtended,
       Comment,
+      TaskList.configure({
+        HTMLAttributes: {
+          class: 'task-list',
+        },
+      }),
+      TaskItem.configure({
+        nested: true,
+        HTMLAttributes: {
+          class: 'task-item',
+        },
+      }),
       Link.configure({
         openOnClick: false, // Manejar clics manualmente para enlaces internos
         linkOnPaste: true,
@@ -503,14 +520,50 @@ export default function LocalEditor({ onShowConfig }) {
         // Filtrar valores nulos (notas rápidas excluidas)
         const paginasValidas = paginasData.filter(p => p !== null);
 
-        // Ordenar por fecha de creación descendente
+        // Ordenar por fecha de creación descendente, pero mantener orden estable
+        // Usar ID como segundo criterio para orden estable
         paginasValidas.sort((a, b) => {
           const fechaA = new Date(a.creadoEn || 0);
           const fechaB = new Date(b.creadoEn || 0);
-          return fechaB - fechaA;
+          if (fechaB.getTime() !== fechaA.getTime()) {
+            return fechaB - fechaA;
+          }
+          // Si las fechas son iguales, ordenar por ID para mantener orden estable
+          return (a.id || '').localeCompare(b.id || '');
         });
 
-        setPaginas(paginasValidas);
+        // Solo actualizar si realmente cambió el número de páginas o los IDs
+        setPaginas(prevPaginas => {
+          // Si no hay páginas previas, actualizar directamente
+          if (prevPaginas.length === 0 && paginasValidas.length > 0) {
+            return paginasValidas;
+          }
+          
+          // Si no hay páginas nuevas y había páginas previas, mantener las previas
+          if (paginasValidas.length === 0 && prevPaginas.length > 0) {
+            return prevPaginas;
+          }
+          
+          const prevIds = new Set(prevPaginas.map(p => p.id));
+          const newIds = new Set(paginasValidas.map(p => p.id));
+          
+          // Si los tamaños son diferentes, actualizar
+          if (prevIds.size !== newIds.size) {
+            return paginasValidas;
+          }
+          
+          // Verificar si hay IDs nuevos o faltantes
+          const hayIdsNuevos = [...newIds].some(id => !prevIds.has(id));
+          const hayIdsFaltantes = [...prevIds].some(id => !newIds.has(id));
+          
+          if (hayIdsNuevos || hayIdsFaltantes) {
+            return paginasValidas;
+          }
+          
+          // Si son los mismos IDs, mantener el estado anterior para evitar re-renders innecesarios
+          // Esto previene que el sidebar se mueva constantemente
+          return prevPaginas;
+        });
       } catch (error) {
         // Error cargando páginas
       }
@@ -524,8 +577,8 @@ export default function LocalEditor({ onShowConfig }) {
     };
     window.addEventListener('paginasReordenadas', handleReordenar);
     
-    // Recargar cada 5 segundos para detectar cambios
-    const interval = setInterval(cargarPaginas, 5000);
+    // Recargar cada 30 segundos para detectar cambios (reducido de 5 a 30 para evitar movimiento constante)
+    const interval = setInterval(cargarPaginas, 30000);
     return () => {
       clearInterval(interval);
       window.removeEventListener('paginasReordenadas', handleReordenar);
@@ -845,6 +898,64 @@ export default function LocalEditor({ onShowConfig }) {
       window.removeEventListener('openPageLinkModal', handleOpenPageLinkModal);
     };
   }, []);
+
+  // Escuchar evento para abrir el selector de emojis
+  useEffect(() => {
+    const handleOpenEmojiPicker = (event) => {
+      if (!editor) return;
+      
+      // Obtener la posición del cursor
+      const { state } = editor;
+      const { $from } = state.selection;
+      const coords = editor.view.coordsAtPos($from.pos);
+      
+      // Calcular posición para mostrar el picker cerca del cursor
+      setEmojiPickerPosition({
+        top: coords.bottom + window.scrollY + 10,
+        left: coords.left + window.scrollX
+      });
+      
+      setShowEmojiPicker(true);
+    };
+
+    window.addEventListener('open-emoji-picker', handleOpenEmojiPicker);
+    return () => {
+      window.removeEventListener('open-emoji-picker', handleOpenEmojiPicker);
+    };
+  }, [editor]);
+
+  // Cerrar emoji picker al hacer clic fuera
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        showEmojiPicker &&
+        emojiPickerRef.current &&
+        !emojiPickerRef.current.contains(event.target)
+      ) {
+        setShowEmojiPicker(false);
+      }
+    };
+
+    if (showEmojiPicker) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [showEmojiPicker]);
+
+  // Manejar selección de emoji
+  const handleEmojiSelect = (emoji) => {
+    if (!editor) return;
+    
+    // Insertar el emoji en la posición actual del cursor
+    editor.chain().focus().insertContent({
+      type: 'text',
+      text: emoji
+    }).run();
+    
+    setShowEmojiPicker(false);
+  };
 
   // Configurar manejo de clics en enlaces internos
   useEffect(() => {
@@ -1850,6 +1961,24 @@ export default function LocalEditor({ onShowConfig }) {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Selector de Emojis Global */}
+      {showEmojiPicker && (
+        <div
+          ref={emojiPickerRef}
+          className="fixed z-50"
+          style={{
+            top: `${emojiPickerPosition.top}px`,
+            left: `${emojiPickerPosition.left}px`
+          }}
+        >
+          <EmojiPicker
+            onSelect={handleEmojiSelect}
+            onClose={() => setShowEmojiPicker(false)}
+            currentEmoji=""
+          />
         </div>
       )}
 

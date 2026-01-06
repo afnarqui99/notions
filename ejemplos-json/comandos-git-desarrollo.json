@@ -1,0 +1,771 @@
+{
+  "titulo": "Git - Guía Completa para Desarrollo",
+  "emoji": "🐙",
+  "contenido": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "heading",
+        "attrs": { "level": 1 },
+        "content": [{ "type": "text", "text": "🐙 Git - Guía Completa para Desarrollo de Software" }]
+      },
+      {
+        "type": "paragraph",
+        "content": [
+          { "type": "text", "text": "Guía completa de comandos Git para desarrollo de software, incluyendo comparación de archivos entre ramas y proyectos." }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 2 },
+        "content": [{ "type": "text", "text": "📥 Clonar y Configurar Repositorios" }]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 3 },
+        "content": [{ "type": "text", "text": "Clonar Repositorio" }]
+      },
+      {
+        "type": "codeBlock",
+        "attrs": { "language": "bash" },
+        "content": [
+          {
+            "type": "text",
+            "text": "# Clonar desde HTTPS\ngit clone https://github.com/usuario/repositorio.git\n\n# Clonar desde SSH\ngit clone git@github.com:usuario/repositorio.git\n\n# Clonar en carpeta específica\ngit clone https://github.com/usuario/repositorio.git mi-carpeta\n\n# Clonar rama específica\ngit clone -b nombre-rama https://github.com/usuario/repositorio.git"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 3 },
+        "content": [{ "type": "text", "text": "Configurar Usuario" }]
+      },
+      {
+        "type": "codeBlock",
+        "attrs": { "language": "bash" },
+        "content": [
+          {
+            "type": "text",
+            "text": "# Configurar usuario global\ngit config --global user.name \"Tu Nombre\"\ngit config --global user.email \"tu@email.com\"\n\n# Configurar usuario solo para este repositorio\ngit config user.name \"Tu Nombre\"\ngit config user.email \"tu@email.com\"\n\n# Ver configuración\ngit config --list"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 2 },
+        "content": [{ "type": "text", "text": "🌿 Trabajar con Ramas" }]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 3 },
+        "content": [{ "type": "text", "text": "Crear y Cambiar de Rama" }]
+      },
+      {
+        "type": "codeBlock",
+        "attrs": { "language": "bash" },
+        "content": [
+          {
+            "type": "text",
+            "text": "# Crear nueva rama y cambiar a ella\ngit checkout -b feature/nueva-funcionalidad\n\n# Crear rama sin cambiar\ngit branch feature/nueva-funcionalidad\n\n# Cambiar a rama existente\ngit checkout nombre-rama\n# O con switch (Git 2.23+)\ngit switch nombre-rama\n\n# Cambiar a rama anterior\ngit checkout -\n\n# Ver todas las ramas\ngit branch                    # Locales\ngit branch -a                 # Locales y remotas\ngit branch -r                 # Solo remotas"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 3 },
+        "content": [{ "type": "text", "text": "Eliminar Ramas" }]
+      },
+      {
+        "type": "codeBlock",
+        "attrs": { "language": "bash" },
+        "content": [
+          {
+            "type": "text",
+            "text": "# Eliminar rama local (debe estar en otra rama)\ngit branch -d nombre-rama        # Eliminación segura\ngit branch -D nombre-rama        # Forzar eliminación\n\n# Eliminar rama remota\ngit push origin --delete nombre-rama"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 2 },
+        "content": [{ "type": "text", "text": "💾 Commits y Cambios" }]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 3 },
+        "content": [{ "type": "text", "text": "Ver Estado y Cambios" }]
+      },
+      {
+        "type": "codeBlock",
+        "attrs": { "language": "bash" },
+        "content": [
+          {
+            "type": "text",
+            "text": "# Ver estado de archivos\ngit status\n\n# Ver cambios en archivos modificados\ngit diff\n\n# Ver cambios en staging\ngit diff --staged\n# O\ngit diff --cached\n\n# Ver cambios de forma compacta\ngit status -s"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 3 },
+        "content": [{ "type": "text", "text": "Agregar y Hacer Commit" }]
+      },
+      {
+        "type": "codeBlock",
+        "attrs": { "language": "bash" },
+        "content": [
+          {
+            "type": "text",
+            "text": "# Agregar archivo específico\ngit add archivo.js\n\n# Agregar todos los cambios\ngit add .\n\n# Agregar archivos interactivamente\ngit add -i\n\n# Agregar solo archivos modificados (no nuevos)\ngit add -u\n\n# Hacer commit\ngit commit -m \"feat: agregar nueva funcionalidad\"\n\n# Hacer commit con mensaje largo\ngit commit -m \"Título\" -m \"Descripción detallada\"\n\n# Agregar y commit en un paso (solo archivos rastreados)\ngit commit -am \"mensaje\""
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 3 },
+        "content": [{ "type": "text", "text": "Convenciones de Mensajes de Commit" }]
+      },
+      {
+        "type": "bulletList",
+        "content": [
+          {
+            "type": "listItem",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  { "type": "text", "marks": [{ "type": "code" }], "text": "feat:" },
+                  { "type": "text", "text": " - Nueva funcionalidad" }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "listItem",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  { "type": "text", "marks": [{ "type": "code" }], "text": "fix:" },
+                  { "type": "text", "text": " - Corrección de bug" }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "listItem",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  { "type": "text", "marks": [{ "type": "code" }], "text": "docs:" },
+                  { "type": "text", "text": " - Documentación" }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "listItem",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  { "type": "text", "marks": [{ "type": "code" }], "text": "style:" },
+                  { "type": "text", "text": " - Formato, punto y coma, etc." }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "listItem",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  { "type": "text", "marks": [{ "type": "code" }], "text": "refactor:" },
+                  { "type": "text", "text": " - Refactorización" }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "listItem",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  { "type": "text", "marks": [{ "type": "code" }], "text": "test:" },
+                  { "type": "text", "text": " - Tests" }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "listItem",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  { "type": "text", "marks": [{ "type": "code" }], "text": "chore:" },
+                  { "type": "text", "text": " - Tareas de mantenimiento" }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 2 },
+        "content": [{ "type": "text", "text": "🔀 Comparar Archivos - Entre Ramas" }]
+      },
+      {
+        "type": "paragraph",
+        "content": [
+          { "type": "text", "text": "Comandos esenciales para comparar archivos entre diferentes ramas." }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 3 },
+        "content": [{ "type": "text", "text": "Comparar Archivo Específico Entre Ramas" }]
+      },
+      {
+        "type": "codeBlock",
+        "attrs": { "language": "bash" },
+        "content": [
+          {
+            "type": "text",
+            "text": "# Comparar archivo entre rama actual y otra rama\ngit diff rama-origen archivo.js\n\n# Comparar archivo entre dos ramas específicas\ngit diff rama1..rama2 -- archivo.js\n\n# Comparar archivo entre rama actual y main\ngit diff main -- src/components/Button.jsx\n\n# Comparar archivo entre develop y feature/nueva-funcionalidad\ngit diff develop..feature/nueva-funcionalidad -- archivo.js"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 3 },
+        "content": [{ "type": "text", "text": "Comparar Todos los Archivos Entre Ramas" }]
+      },
+      {
+        "type": "codeBlock",
+        "attrs": { "language": "bash" },
+        "content": [
+          {
+            "type": "text",
+            "text": "# Ver diferencias entre dos ramas\ngit diff rama1..rama2\n\n# Ver solo nombres de archivos diferentes\ngit diff --name-only rama1..rama2\n\n# Ver nombres y estadísticas\ngit diff --stat rama1..rama2\n\n# Ver diferencias con contexto (más líneas)\ngit diff -U10 rama1..rama2"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 3 },
+        "content": [{ "type": "text", "text": "Comparar Archivo en Commit Específico" }]
+      },
+      {
+        "type": "codeBlock",
+        "attrs": { "language": "bash" },
+        "content": [
+          {
+            "type": "text",
+            "text": "# Comparar archivo entre dos commits\ngit diff commit1 commit2 -- archivo.js\n\n# Comparar archivo entre commit y HEAD actual\ngit diff abc123 -- archivo.js\n\n# Ver archivo en commit específico\ngit show commit-hash:ruta/archivo.js"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 2 },
+        "content": [{ "type": "text", "text": "🔀 Comparar Archivos - Entre Proyectos" }]
+      },
+      {
+        "type": "paragraph",
+        "content": [
+          { "type": "text", "text": "Comandos para comparar archivos entre proyectos diferentes (repositorios distintos)." }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 3 },
+        "content": [{ "type": "text", "text": "Método 1: Usando diff Directo" }]
+      },
+      {
+        "type": "codeBlock",
+        "attrs": { "language": "bash" },
+        "content": [
+          {
+            "type": "text",
+            "text": "# Comparar archivo entre dos proyectos (rutas absolutas)\ndiff -u /ruta/proyecto1/archivo.js /ruta/proyecto2/archivo.js\n\n# Comparar con colores (requiere colordiff)\ncolordiff -u /ruta/proyecto1/archivo.js /ruta/proyecto2/archivo.js\n\n# Comparar directorios completos\ndiff -r /ruta/proyecto1/src /ruta/proyecto2/src"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 3 },
+        "content": [{ "type": "text", "text": "Método 2: Usando Git con Múltiples Repositorios" }]
+      },
+      {
+        "type": "codeBlock",
+        "attrs": { "language": "bash" },
+        "content": [
+          {
+            "type": "text",
+            "text": "# Agregar otro repositorio como remoto\ngit remote add otro-proyecto https://github.com/usuario/otro-repo.git\n\n# Traer cambios del otro repositorio\ngit fetch otro-proyecto\n\n# Comparar archivo entre repositorios\ngit diff HEAD otro-proyecto/main -- archivo.js\n\n# Comparar rama específica del otro proyecto\ngit diff HEAD otro-proyecto/develop -- src/components/Button.jsx"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 3 },
+        "content": [{ "type": "text", "text": "Método 3: Usando Git Worktree (Múltiples Checkouts)" }]
+      },
+      {
+        "type": "codeBlock",
+        "attrs": { "language": "bash" },
+        "content": [
+          {
+            "type": "text",
+            "text": "# Crear worktree para otro proyecto en otra carpeta\ngit worktree add ../proyecto2-comparacion rama-proyecto2\n\n# Ahora puedes comparar entre las dos carpetas\ngit diff HEAD ../proyecto2-comparacion -- archivo.js\n\n# Limpiar worktree cuando termines\ngit worktree remove ../proyecto2-comparacion"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 3 },
+        "content": [{ "type": "text", "text": "Método 4: Script para Comparar Proyectos" }]
+      },
+      {
+        "type": "codeBlock",
+        "attrs": { "language": "bash" },
+        "content": [
+          {
+            "type": "text",
+            "text": "#!/bin/bash\n# Script para comparar archivo entre dos proyectos\n\nPROYECTO1=\"/ruta/al/proyecto1\"\nPROYECTO2=\"/ruta/al/proyecto2\"\nARCHIVO=\"src/components/Button.jsx\"\n\n# Comparar usando diff\necho \"Comparando $ARCHIVO entre proyectos...\"\ndiff -u \"$PROYECTO1/$ARCHIVO\" \"$PROYECTO2/$ARCHIVO\"\n\n# O usando git si ambos son repositorios\necho \"\\n--- Usando Git ---\"\ncd \"$PROYECTO1\"\ngit diff \"$PROYECTO2/$ARCHIVO\" \"$ARCHIVO\""
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 2 },
+        "content": [{ "type": "text", "text": "📤 Sincronizar con Remoto" }]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 3 },
+        "content": [{ "type": "text", "text": "Push y Pull" }]
+      },
+      {
+        "type": "codeBlock",
+        "attrs": { "language": "bash" },
+        "content": [
+          {
+            "type": "text",
+            "text": "# Subir cambios a remoto\ngit push origin nombre-rama\n\n# Subir y establecer upstream\ngit push -u origin nombre-rama\n\n# Subir todos los tags\ngit push --tags\n\n# Forzar push (¡cuidado!)\ngit push --force origin nombre-rama\n\n# Descargar cambios\ngit pull origin nombre-rama\n\n# Solo descargar sin fusionar\ngit fetch origin\n\n# Ver diferencias antes de pull\ngit fetch origin\ngit diff HEAD origin/nombre-rama"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 2 },
+        "content": [{ "type": "text", "text": "🔄 Merge y Rebase" }]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 3 },
+        "content": [{ "type": "text", "text": "Merge" }]
+      },
+      {
+        "type": "codeBlock",
+        "attrs": { "language": "bash" },
+        "content": [
+          {
+            "type": "text",
+            "text": "# Fusionar rama en rama actual\ngit merge nombre-rama\n\n# Merge sin fast-forward (siempre crea commit de merge)\ngit merge --no-ff nombre-rama\n\n# Merge con mensaje personalizado\ngit merge -m \"Merge feature X into main\" nombre-rama\n\n# Abortar merge en progreso\ngit merge --abort"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 3 },
+        "content": [{ "type": "text", "text": "Rebase" }]
+      },
+      {
+        "type": "codeBlock",
+        "attrs": { "language": "bash" },
+        "content": [
+          {
+            "type": "text",
+            "text": "# Rebase interactivo (últimos 3 commits)\ngit rebase -i HEAD~3\n\n# Rebase sobre otra rama\ngit rebase nombre-rama\n\n# Rebase continuar después de resolver conflictos\ngit rebase --continue\n\n# Abortar rebase\ngit rebase --abort\n\n# Rebase con estrategia específica\ngit rebase -X theirs nombre-rama"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 2 },
+        "content": [{ "type": "text", "text": "📜 Historial y Búsqueda" }]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 3 },
+        "content": [{ "type": "text", "text": "Ver Historial" }]
+      },
+      {
+        "type": "codeBlock",
+        "attrs": { "language": "bash" },
+        "content": [
+          {
+            "type": "text",
+            "text": "# Ver log de commits\ngit log\n\n# Log compacto (una línea por commit)\ngit log --oneline\n\n# Log con gráfico\ngit log --oneline --graph --all\n\n# Log con estadísticas\ngit log --stat\n\n# Log de archivo específico\ngit log -- archivo.js\n\n# Log con búsqueda de texto\ngit log --grep=\"autenticación\"\n\n# Log por autor\ngit log --author=\"Juan\""
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 3 },
+        "content": [{ "type": "text", "text": "Buscar en Historial" }]
+      },
+      {
+        "type": "codeBlock",
+        "attrs": { "language": "bash" },
+        "content": [
+          {
+            "type": "text",
+            "text": "# Buscar cuando se agregó/eliminó texto específico\ngit log -S \"function login\" --source --all\n\n# Buscar cambios en función específica\ngit log -p -S \"function login\" -- archivo.js\n\n# Buscar por rango de fechas\ngit log --since=\"2025-01-01\" --until=\"2025-01-31\"\n\n# Ver cambios en commit específico\ngit show commit-hash\n\n# Ver archivos modificados en commit\ngit show --name-only commit-hash"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 2 },
+        "content": [{ "type": "text", "text": "🗑️ Deshacer Cambios" }]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 3 },
+        "content": [{ "type": "text", "text": "Descartar Cambios" }]
+      },
+      {
+        "type": "codeBlock",
+        "attrs": { "language": "bash" },
+        "content": [
+          {
+            "type": "text",
+            "text": "# Descartar cambios en archivo específico\ngit checkout -- archivo.js\n# O con restore (Git 2.23+)\ngit restore archivo.js\n\n# Descartar todos los cambios\ngit checkout -- .\ngit restore .\n\n# Descartar cambios en staging\ngit restore --staged archivo.js"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 3 },
+        "content": [{ "type": "text", "text": "Deshacer Commits" }]
+      },
+      {
+        "type": "codeBlock",
+        "attrs": { "language": "bash" },
+        "content": [
+          {
+            "type": "text",
+            "text": "# Deshacer último commit (mantener cambios)\ngit reset --soft HEAD~1\n\n# Deshacer último commit (descartar cambios)\ngit reset --hard HEAD~1\n\n# Deshacer varios commits\ngit reset --hard HEAD~3\n\n# Revertir commit (crea nuevo commit que deshace cambios)\ngit revert commit-hash"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 2 },
+        "content": [{ "type": "text", "text": "🏷️ Tags y Releases" }]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "codeBlock",
+        "attrs": { "language": "bash" },
+        "content": [
+          {
+            "type": "text",
+            "text": "# Crear tag\ngit tag v1.0.0\n\n# Crear tag anotado (con mensaje)\ngit tag -a v1.0.0 -m \"Release versión 1.0.0\"\n\n# Ver todos los tags\ngit tag\n\n# Subir tag a remoto\ngit push origin v1.0.0\n\n# Subir todos los tags\ngit push --tags\n\n# Eliminar tag local\ngit tag -d v1.0.0\n\n# Eliminar tag remoto\ngit push origin --delete v1.0.0"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 2 },
+        "content": [{ "type": "text", "text": "🔧 Comandos Útiles Adicionales" }]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 3 },
+        "content": [{ "type": "text", "text": "Stash (Guardar Cambios Temporales)" }]
+      },
+      {
+        "type": "codeBlock",
+        "attrs": { "language": "bash" },
+        "content": [
+          {
+            "type": "text",
+            "text": "# Guardar cambios temporalmente\ngit stash\n\n# Guardar con mensaje\ngit stash save \"mensaje descriptivo\"\n\n# Ver stashes\ngit stash list\n\n# Aplicar último stash\ngit stash apply\n\n# Aplicar y eliminar stash\ngit stash pop\n\n# Eliminar stash\ngit stash drop stash@{0}"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 3 },
+        "content": [{ "type": "text", "text": "Limpiar Archivos" }]
+      },
+      {
+        "type": "codeBlock",
+        "attrs": { "language": "bash" },
+        "content": [
+          {
+            "type": "text",
+            "text": "# Ver qué se eliminaría\ngit clean -n\n\n# Eliminar archivos no rastreados\ngit clean -f\n\n# Eliminar archivos y directorios\ngit clean -fd\n\n# Eliminar con confirmación interactiva\ngit clean -i"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 3 },
+        "content": [{ "type": "text", "text": "Ver Información" }]
+      },
+      {
+        "type": "codeBlock",
+        "attrs": { "language": "bash" },
+        "content": [
+          {
+            "type": "text",
+            "text": "# Ver información del repositorio\ngit remote -v\n\n# Ver rama actual\ngit branch --show-current\n\n# Ver último commit\ngit log -1\n\n# Ver quién modificó cada línea\ngit blame archivo.js"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 2 },
+        "content": [{ "type": "text", "text": "💡 Tips y Mejores Prácticas" }]
+      },
+      {
+        "type": "bulletList",
+        "content": [
+          {
+            "type": "listItem",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  { "type": "text", "text": "Haz commits pequeños y frecuentes con mensajes descriptivos" }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "listItem",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  { "type": "text", "text": "Usa ramas para features, nunca trabajes directamente en main/master" }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "listItem",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  { "type": "text", "text": "Siempre haz pull antes de push para evitar conflictos" }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "listItem",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  { "type": "text", "text": "Revisa los cambios con " },
+                  { "type": "text", "marks": [{ "type": "code" }], "text": "git diff" },
+                  { "type": "text", "text": " antes de hacer commit" }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "listItem",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  { "type": "text", "text": "Usa " },
+                  { "type": "text", "marks": [{ "type": "code" }], "text": "git stash" },
+                  { "type": "text", "text": " cuando necesites cambiar de rama temporalmente" }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "listItem",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  { "type": "text", "text": "Nunca hagas " },
+                  { "type": "text", "marks": [{ "type": "code" }], "text": "git push --force" },
+                  { "type": "text", "text": " en ramas compartidas" }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "tags": [],
+  "parentId": "comandos-y-referencias",
+  "creadoEn": "2025-01-20T00:00:00.000Z",
+  "actualizadoEn": "2025-01-20T00:00:00.000Z"
+}
+

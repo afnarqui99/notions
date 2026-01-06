@@ -19,6 +19,8 @@ import TableHeader from "@tiptap/extension-table-header";
 import Image from "@tiptap/extension-image";
 import lowlight from "./lowlightInstance";
 import Link from "@tiptap/extension-link";
+import TaskList from "@tiptap/extension-task-list";
+import TaskItem from "@tiptap/extension-task-item";
 import { Toggle } from "./Toggle";
 
 export default function EditorDescripcion({ content, onChange }) {
@@ -40,6 +42,17 @@ export default function EditorDescripcion({ content, onChange }) {
       TableHeader,
       TableCellExtended,
       Image,
+      TaskList.configure({
+        HTMLAttributes: {
+          class: 'task-list',
+        },
+      }),
+      TaskItem.configure({
+        nested: true,
+        HTMLAttributes: {
+          class: 'task-item',
+        },
+      }),
       Link.configure({ openOnClick: false, autolink: false }),
       Placeholder.configure({ placeholder: "Escribe '/' para comandos..." }),
       SlashCommand,
@@ -74,6 +87,8 @@ export default function EditorDescripcion({ content, onChange }) {
     </div>
   );
 }
+
+
 
 
 

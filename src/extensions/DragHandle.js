@@ -868,3 +868,6 @@ const DragHandle = Extension.create({
 El archivo generado tiene un error. Simplificando la implementación de drag & drop usando CSS y eventos del DOM directamente. TipTap ya incluye soporte básico de drag & drop; agregando estilos CSS para mejorar la experiencia visual:
 <｜tool▁calls▁begin｜><｜tool▁call▁begin｜>
 delete_file
+
+
+

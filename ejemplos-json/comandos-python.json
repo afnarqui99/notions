@@ -1,0 +1,141 @@
+{
+  "titulo": "Python",
+  "emoji": "🐍",
+  "contenido": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "heading",
+        "attrs": { "level": 1 },
+        "content": [{ "type": "text", "text": "🐍 Python - Comandos y Referencias" }]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 2 },
+        "content": [{ "type": "text", "text": "🐍 Entornos Virtuales" }]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 3 },
+        "content": [{ "type": "text", "text": "Crear entorno virtual" }]
+      },
+      {
+        "type": "codeBlock",
+        "attrs": { "language": "bash" },
+        "content": [
+          {
+            "type": "text",
+            "text": "# Python 3\npython -m venv venv\n\n# O con python3 explícito\npython3 -m venv venv\n\n# Con nombre específico\npython -m venv mi-entorno"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 3 },
+        "content": [{ "type": "text", "text": "Activar entorno virtual" }]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 4 },
+        "content": [{ "type": "text", "text": "Windows (PowerShell)" }]
+      },
+      {
+        "type": "codeBlock",
+        "attrs": { "language": "powershell" },
+        "content": [
+          {
+            "type": "text",
+            "text": ".\\venv\\Scripts\\Activate.ps1"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 4 },
+        "content": [{ "type": "text", "text": "Linux/Mac" }]
+      },
+      {
+        "type": "codeBlock",
+        "attrs": { "language": "bash" },
+        "content": [
+          {
+            "type": "text",
+            "text": "source venv/bin/activate"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 2 },
+        "content": [{ "type": "text", "text": "🚀 Ejecutar Aplicaciones Python" }]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 3 },
+        "content": [{ "type": "text", "text": "Django" }]
+      },
+      {
+        "type": "codeBlock",
+        "attrs": { "language": "bash" },
+        "content": [
+          {
+            "type": "text",
+            "text": "# Crear proyecto\ndjango-admin startproject mi-proyecto\n\n# Crear app\npython manage.py startapp mi-app\n\n# Migraciones\npython manage.py makemigrations\npython manage.py migrate\n\n# Ejecutar servidor\npython manage.py runserver\npython manage.py runserver 8000  # Puerto específico"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 3 },
+        "content": [{ "type": "text", "text": "Flask" }]
+      },
+      {
+        "type": "codeBlock",
+        "attrs": { "language": "bash" },
+        "content": [
+          {
+            "type": "text",
+            "text": "# Ejecutar aplicación\nflask run\nflask run --port 5000\nflask run --host 0.0.0.0  # Accesible desde red"
+          }
+        ]
+      }
+    ]
+  },
+  "tags": [],
+  "parentId": "comandos-y-referencias",
+  "creadoEn": "2025-01-20T00:00:00.000Z",
+  "actualizadoEn": "2025-01-20T00:00:00.000Z"
+}
+

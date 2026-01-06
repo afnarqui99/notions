@@ -1,0 +1,173 @@
+{
+  "titulo": "Git",
+  "emoji": "🐙",
+  "contenido": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "heading",
+        "attrs": { "level": 1 },
+        "content": [{ "type": "text", "text": "🐙 Git - Comandos y Referencias" }]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 2 },
+        "content": [{ "type": "text", "text": "📥 Clonar Repositorios" }]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 3 },
+        "content": [{ "type": "text", "text": "Clonar desde Azure DevOps" }]
+      },
+      {
+        "type": "codeBlock",
+        "attrs": { "language": "bash" },
+        "content": [
+          {
+            "type": "text",
+            "text": "git clone https://dev.azure.com/mi-empresa/E-Commerce/_git/ecommerce-frontend\ncd ecommerce-frontend"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 2 },
+        "content": [{ "type": "text", "text": "🌿 Ramas (Branches)" }]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 3 },
+        "content": [{ "type": "text", "text": "Crear y cambiar de rama" }]
+      },
+      {
+        "type": "codeBlock",
+        "attrs": { "language": "bash" },
+        "content": [
+          {
+            "type": "text",
+            "text": "# Crear nueva rama\ngit checkout -b feature/nueva-funcionalidad\n\n# Cambiar a rama existente\ngit checkout main\ngit checkout develop\n\n# Ver todas las ramas\ngit branch -a"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 2 },
+        "content": [{ "type": "text", "text": "💾 Commits" }]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 3 },
+        "content": [{ "type": "text", "text": "Hacer commit" }]
+      },
+      {
+        "type": "codeBlock",
+        "attrs": { "language": "bash" },
+        "content": [
+          {
+            "type": "text",
+            "text": "# Agregar archivos específicos\ngit add archivo1.js archivo2.js\n\n# Agregar todos los cambios\ngit add .\n\n# Hacer commit con mensaje\ngit commit -m \"feat: agregar sistema de autenticación OAuth\""
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 3 },
+        "content": [{ "type": "text", "text": "Convenciones de mensajes" }]
+      },
+      {
+        "type": "bulletList",
+        "content": [
+          {
+            "type": "listItem",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  { "type": "text", "text": "feat: - Nueva funcionalidad" }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "listItem",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  { "type": "text", "text": "fix: - Corrección de bug" }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "listItem",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  { "type": "text", "text": "docs: - Documentación" }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "heading",
+        "attrs": { "level": 2 },
+        "content": [{ "type": "text", "text": "🔀 Comparar Archivos" }]
+      },
+      {
+        "type": "paragraph",
+        "content": []
+      },
+      {
+        "type": "codeBlock",
+        "attrs": { "language": "bash" },
+        "content": [
+          {
+            "type": "text",
+            "text": "# Comparar working directory con staging\ngit diff\n\n# Comparar staging con último commit\ngit diff --staged\n\n# Comparar dos commits\ngit diff commit1 commit2\n\n# Comparar dos ramas\ngit diff main..develop\n\n# Comparar archivo específico entre ramas\ngit diff main..develop -- archivo.js"
+          }
+        ]
+      }
+    ]
+  },
+  "tags": [],
+  "parentId": "comandos-y-referencias",
+  "creadoEn": "2025-01-20T00:00:00.000Z",
+  "actualizadoEn": "2025-01-20T00:00:00.000Z"
+}
+
