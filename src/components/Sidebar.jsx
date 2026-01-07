@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Search, Star, ChevronDown, Settings, Plus, Trash2, Github, ChevronRight, Pencil, Tag as TagIcon, X, Moon, Sun } from 'lucide-react';
+import { Search, Star, ChevronDown, Settings, Plus, Trash2, Github, ChevronRight, Pencil, Tag as TagIcon, X, Moon, Sun, Database } from 'lucide-react';
 import TagService from '../services/TagService';
 import { useTheme } from '../contexts/ThemeContext';
+import SQLFileService from '../services/SQLFileService';
 
 export default function Sidebar({ 
   paginas = [], 
@@ -40,6 +41,7 @@ export default function Sidebar({
   });
   const [filtroTag, setFiltroTag] = useState(null);
   const [tags, setTags] = useState([]);
+  const [pageSQLCounts, setPageSQLCounts] = useState({}); // { pageId: count }
   
   // Estado para páginas expandidas/colapsadas en el árbol
   const [paginasExpandidas, setPaginasExpandidas] = useState(() => {
@@ -121,6 +123,34 @@ export default function Sidebar({
       return nuevos;
     });
   };
+
+  // Cargar conteos de scripts SQL para páginas visibles
+  useEffect(() => {
+    const loadSQLCounts = async () => {
+      if (paginas.length === 0) return;
+      
+      const counts = {};
+      // Cargar solo para las primeras 50 páginas para no sobrecargar
+      const paginasACargar = paginas.slice(0, 50);
+      
+      await Promise.all(
+        paginasACargar.map(async (pagina) => {
+          try {
+            const result = await SQLFileService.getFilesByPage(pagina.id);
+            counts[pagina.id] = result.files?.length || 0;
+          } catch (error) {
+            counts[pagina.id] = 0;
+          }
+        })
+      );
+      
+      setPageSQLCounts(counts);
+    };
+    
+    // Cargar con un pequeño delay para no bloquear el renderizado
+    const timeoutId = setTimeout(loadSQLCounts, 500);
+    return () => clearTimeout(timeoutId);
+  }, [paginas]);
 
   // Función helper para obtener páginas raíz (sin parentId)
   const obtenerPaginasRaiz = (paginasList) => {
@@ -547,6 +577,21 @@ export default function Sidebar({
               </>
             )}
           </div>
+          
+          {/* Indicador de scripts SQL (si tiene) */}
+          {paginaEditando !== pagina.id && pageSQLCounts[pagina.id] > 0 && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                window.dispatchEvent(new CustomEvent('open-page-sql-scripts', { detail: { pageId: pagina.id } }));
+              }}
+              className="ml-1 flex items-center gap-1 px-1.5 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+              title={`Ver ${pageSQLCounts[pagina.id]} script${pageSQLCounts[pagina.id] !== 1 ? 's' : ''} SQL asociado${pageSQLCounts[pagina.id] !== 1 ? 's' : ''}`}
+            >
+              <Database className="w-3 h-3" />
+              <span>{pageSQLCounts[pagina.id]}</span>
+            </button>
+          )}
           
           {/* Botones de acción (hover) */}
           {paginaEditando !== pagina.id && (

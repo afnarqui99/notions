@@ -31,6 +31,7 @@ export default function NewPageModal({ isOpen, onClose, onCreate }) {
   };
 
   const handleCreateWithTemplate = () => {
+    if (!titulo.trim()) return; // No crear si no hay título
     if (selectedTemplate) {
       onCreate(titulo.trim(), selectedTemplate.icon || null, selectedTags, selectedTemplate.content);
     } else {
@@ -107,18 +108,31 @@ export default function NewPageModal({ isOpen, onClose, onCreate }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (titulo.trim()) {
-      const emojiExtraido = extraerEmojiDelTitulo(titulo.trim());
-      if (selectedTemplate) {
-        onCreate(titulo.trim(), emojiExtraido || selectedTemplate.icon || null, selectedTags, selectedTemplate.content);
-      } else {
-        onCreate(titulo.trim(), emojiExtraido, selectedTags, null);
-      }
-      setTitulo('');
-      setSelectedTags([]);
-      setSelectedTemplate(null);
-      onClose();
+    const tituloLimpio = titulo.trim();
+    // Validar que haya título después de quitar emojis
+    if (!tituloLimpio) {
+      return; // No crear si no hay título
     }
+    
+    // Verificar que después de extraer el emoji, quede texto
+    const emojiExtraido = extraerEmojiDelTitulo(tituloLimpio);
+    const tituloSinEmoji = tituloLimpio.substring(emojiExtraido ? emojiExtraido.length : 0).trim();
+    
+    // Si solo hay emoji sin texto, permitir crear con el emoji como título
+    // Pero si no hay nada (ni emoji ni texto), no crear
+    if (!emojiExtraido && !tituloSinEmoji) {
+      return; // No crear si no hay contenido
+    }
+    
+    if (selectedTemplate) {
+      onCreate(tituloLimpio, emojiExtraido || selectedTemplate.icon || null, selectedTags, selectedTemplate.content);
+    } else {
+      onCreate(tituloLimpio, emojiExtraido, selectedTags, null);
+    }
+    setTitulo('');
+    setSelectedTags([]);
+    setSelectedTemplate(null);
+    onClose();
   };
 
   const handleKeyDown = (e) => {
@@ -153,7 +167,12 @@ export default function NewPageModal({ isOpen, onClose, onCreate }) {
         </div>
 
         {/* Content */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={(e) => {
+          e.preventDefault();
+          if (titulo.trim()) {
+            handleSubmit(e);
+          }
+        }} className="p-6 space-y-4">
           <div className="relative">
             <label htmlFor="titulo" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Título de la nueva página
@@ -164,7 +183,12 @@ export default function NewPageModal({ isOpen, onClose, onCreate }) {
                 type="text"
                 value={titulo}
                 onChange={(e) => setTitulo(e.target.value)}
-                onKeyDown={handleKeyDown}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.ctrlKey) {
+                    e.preventDefault(); // Prevenir submit con Enter solo
+                  }
+                  handleKeyDown(e);
+                }}
                 placeholder="Escribe el título aquí..."
                 className="w-full pl-12 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
                 autoFocus

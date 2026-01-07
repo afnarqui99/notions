@@ -106,6 +106,17 @@ export const SlashCommand = Extension.create({
         },
         items: () => [
           {
+            label: "Script SQL",
+            description: "Editor de scripts SQL con versionado tipo git - Abre gestor de archivos",
+            icon: "📊",
+            keywords: ["sql", "script", "database", "versionado", "query", "select", "insert", "update", "delete"],
+            command: ({ editor, range }) => {
+              editor.chain().focus().deleteRange(range).run();
+              // Disparar evento para abrir el gestor de archivos SQL
+              window.dispatchEvent(new CustomEvent('open-sql-file-manager'));
+            },
+          },
+          {
   label: "Tabla",
   description: "Insertar una tabla dinámica con columnas configurables",
   icon: "📋",

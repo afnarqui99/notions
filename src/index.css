@@ -180,6 +180,23 @@ html.dark body {
   padding: 0;
 }
 
+/* Estilos para bloques de código con botón de copiar */
+.ProseMirror .code-block-wrapper {
+  position: relative;
+  margin: 1rem 0;
+}
+
+.ProseMirror .code-block-wrapper pre {
+  position: relative;
+  padding-top: 2.5rem;
+}
+
+.ProseMirror .code-block-wrapper pre code {
+  display: block;
+  padding: 0;
+  background: transparent;
+}
+
 /* Estilos para imágenes */
 .ProseMirror img {
   max-width: 100%;

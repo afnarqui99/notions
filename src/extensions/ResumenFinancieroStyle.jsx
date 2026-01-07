@@ -134,19 +134,7 @@ export default function ResumenFinancieroStyle({ node, updateAttributes, editor 
         return esFinanciera && nombreValido;
       });
       
-      // Log de tablas que NO pasaron el filtro pero podrían ser relevantes
-      const tablasNoFiltradas = tablasEnContenido.filter(t => {
-        const esFinanciera = t.comportamiento === 'financiero';
-        const nombreValido = ['Ingresos', 'Egresos', 'Deudas'].includes(t.nombre);
-        return (esFinanciera || nombreValido) && !(esFinanciera && nombreValido);
-      });
-      if (tablasNoFiltradas.length > 0) {
-        console.log('⚠️ Tablas que no pasaron el filtro pero podrían ser relevantes:', tablasNoFiltradas.map(t => ({
-          nombre: t.nombre,
-          comportamiento: t.comportamiento,
-          tableId: t.tableId
-        })));
-      }
+      // Filtrar tablas financieras válidas
       
       // Usar las tablas del contenido como fuente de verdad
       const tablasFinancieras = tablasFinancierasEnContenido;
@@ -160,17 +148,11 @@ export default function ResumenFinancieroStyle({ node, updateAttributes, editor 
               filas: tabla.attrs.filas || [],
               propiedades: tabla.attrs.propiedades || []
             };
-            console.log(`✅ Tabla "${tabla.nombre}" cargada:`, {
-              numFilas: datos[tabla.nombre].filas.length,
-              numPropiedades: datos[tabla.nombre].propiedades?.length || 0
-            });
           }
         } catch (error) {
           console.error(`Error cargando tabla ${tabla.nombre}:`, error);
         }
       }
-      console.log('📊 DATOS FINALES cargados en setDatosTablas:', Object.keys(datos));
-      console.log('📊 DATOS COMPLETOS:', datos);
       setDatosTablas(datos);
     } catch (error) {
       console.error('❌ Error cargando datos de tablas:', error);
@@ -233,21 +215,9 @@ export default function ResumenFinancieroStyle({ node, updateAttributes, editor 
     };
 
     // Calcular totales exactamente igual para todas las tablas
-    console.log('💰 Calculando totales. datosTablas disponible:', Object.keys(datosTablas));
-    console.log('💰 Tabla Ingresos en datosTablas:', datosTablas['Ingresos'] ? 'EXISTE' : 'NO EXISTE');
-    console.log('💰 Tabla Egresos en datosTablas:', datosTablas['Egresos'] ? 'EXISTE' : 'NO EXISTE');
-    console.log('💰 Tabla Deudas en datosTablas:', datosTablas['Deudas'] ? 'EXISTE' : 'NO EXISTE');
-    
     const totalIngresos = calcularTotal('Ingresos', 'Ingresos');
     const totalEgresos = calcularTotal('Egresos', 'Egresos');
     const totalDeudas = calcularTotal('Deudas', 'Deudas');
-    
-    console.log('💰 TOTALES calculados:', {
-      ingresos: totalIngresos,
-      egresos: totalEgresos,
-      deudas: totalDeudas,
-      saldo: totalIngresos - totalEgresos
-    });
     
     return {
       ingresos: totalIngresos,
@@ -263,13 +233,6 @@ export default function ResumenFinancieroStyle({ node, updateAttributes, editor 
   const saldoTotal = totales.saldo;
 
   // Datos para gráfica de barras
-  console.log('📊 DATOS PARA GRÁFICAS:', {
-    totalIngresos,
-    totalEgresos,
-    totalDeudas,
-    datosBarra: [totalIngresos, totalEgresos, totalDeudas]
-  });
-  
   const datosBarra = {
     labels: ['Ingresos', 'Egresos', 'Deudas'],
     datasets: [{
