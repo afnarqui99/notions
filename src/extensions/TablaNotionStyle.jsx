@@ -15,6 +15,7 @@ import TableViewSelector from '../components/TableViewSelector';
 import KanbanView from '../components/KanbanView';
 import TimelineView from '../components/TimelineView';
 import GalleryView from '../components/GalleryView';
+import Toast from '../components/Toast';
 
 // Componente auxiliar para cargar imagen desde filename
 function ImagenDesdeFilename({ fila, className, alt }) {
@@ -450,6 +451,7 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
   const [showVincularModal, setShowVincularModal] = useState(false);
   const [showGraficasModal, setShowGraficasModal] = useState(false);
   const [showEditNombreModal, setShowEditNombreModal] = useState(false);
+  const [toast, setToast] = useState(null);
   
   // Estado para controlar si la tabla usa todo el ancho
   const [usarAnchoCompleto, setUsarAnchoCompleto] = useState(() => {
@@ -781,6 +783,12 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
   const guardarFilas = (filasAGuardar) => {
     // Actualizar los atributos del nodo con las nuevas filas
     updateAttributes({ filas: filasAGuardar });
+    // Mostrar mensaje de confirmación
+    setToast({
+      message: 'Cambios guardados correctamente',
+      type: 'success',
+      duration: 2000
+    });
   };
 
   const cerrarDrawer = () => {
@@ -4536,6 +4544,7 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
           boxShadow: '-4px 0 24px rgba(0, 0, 0, 0.15)'
         }}
         onClick={(e) => e.stopPropagation()}
+        data-drawer="table-drawer"
       >
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center z-10">
           <h2 className="text-lg font-semibold text-gray-900">
@@ -4863,21 +4872,6 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
 />
         </>
       )}
-        </div>
-        {/* Botón de guardar fijo en la parte inferior derecha */}
-        <div className="sticky bottom-0 bg-white border-t border-gray-200 px-6 py-4 flex justify-end z-10">
-          <button
-            onClick={() => {
-              guardarFilas(filas);
-            }}
-            className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 font-medium shadow-lg"
-            title="Guardar cambios"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-            Guardar
-          </button>
         </div>
       </div>
     </>
@@ -6399,6 +6393,16 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
         title="Eliminar Tabla"
         message="¿Estás seguro de que deseas eliminar esta tabla completa? Esta acción no se puede deshacer y se perderán todos los datos, columnas, filas y configuraciones del sprint."
       />
+
+      {/* Toast de notificación */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          duration={toast.duration}
+          onClose={() => setToast(null)}
+        />
+      )}
 
     </NodeViewWrapper>
   );

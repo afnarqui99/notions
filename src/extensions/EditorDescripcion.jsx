@@ -1,10 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import { SlashCommand } from './SlashCommand';
 import Heading from "@tiptap/extension-heading";
-import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
+import { CodeBlockWithCopyExtension } from "./CodeBlockWithCopyExtension";
 import Underline from "@tiptap/extension-underline";
 import TextStyle from "@tiptap/extension-text-style";
 import Table from "@tiptap/extension-table";
@@ -17,17 +17,19 @@ import { ResumenFinancieroNode } from "./ResumenFinancieroNode";
 import { CalendarNode } from "./CalendarNode";
 import TableHeader from "@tiptap/extension-table-header";
 import Image from "@tiptap/extension-image";
-import lowlight from "./lowlightInstance";
 import Link from "@tiptap/extension-link";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import { Toggle } from "./Toggle";
 
 export default function EditorDescripcion({ content, onChange }) {
+  const isUpdatingFromEditor = useRef(false);
+  const lastContentRef = useRef(null);
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ codeBlock: false }),
-      CodeBlockLowlight.configure({ lowlight }),
+      CodeBlockWithCopyExtension,
       Toggle,
       TablaNotionNode,
       GaleriaImagenesNode,
@@ -59,11 +61,50 @@ export default function EditorDescripcion({ content, onChange }) {
     ],
     content: content || "",
     onUpdate: ({ editor }) => {
+      isUpdatingFromEditor.current = true;
       const json = editor.getJSON();
       const limpio = removeUndefinedFields(json);
+      lastContentRef.current = JSON.stringify(limpio);
       onChange(limpio);
+      // Resetear la bandera después de un breve delay
+      setTimeout(() => {
+        isUpdatingFromEditor.current = false;
+      }, 100);
+    },
+    editorProps: {
+      attributes: {
+        class: 'prose prose-sm max-w-none focus:outline-none',
+      },
     },
   });
+
+  // Actualizar el contenido cuando cambia desde fuera (solo si no estamos actualizando desde el editor)
+  useEffect(() => {
+    if (!editor) return;
+    
+    // No actualizar si acabamos de actualizar desde el editor
+    if (isUpdatingFromEditor.current) return;
+
+    // Si content es null/undefined, usar objeto vacío para comparar
+    const contentToCompare = content || { type: 'doc', content: [] };
+    const currentContent = editor.getJSON();
+    const contentStr = JSON.stringify(currentContent);
+    const newContentStr = JSON.stringify(contentToCompare);
+    
+    // Solo actualizar si el contenido realmente cambió y no es el mismo que acabamos de enviar
+    if (contentStr !== newContentStr && newContentStr !== lastContentRef.current) {
+      // Usar un pequeño delay para evitar conflictos con actualizaciones del editor
+      const timeoutId = setTimeout(() => {
+        if (!isUpdatingFromEditor.current) {
+          editor.commands.setContent(contentToCompare, false, {
+            preserveWhitespace: 'full',
+          });
+        }
+      }, 50);
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [content, editor]);
 
   const removeUndefinedFields = (obj) => {
     if (Array.isArray(obj)) {
@@ -82,7 +123,7 @@ export default function EditorDescripcion({ content, onChange }) {
   };
 
   return (
-    <div className="w-full h-full px-4 py-6 overflow-y-auto flex flex-col">
+    <div className="w-full h-full px-4 py-6 overflow-y-auto flex flex-col" style={{ position: 'relative' }}>
       <EditorContent editor={editor} />
     </div>
   );
