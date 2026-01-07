@@ -961,7 +961,9 @@ export default function LocalEditor({ onShowConfig }) {
     }
     try {
       const result = await SQLFileService.getFilesByPage(pageId);
-      setPageSQLScriptsCount(result.files?.length || 0);
+      const count = result.files?.length || 0;
+      console.log(`[checkPageSQLScripts] Página ${pageId}: ${count} scripts encontrados`, result);
+      setPageSQLScriptsCount(count);
     } catch (error) {
       console.error('Error verificando scripts SQL:', error);
       setPageSQLScriptsCount(0);
@@ -1859,16 +1861,18 @@ export default function LocalEditor({ onShowConfig }) {
                   <span>Tags</span>
                 </button>
               </div>
-              {pageSQLScriptsCount > 0 && (
-                <button
-                  onClick={() => setShowPageSQLScripts(true)}
-                  className="ml-4 px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2 text-sm font-medium"
-                  title={`${pageSQLScriptsCount} script${pageSQLScriptsCount !== 1 ? 's' : ''} SQL asociado${pageSQLScriptsCount !== 1 ? 's' : ''}`}
-                >
-                  <Database className="w-4 h-4" />
-                  <span>{pageSQLScriptsCount} SQL</span>
-                </button>
-              )}
+              <div className="flex items-center gap-2">
+                {pageSQLScriptsCount > 0 && (
+                  <button
+                    onClick={() => setShowPageSQLScripts(true)}
+                    className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2 text-sm font-medium"
+                    title={`${pageSQLScriptsCount} script${pageSQLScriptsCount !== 1 ? 's' : ''} SQL asociado${pageSQLScriptsCount !== 1 ? 's' : ''}`}
+                  >
+                    <Database className="w-4 h-4" />
+                    <span>{pageSQLScriptsCount} SQL</span>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
