@@ -5,7 +5,9 @@ import lowlight from './lowlightInstance';
 
 export const CodeBlockWithCopyExtension = CodeBlockLowlight.extend({
   addNodeView() {
-    return ReactNodeViewRenderer(CodeBlockWithCopy);
+    return ReactNodeViewRenderer(CodeBlockWithCopy, {
+      contentDOMElementTag: 'code',
+    });
   },
 }).configure({
   lowlight,

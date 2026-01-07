@@ -520,21 +520,32 @@ export default function LocalEditor({ onShowConfig }) {
           files
             .filter(f => f.endsWith('.json') && !f.startsWith('quick-note-')) // Excluir notas rápidas
             .map(async (file) => {
-              const data = await LocalStorageService.readJSONFile(file, 'data');
-              // Verificar que no sea una nota rápida por su estructura
-              if (data && data.id && data.id.startsWith('quick-note-')) {
-                return null; // Excluir notas rápidas
+              try {
+                const data = await LocalStorageService.readJSONFile(file, 'data');
+                // Verificar que no sea una nota rápida por su estructura
+                if (data && data.id && data.id.startsWith('quick-note-')) {
+                  return null; // Excluir notas rápidas
+                }
+                // Validar que la página tenga un título válido (no vacío ni "Sin título")
+                const titulo = data?.titulo || '';
+                if (!titulo || titulo.trim() === '' || titulo.trim() === 'Sin título') {
+                  console.warn(`Página sin título válido ignorada: ${file}`, data);
+                  return null; // Excluir páginas sin título válido
+                }
+                return { 
+                  id: file.replace('.json', ''), 
+                  parentId: data.parentId || null, // Asegurar que parentId existe (null para páginas raíz)
+                  ...data 
+                };
+              } catch (error) {
+                console.error(`Error cargando página ${file}:`, error);
+                return null; // Excluir archivos con error
               }
-              return { 
-                id: file.replace('.json', ''), 
-                parentId: data.parentId || null, // Asegurar que parentId existe (null para páginas raíz)
-                ...data 
-              };
             })
         );
         
-        // Filtrar valores nulos (notas rápidas excluidas)
-        const paginasValidas = paginasData.filter(p => p !== null);
+        // Filtrar valores nulos (notas rápidas excluidas, páginas sin título, errores)
+        const paginasValidas = paginasData.filter(p => p !== null && p !== undefined);
 
         // Reconstruir índice solo si no existe o si el número de páginas cambió significativamente
         // Esto evita reconstrucciones innecesarias
