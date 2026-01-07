@@ -5,6 +5,7 @@ import { Copy, Check } from 'lucide-react';
 export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
   const [copied, setCopied] = useState(false);
   const [isInDrawer, setIsInDrawer] = useState(false);
+  const [isInModal, setIsInModal] = useState(false);
   const [shouldShowButton, setShouldShowButton] = useState(true);
   const language = node.attrs.language || '';
   const contentRef = useRef(null);
@@ -15,15 +16,20 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
     const checkContext = () => {
       if (!wrapperRef.current) return;
 
-      // Verificar si el componente está dentro de un drawer
+      // Verificar si el componente está dentro de un drawer o modal
       // Buscar un elemento padre que tenga el atributo data-drawer
       let parent = wrapperRef.current.parentElement;
       let foundDrawer = false;
+      let foundModal = false;
       
       while (parent && parent !== document.body) {
         // Verificar si tiene el atributo data-drawer (método más confiable)
-        if (parent.getAttribute('data-drawer') === 'table-drawer') {
+        const drawerAttr = parent.getAttribute('data-drawer');
+        if (drawerAttr === 'table-drawer' || drawerAttr === 'table-drawer-modal') {
           foundDrawer = true;
+          if (drawerAttr === 'table-drawer-modal') {
+            foundModal = true;
+          }
           break;
         }
         
@@ -32,10 +38,13 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
         const zIndex = computedStyle.zIndex;
         const position = computedStyle.position;
         
-        if (position === 'fixed' && (zIndex === '100' || parent.classList.toString().includes('z-[100]'))) {
+        if (position === 'fixed' && (zIndex === '100' || zIndex === '10000' || parent.classList.toString().includes('z-[100]') || parent.classList.toString().includes('z-[10000]'))) {
           if (parent.classList.toString().includes('bg-white') || 
               parent.classList.toString().includes('shadow-2xl')) {
             foundDrawer = true;
+            if (zIndex === '10000' || parent.classList.toString().includes('z-[10000]')) {
+              foundModal = true;
+            }
             break;
           }
         }
@@ -43,20 +52,31 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
       }
 
       setIsInDrawer(foundDrawer);
+      setIsInModal(foundModal);
 
-      // Verificar si hay un drawer abierto buscando el overlay o panel
+      // Verificar si hay un drawer o modal abierto buscando el overlay o panel
       const drawerOverlay = Array.from(document.querySelectorAll('.fixed.inset-0')).find(
-        el => getComputedStyle(el).zIndex === '100' || el.classList.toString().includes('z-[100]')
+        el => {
+          const zIndex = getComputedStyle(el).zIndex;
+          return zIndex === '100' || zIndex === '9999' || zIndex === '10000' || 
+                 el.classList.toString().includes('z-[100]') || 
+                 el.classList.toString().includes('z-[9999]') ||
+                 el.classList.toString().includes('z-[10000]');
+        }
       );
-      const drawerPanel = Array.from(document.querySelectorAll('.fixed.top-0.bottom-0')).find(
-        el => (getComputedStyle(el).zIndex === '100' || el.classList.toString().includes('z-[100]')) &&
-              el.classList.toString().includes('bg-white')
+      const drawerPanel = Array.from(document.querySelectorAll('.fixed.top-0.bottom-0, .fixed.inset-0')).find(
+        el => {
+          const zIndex = getComputedStyle(el).zIndex;
+          return (zIndex === '100' || zIndex === '10000' || 
+                  el.classList.toString().includes('z-[100]') || 
+                  el.classList.toString().includes('z-[10000]')) &&
+                 (el.classList.toString().includes('bg-white') || 
+                  el.getAttribute('data-drawer') === 'table-drawer-modal');
+        }
       );
       const isDrawerOpen = !!(drawerOverlay || drawerPanel);
 
-      // Mostrar el botón solo si:
-      // 1. Estamos en el drawer Y el drawer está abierto, O
-      // 2. NO estamos en el drawer Y el drawer NO está abierto
+      // Mostrar el botón siempre si estamos en un drawer/modal, o si no hay drawer/modal abierto
       setShouldShowButton((foundDrawer && isDrawerOpen) || (!foundDrawer && !isDrawerOpen));
     };
 
@@ -157,7 +177,10 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
               e.stopPropagation();
             }}
             className="absolute top-2 right-2 p-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors flex items-center gap-1 text-xs z-[110]"
-            style={{ position: 'absolute' }}
+            style={{ 
+              position: 'absolute',
+              zIndex: isInModal ? 10002 : 110 // Mayor z-index cuando está en el Portal
+            }}
             title="Copiar código"
             type="button"
           >

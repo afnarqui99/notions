@@ -1044,21 +1044,77 @@ export default function LocalEditor({ onShowConfig }) {
     const handleOpenEmojiPicker = (event) => {
       if (!editor) return;
       
+      // Verificar si el evento viene de un editor dentro de un Portal
+      // Si es así, ignorar este evento (será manejado por EditorDescripcion.jsx)
+      if (event.detail && event.detail.editor) {
+        const eventEditor = event.detail.editor;
+        
+        // Verificar si hay un modal del Portal abierto
+        const isPortalOpen = document.querySelector('[data-drawer="table-drawer-modal"]');
+        
+        // Si hay un Portal abierto y el editor del evento no es el editor principal,
+        // entonces el evento viene del Portal, no manejarlo aquí
+        if (isPortalOpen) {
+          if (eventEditor !== editor) {
+            // El evento viene del Portal, no manejarlo aquí
+            return;
+          }
+          // Si el editor es el mismo pero hay un Portal abierto, verificar si el editor principal tiene focus
+          // Si no tiene focus, probablemente el evento viene del Portal
+          if (!editor.isFocused) {
+            return;
+          }
+        }
+        
+        // Si el editor del evento no es el editor principal, también ignorar
+        if (eventEditor !== editor) {
+          return;
+        }
+      }
+      
       // Obtener la posición del cursor
       const { state } = editor;
       const { $from } = state.selection;
       const coords = editor.view.coordsAtPos($from.pos);
       
-      // Calcular posición para mostrar el picker cerca del cursor
+      // Calcular posición para mostrar el picker centrado cerca del cursor
+      // El EmojiPicker tiene un ancho de 420px, así que lo centramos respecto al cursor
+      const pickerWidth = 420;
+      const pickerHeight = 400; // Altura aproximada del picker
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      
+      // Calcular posición horizontal (centrado respecto al cursor, pero ajustado si se sale del viewport)
+      let leftPosition = coords.left + window.scrollX - (pickerWidth / 2);
+      if (leftPosition < 10) {
+        leftPosition = 10; // Mínimo 10px del borde izquierdo
+      } else if (leftPosition + pickerWidth > viewportWidth - 10) {
+        leftPosition = viewportWidth - pickerWidth - 10; // Ajustar si se sale por la derecha
+      }
+      
+      // Calcular posición vertical (debajo del cursor, pero ajustado si no hay espacio)
+      let topPosition = coords.bottom + window.scrollY + 10;
+      const spaceBelow = viewportHeight - (coords.bottom + window.scrollY);
+      const spaceAbove = coords.top + window.scrollY;
+      
+      if (spaceBelow < pickerHeight && spaceAbove > spaceBelow) {
+        // No hay espacio debajo, ponerlo arriba
+        topPosition = coords.top + window.scrollY - pickerHeight - 10;
+      } else if (topPosition + pickerHeight > viewportHeight - 10) {
+        // Ajustar si se sale por abajo
+        topPosition = viewportHeight - pickerHeight - 10;
+      }
+      
       setEmojiPickerPosition({
-        top: coords.bottom + window.scrollY + 10,
-        left: coords.left + window.scrollX
+        top: Math.max(10, topPosition),
+        left: Math.max(10, leftPosition)
       });
       
       setShowEmojiPicker(true);
     };
 
-    window.addEventListener('open-emoji-picker', handleOpenEmojiPicker);
+    // Usar capture: false para que EditorDescripcion.jsx (con capture: true) se ejecute primero
+    window.addEventListener('open-emoji-picker', handleOpenEmojiPicker, false);
     return () => {
       window.removeEventListener('open-emoji-picker', handleOpenEmojiPicker);
     };
@@ -2185,13 +2241,21 @@ export default function LocalEditor({ onShowConfig }) {
       )}
 
       {/* Selector de Emojis Global */}
-      {showEmojiPicker && (
+      {showEmojiPicker && !document.querySelector('[data-drawer="table-drawer-modal"]') && (
         <div
           ref={emojiPickerRef}
           className="fixed z-50"
           style={{
             top: `${emojiPickerPosition.top}px`,
-            left: `${emojiPickerPosition.left}px`
+            left: `${emojiPickerPosition.left}px`,
+            // Calcular z-index dinámico para estar por encima del menú de sugerencias
+            zIndex: (() => {
+              const openModals = document.querySelectorAll('[data-drawer="table-drawer-modal"]');
+              const level = openModals.length;
+              // El menú de sugerencias tiene: 10000 + (level * 1000) + 100
+              // El EmojiPicker debe estar por encima, así que usamos + 200
+              return 10000 + (level * 1000) + 200;
+            })()
           }}
         >
           <EmojiPicker

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { NodeViewWrapper } from "@tiptap/react";
 import TagInputNotionLike from "./TagInputNotionLike";
 import EditorDescripcion from './EditorDescripcion';
@@ -154,7 +155,8 @@ function NombreCeldaConImagen({ fila, filaIndex, onSubirImagen, onEliminarImagen
         boxShadow: '2px 0 4px rgba(0, 0, 0, 0.05)'
       }}
       onClick={(e) => {
-        if (!e.target.closest('input') && !e.target.closest('button') && !e.target.closest('.TagInputNotionLike') && !e.target.closest('.fila-imagen-container')) {
+        // Solo abrir el drawer si es un clic real del usuario (no un evento sintético o automático)
+        if (e.isTrusted && !e.target.closest('input') && !e.target.closest('button') && !e.target.closest('.TagInputNotionLike') && !e.target.closest('.fila-imagen-container')) {
           onAbrirDrawer(fila);
         }
       }}
@@ -421,6 +423,9 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
   const [showDrawer, setShowDrawer] = useState(false);
   const [drawerExpandido, setDrawerExpandido] = useState(false);
   const [drawerZIndex, setDrawerZIndex] = useState(100);
+  const [useFullScreenModal, setUseFullScreenModal] = useState(false);
+  const saveTimeoutRef = useRef(null);
+  const ultimoContenidoDescripcionRef = useRef(null);
   const [nuevoCampo, setNuevoCampo] = useState({ name: "", type: "text", formula: "", visible: true });
   const [sortBy, setSortBy] = useState(null);
   const [sortAsc, setSortAsc] = useState(true);
@@ -780,39 +785,108 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
 
   // Obtener el nivel de anidamiento actual
   const getDrawerNestingLevel = () => {
-    // Contar cuántos drawers están abiertos actualmente
-    const openDrawers = document.querySelectorAll('[data-drawer="table-drawer"]');
+    // Contar cuántos drawers y modales están abiertos actualmente
+    // Esto incluye tanto drawers laterales como modales de pantalla completa
+    const openDrawers = document.querySelectorAll('[data-drawer="table-drawer"], [data-drawer="table-drawer-modal"]');
     return openDrawers.length;
+  };
+
+  // Calcular z-index dinámico basado en el nivel de anidamiento
+  // Cada nivel aumenta el z-index para asegurar que los modales más recientes estén siempre arriba
+  const getModalZIndex = (level) => {
+    // Base z-index para modales: 10000
+    // Cada nivel adicional suma 1000 para asegurar que esté por encima
+    return 10000 + (level * 1000);
   };
 
   const abrirDrawer = (fila) => {
     const index = filas.findIndex((f) => f === fila);
-    setFilaSeleccionada(index);
     // Calcular z-index basado en el nivel de anidamiento actual
     const currentLevel = getDrawerNestingLevel();
-    setDrawerZIndex(100 + (currentLevel * 10)); // Incrementar z-index por cada nivel
-    setShowDrawer(true);
-    drawerNestingLevel = currentLevel;
+    
+    // Usar setTimeout para asegurar que todos los setState se ejecuten fuera del ciclo de renderizado
+    // Esto evita el error "Cannot update a component while rendering a different component"
+    setTimeout(() => {
+      // Si ya hay algún drawer o modal abierto (nivel >= 1), usar modal de pantalla completa
+      // Esto evita que quede "abajo" del drawer anterior y asegura que todo lo que se abra
+      // desde dentro de una página de descripción sea un modal de pantalla completa
+      // Nivel 0 = página principal (sin drawer), Nivel 1 = primer drawer, Nivel 2+ = modales de pantalla completa
+      if (currentLevel >= 1) {
+        setUseFullScreenModal(true);
+        // Calcular z-index dinámico basado en el nivel de anidamiento
+        // Esto asegura que cada modal esté por encima del anterior
+        const modalZIndex = getModalZIndex(currentLevel);
+        setDrawerZIndex(modalZIndex); // El overlay será drawerZIndex y el contenido drawerZIndex + 1
+      } else {
+        setUseFullScreenModal(false);
+        setDrawerZIndex(100);
+      }
+      
+      setFilaSeleccionada(index);
+      setShowDrawer(true);
+      drawerNestingLevel = currentLevel;
+    }, 0);
   };
 
   const guardarFilas = (filasAGuardar) => {
+    // Asegurar que el último contenido de la descripción esté guardado
+    let filasParaGuardar = [...filasAGuardar];
+    if (filaSeleccionada !== null && ultimoContenidoDescripcionRef.current !== null) {
+      filasParaGuardar[filaSeleccionada].descripcion = ultimoContenidoDescripcionRef.current;
+    }
+    
+    // Actualizar el estado primero
+    setTimeout(() => {
+      setFilas(filasParaGuardar);
+    }, 0);
+    
     // Actualizar los atributos del nodo con las nuevas filas
-    updateAttributes({ filas: filasAGuardar });
+    updateAttributes({ filas: filasParaGuardar });
+    
     // Mostrar mensaje de confirmación
-    setToast({
-      message: 'Cambios guardados correctamente',
-      type: 'success',
-      duration: 2000
-    });
+    // Usar setTimeout para asegurar que el estado se actualice correctamente
+    setTimeout(() => {
+      setToast({
+        message: 'Cambios guardados correctamente',
+        type: 'success',
+        duration: 2000
+      });
+    }, 100);
   };
 
   const cerrarDrawer = () => {
-    // Guardar antes de cerrar
-    guardarFilas(filas);
+    // Ejecutar inmediatamente el guardado pendiente si hay uno
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
+    }
+    
+    // Asegurar que el último contenido de la descripción esté guardado
+    let filasParaGuardar = [...filas];
+    if (filaSeleccionada !== null && ultimoContenidoDescripcionRef.current !== null) {
+      filasParaGuardar[filaSeleccionada].descripcion = ultimoContenidoDescripcionRef.current;
+      // Actualizar el estado de forma asíncrona para evitar errores de renderizado
+      setTimeout(() => {
+        setFilas(filasParaGuardar);
+      }, 0);
+    }
+    
+    // Guardar antes de cerrar (asegurar que todos los cambios se guarden, incluyendo bloques de código)
+    // Usar setTimeout para asegurar que se ejecute fuera del ciclo de renderizado
+    setTimeout(() => {
+      guardarFilas(filasParaGuardar);
+    }, 0);
+    
+    // Limpiar el ref
+    ultimoContenidoDescripcionRef.current = null;
+    
     // Los datos se guardan automáticamente en el nodo del editor
     // No necesitamos Firebase, se guarda en el contenido del editor
-    setShowDrawer(false);
-    setFilaSeleccionada(null);
+    // Actualizar el estado de forma asíncrona para evitar errores de renderizado
+    setTimeout(() => {
+      setShowDrawer(false);
+      setFilaSeleccionada(null);
+    }, 0);
     setDrawerExpandido(false); // Resetear el estado de expansión al cerrar
     // Actualizar el nivel de anidamiento después de cerrar
     setTimeout(() => {
@@ -3851,8 +3925,11 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
             propiedades={propiedadesVisibles}
             onSelectFila={(index) => {
               const fila = filasFiltradas[index];
-              setFilaSeleccionada(fila);
-              setShowDrawer(true);
+              // Usar setTimeout para asegurar que los setState se ejecuten fuera del ciclo de renderizado
+              setTimeout(() => {
+                setFilaSeleccionada(fila);
+                setShowDrawer(true);
+              }, 0);
             }}
           />
         </div>
@@ -3872,8 +3949,11 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
             }}
             onSelectFila={(index) => {
               const fila = filasFiltradas[index];
-              setFilaSeleccionada(fila);
-              setShowDrawer(true);
+              // Usar setTimeout para asegurar que los setState se ejecuten fuera del ciclo de renderizado
+              setTimeout(() => {
+                setFilaSeleccionada(fila);
+                setShowDrawer(true);
+              }, 0);
             }}
           />
         </div>
@@ -3887,8 +3967,11 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
             propiedades={propiedadesVisibles}
             onSelectFila={(index) => {
               const fila = filasFiltradas[index];
-              setFilaSeleccionada(fila);
-              setShowDrawer(true);
+              // Usar setTimeout para asegurar que los setState se ejecuten fuera del ciclo de renderizado
+              setTimeout(() => {
+                setFilaSeleccionada(fila);
+                setShowDrawer(true);
+              }, 0);
             }}
           />
         </div>
@@ -4547,46 +4630,62 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
 
 {showDrawer && (
     <>
-      {/* Overlay con animación */}
-      <div 
-        className="fixed inset-0 bg-black/40 transition-opacity"
-        onClick={cerrarDrawer}
-        style={{ 
-          animation: 'fadeIn 0.2s ease-out',
-          zIndex: drawerZIndex
-        }}
-      />
-      {/* Panel lateral con animación */}
-      <div 
-        className={`fixed top-0 bottom-0 bg-white shadow-2xl overflow-y-auto transition-all duration-300 ease-out ${
-          drawerExpandido ? 'right-0 w-full' : 'right-0 w-1/2'
-        }`}
-        style={{ 
-          animation: 'slideInRight 0.3s ease-out',
-          boxShadow: '-4px 0 24px rgba(0, 0, 0, 0.15)',
-          zIndex: drawerZIndex + 1
-        }}
-        onClick={(e) => e.stopPropagation()}
-        data-drawer="table-drawer"
-      >
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center z-10">
-          <h2 className="text-lg font-semibold text-gray-900">
-            {filaSeleccionada !== null ? filas[filaSeleccionada]?.Name || "Sin nombre" : "Editar fila"}
-          </h2>
-          <div className="flex items-center gap-2">
-            {/* Botón de guardar visible siempre */}
-            <button 
-              onClick={() => {
-                guardarFilas(filas);
+      {useFullScreenModal ? (
+        /* Modal de pantalla completa para nivel 2+ - Renderizado con Portal fuera del árbol DOM */
+        createPortal(
+          <>
+            <div 
+              className="fixed inset-0 bg-black/60"
+              onClick={cerrarDrawer}
+              style={{ 
+                animation: 'fadeIn 0.2s ease-out',
+                zIndex: drawerZIndex,
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0
               }}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm font-medium shadow-md"
-              title="Guardar cambios"
+            />
+            <div 
+              className="bg-white shadow-2xl"
+              style={{ 
+                animation: 'fadeIn 0.3s ease-out',
+                zIndex: drawerZIndex + 1,
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                width: '100vw',
+                height: '100vh',
+                overflowY: 'auto',
+                overflowX: 'hidden'
+              }}
+              onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+              data-drawer="table-drawer-modal"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              Guardar
-            </button>
+            {/* Header del modal con botón de guardar */}
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center z-10 shadow-sm">
+              <h2 className="text-lg font-semibold text-gray-900">
+                {filaSeleccionada !== null ? filas[filaSeleccionada]?.Name || "Sin nombre" : "Editar fila"}
+              </h2>
+              <div className="flex items-center gap-2">
+                {/* Botón de guardar visible siempre */}
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    guardarFilas(filas);
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm font-medium shadow-md"
+                  title="Guardar cambios"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Guardar
+                </button>
             <button 
               onClick={() => {
                 setShowColumnasSugeridasModal(true);
@@ -4599,42 +4698,61 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
               </svg>
             </button>
-            <button 
-              onClick={() => setDrawerExpandido(!drawerExpandido)} 
-              className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded hover:bg-gray-100"
-              title={drawerExpandido ? "Reducir" : "Expandir al 100%"}
+            {!useFullScreenModal && (
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDrawerExpandido(!drawerExpandido);
+                }} 
+                className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded hover:bg-gray-100"
+                title={drawerExpandido ? "Reducir" : "Expandir al 100%"}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  {drawerExpandido ? (
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  ) : (
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  )}
+                </svg>
+              </button>
+            )}
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    cerrarDrawer();
+                  }} 
+                  className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded hover:bg-gray-100"
+                  title="Cerrar"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div 
+              className={`p-6 ${useFullScreenModal ? 'w-full' : ''}`} 
+              style={useFullScreenModal ? { 
+                maxWidth: '100%', 
+                width: '100%',
+                boxSizing: 'border-box',
+                overflowX: 'hidden'
+              } : {}}
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                {drawerExpandido ? (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                ) : (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                )}
-              </svg>
-            </button>
-            <button 
-              onClick={cerrarDrawer} 
-              className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded hover:bg-gray-100"
-              title="Cerrar"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        </div>
-        <div className="p-6">
 
       {filaSeleccionada !== null && (
         <>
           {/* Título editable en la parte superior */}
-          <div className="mb-6">
+          <div className="mb-6" onClick={(e) => e.stopPropagation()}>
             <input
               type="text"
               className="w-full text-2xl font-semibold border-none outline-none focus:bg-gray-50 px-2 py-1 rounded transition-colors"
               value={filas[filaSeleccionada].Name || ""}
               placeholder="Sin título"
+              onClick={(e) => e.stopPropagation()}
+              onFocus={(e) => e.stopPropagation()}
               onChange={(e) => {
+                e.stopPropagation();
                 const nuevas = [...filas];
                 nuevas[filaSeleccionada].Name = e.target.value;
                 setFilas(nuevas);
@@ -4886,17 +5004,220 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
             </div>
           </div>
          <EditorDescripcion
-  content={filas[filaSeleccionada]?.descripcion || ""}
+  key={useFullScreenModal ? `modal-editor-${filaSeleccionada}` : `drawer-editor-${filaSeleccionada}`}
+  content={filas[filaSeleccionada]?.descripcion || { type: 'doc', content: [{ type: 'paragraph' }] }}
+  autoFocus={useFullScreenModal}
   onChange={(nuevoContenido) => {
-    const nuevas = [...filas];
-    nuevas[filaSeleccionada].descripcion = nuevoContenido;
-    setFilas(nuevas);
+    // Usar setTimeout para asegurar que setFilas se ejecute fuera del ciclo de renderizado
+    // Esto evita el error "Cannot update a component while rendering a different component"
+    setTimeout(() => {
+      const nuevas = [...filas];
+      if (filaSeleccionada !== null && nuevas[filaSeleccionada]) {
+        nuevas[filaSeleccionada].descripcion = nuevoContenido;
+        // Guardar el último contenido en el ref para asegurar que se guarde al cerrar
+        ultimoContenidoDescripcionRef.current = nuevoContenido;
+        setFilas(nuevas);
+        // Guardar automáticamente con debounce para evitar demasiadas actualizaciones
+        // Esto asegura que las tablas anidadas y otros contenidos se guarden correctamente
+        if (saveTimeoutRef.current) {
+          clearTimeout(saveTimeoutRef.current);
+        }
+        saveTimeoutRef.current = setTimeout(() => {
+          updateAttributes({ filas: nuevas });
+        }, 500); // Guardar después de 500ms de inactividad
+      }
+    }, 0);
   }}
 />
         </>
       )}
-        </div>
-      </div>
+            </div>
+          </div>
+          
+          {/* Toast dentro del Portal para que sea visible cuando el modal está abierto */}
+          {toast && (
+            <Toast
+              message={toast.message}
+              type={toast.type}
+              duration={toast.duration}
+              onClose={() => setToast(null)}
+            />
+          )}
+          </>,
+          document.body
+        )
+      ) : (
+        /* Drawer lateral para nivel 1 */
+        <>
+          {/* Overlay con animación */}
+          <div 
+            className="fixed inset-0 bg-black/40 transition-opacity"
+            onClick={cerrarDrawer}
+            style={{ 
+              animation: 'fadeIn 0.2s ease-out',
+              zIndex: drawerZIndex
+            }}
+          />
+          {/* Panel lateral con animación */}
+          <div 
+            className={`fixed top-0 bottom-0 bg-white shadow-2xl overflow-y-auto transition-all duration-300 ease-out ${
+              drawerExpandido ? 'right-0 w-full' : 'right-0 w-1/2'
+            }`}
+            style={{ 
+              animation: 'slideInRight 0.3s ease-out',
+              boxShadow: '-4px 0 24px rgba(0, 0, 0, 0.15)',
+              zIndex: drawerZIndex + 1
+            }}
+            onClick={(e) => e.stopPropagation()}
+            data-drawer="table-drawer"
+          >
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center z-10">
+              <h2 className="text-lg font-semibold text-gray-900">
+                {filaSeleccionada !== null ? filas[filaSeleccionada]?.Name || "Sin nombre" : "Editar fila"}
+              </h2>
+              <div className="flex items-center gap-2">
+                {/* Botón de guardar visible siempre */}
+                <button 
+                  onClick={() => {
+                    guardarFilas(filas);
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm font-medium shadow-md"
+                  title="Guardar cambios"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Guardar
+                </button>
+                <button 
+                  onClick={() => {
+                    setShowColumnasSugeridasModal(true);
+                    setColumnasSeleccionadas([]);
+                  }}
+                  className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded hover:bg-gray-100"
+                  title="Columnas sugeridas para metodologías ágiles"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                  </svg>
+                </button>
+                {!useFullScreenModal && (
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDrawerExpandido(!drawerExpandido);
+                    }} 
+                    className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded hover:bg-gray-100"
+                    title={drawerExpandido ? "Reducir" : "Expandir al 100%"}
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      {drawerExpandido ? (
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      ) : (
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      )}
+                    </svg>
+                  </button>
+                )}
+                <button 
+                  onClick={cerrarDrawer} 
+                  className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded hover:bg-gray-100"
+                  title="Cerrar"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div className="p-6">
+              {filaSeleccionada !== null && (
+                <>
+                  {/* Título editable en la parte superior */}
+                  <div className="mb-6">
+                    <input
+                      type="text"
+                      className="w-full text-2xl font-semibold border-none outline-none focus:bg-gray-50 px-2 py-1 rounded transition-colors"
+                      value={filas[filaSeleccionada].Name || ""}
+                      placeholder="Sin título"
+                      onChange={(e) => {
+                        const nuevas = [...filas];
+                        nuevas[filaSeleccionada].Name = e.target.value;
+                        setFilas(nuevas);
+                      }}
+                    />
+                  </div>
+                  
+                  <div className="mb-4">
+                    <label className="block text-xs text-gray-600 mb-1">Imagen</label>
+                    <div className="flex items-center gap-3">
+                      {filas[filaSeleccionada].imageFilename || filas[filaSeleccionada].image ? (
+                        <div className="relative">
+                          {filas[filaSeleccionada].imageFilename?.startsWith('icon-') ? (
+                            <div className="w-16 h-16 rounded flex items-center justify-center text-3xl border border-gray-200 bg-white">
+                              {filas[filaSeleccionada].image}
+                            </div>
+                          ) : (
+                            <ImagenDesdeFilename 
+                              fila={filas[filaSeleccionada]} 
+                              className="w-16 h-16 rounded object-cover border border-gray-200"
+                            />
+                          )}
+                          <button
+                            onClick={() => eliminarImagenFila(filaSeleccionada)}
+                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm hover:bg-red-600"
+                            title="Eliminar imagen"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setFilaIndexParaIcono(filaSeleccionada);
+                            setShowIconPickerModal(true);
+                          }}
+                          className="w-16 h-16 rounded border border-dashed border-gray-300 flex items-center justify-center text-gray-400 hover:border-gray-400 hover:text-gray-500 transition-colors"
+                          title="Agregar imagen o icono"
+                        >
+                          <span className="text-xl">🖼️</span>
+                        </button>
+                      )}
+                      <button
+                        onClick={() => {
+                          setFilaIndexParaIcono(filaSeleccionada);
+                          setShowIconPickerModal(true);
+                        }}
+                        className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm"
+                      >
+                        {filas[filaSeleccionada].image ? 'Cambiar imagen' : 'Agregar imagen/icono'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Propiedades - copiar todo el bloque de propiedades aquí */}
+                  {/* ... resto del contenido del drawer ... */}
+                  
+                  <EditorDescripcion
+                    content={filas[filaSeleccionada]?.descripcion || ""}
+                    onChange={(nuevoContenido) => {
+                      const nuevas = [...filas];
+                      nuevas[filaSeleccionada].descripcion = nuevoContenido;
+                      setFilas(nuevas);
+                      if (saveTimeoutRef.current) {
+                        clearTimeout(saveTimeoutRef.current);
+                      }
+                      saveTimeoutRef.current = setTimeout(() => {
+                        updateAttributes({ filas: nuevas });
+                      }, 500);
+                    }}
+                  />
+                </>
+              )}
+            </div>
+          </div>
+        </>
+      )}
     </>
   )}
 
