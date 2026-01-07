@@ -9,6 +9,7 @@ export default function QuickNote({ isOpen, onClose, onShowHistory, initialNote 
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [currentNoteId, setCurrentNoteId] = useState(null);
+  const [zIndex, setZIndex] = useState(10000);
   const saveTimeoutRef = useRef(null);
   const isSavingRef = useRef(false); // Ref para evitar guardados duplicados
 
@@ -98,6 +99,38 @@ export default function QuickNote({ isOpen, onClose, onShowHistory, initialNote 
     };
   }, []);
 
+  // Calcular z-index dinámico para estar por encima de las páginas visibles
+  useEffect(() => {
+    const calculateZIndex = () => {
+      if (typeof document === 'undefined') return 10000;
+      
+      // Buscar todos los modales abiertos
+      const openModals = document.querySelectorAll('[data-drawer="table-drawer-modal"]');
+      const level = openModals.length;
+      
+      if (level > 0) {
+        // El z-index del modal es: 10000 + (level * 1000) + 1
+        // El modal de notas rápidas debe estar por encima, así que usamos + 100
+        return 10000 + (level * 1000) + 100;
+      }
+      
+      // Si no hay modales, usar un z-index alto para estar por encima de las páginas
+      return 10000;
+    };
+
+    if (isOpen) {
+      // Actualizar z-index inicial
+      setZIndex(calculateZIndex());
+
+      // Actualizar z-index periódicamente para detectar cambios en los modales
+      const interval = setInterval(() => {
+        setZIndex(calculateZIndex());
+      }, 100);
+
+      return () => clearInterval(interval);
+    }
+  }, [isOpen]);
+
   const handleSave = async () => {
     if (!editor || isSavingRef.current) return; // Evitar guardados duplicados
 
@@ -160,7 +193,10 @@ export default function QuickNote({ isOpen, onClose, onShowHistory, initialNote 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+    <div 
+      className="fixed inset-0 flex items-center justify-center p-4 bg-black/50"
+      style={{ zIndex }}
+    >
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[85vh] flex flex-col border border-gray-200 dark:border-gray-700">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">

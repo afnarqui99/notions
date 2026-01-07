@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { MessageSquare, X, Plus } from 'lucide-react';
 import CommentService from '../services/CommentService';
 import CommentThread from './CommentThread';
@@ -8,6 +8,8 @@ export default function CommentPanel({ isOpen, onClose, pageId, editor, onShowTo
   const [loading, setLoading] = useState(true);
   const [showNewCommentForm, setShowNewCommentForm] = useState(false);
   const [newCommentText, setNewCommentText] = useState('');
+  const [zIndex, setZIndex] = useState(10000);
+  const panelRef = useRef(null);
 
   useEffect(() => {
     if (isOpen && pageId) {
@@ -18,6 +20,36 @@ export default function CommentPanel({ isOpen, onClose, pageId, editor, onShowTo
       setNewCommentText('');
     }
   }, [isOpen, pageId]);
+
+  // Calcular z-index dinámico para estar por encima de las páginas visibles
+  useEffect(() => {
+    const calculateZIndex = () => {
+      if (typeof document === 'undefined') return 10000;
+      
+      // Buscar todos los modales abiertos
+      const openModals = document.querySelectorAll('[data-drawer="table-drawer-modal"]');
+      const level = openModals.length;
+      
+      if (level > 0) {
+        // El z-index del modal es: 10000 + (level * 1000) + 1
+        // El panel de comentarios debe estar por encima, así que usamos + 100
+        return 10000 + (level * 1000) + 100;
+      }
+      
+      // Si no hay modales, usar un z-index alto para estar por encima de las páginas
+      return 10000;
+    };
+
+    // Actualizar z-index inicial
+    setZIndex(calculateZIndex());
+
+    // Actualizar z-index periódicamente para detectar cambios en los modales
+    const interval = setInterval(() => {
+      setZIndex(calculateZIndex());
+    }, 100);
+
+    return () => clearInterval(interval);
+  }, [isOpen]);
 
   const loadComments = async () => {
     if (!pageId) return;
@@ -101,7 +133,11 @@ export default function CommentPanel({ isOpen, onClose, pageId, editor, onShowTo
   const resolvedComments = comments.filter(c => c.resolved);
 
   return (
-    <div className="fixed right-0 top-0 h-full w-96 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 shadow-xl z-50 flex flex-col">
+    <div 
+      ref={panelRef}
+      className="fixed right-0 top-0 h-full w-96 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 shadow-xl flex flex-col"
+      style={{ zIndex }}
+    >
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center gap-2">
