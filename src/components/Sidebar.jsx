@@ -578,21 +578,6 @@ export default function Sidebar({
             )}
           </div>
           
-          {/* Indicador de scripts SQL (si tiene) */}
-          {paginaEditando !== pagina.id && pageSQLCounts[pagina.id] > 0 && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                window.dispatchEvent(new CustomEvent('open-page-sql-scripts', { detail: { pageId: pagina.id } }));
-              }}
-              className="ml-1 flex items-center gap-1 px-1.5 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
-              title={`Ver ${pageSQLCounts[pagina.id]} script${pageSQLCounts[pagina.id] !== 1 ? 's' : ''} SQL asociado${pageSQLCounts[pagina.id] !== 1 ? 's' : ''}`}
-            >
-              <Database className="w-3 h-3" />
-              <span>{pageSQLCounts[pagina.id]}</span>
-            </button>
-          )}
-          
           {/* Botones de acción (hover) */}
           {paginaEditando !== pagina.id && (
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100" onClick={(e) => e.stopPropagation()}>
@@ -683,6 +668,27 @@ export default function Sidebar({
             </div>
           )}
         </button>
+        
+        {/* Indicador de scripts SQL (si tiene) - Fuera del botón para evitar anidamiento */}
+        {paginaEditando !== pagina.id && pageSQLCounts[pagina.id] > 0 && (
+          <div 
+            className="ml-2 flex items-center"
+            style={{ paddingLeft: `${8 + nivel * 16}px` }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                window.dispatchEvent(new CustomEvent('open-page-sql-scripts', { detail: { pageId: pagina.id } }));
+              }}
+              className="flex items-center gap-1 px-1.5 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+              title={`Ver ${pageSQLCounts[pagina.id]} script${pageSQLCounts[pagina.id] !== 1 ? 's' : ''} SQL asociado${pageSQLCounts[pagina.id] !== 1 ? 's' : ''}`}
+            >
+              <Database className="w-3 h-3" />
+              <span>{pageSQLCounts[pagina.id]}</span>
+            </button>
+          </div>
+        )}
         
         {/* Renderizar hijos si está expandida */}
         {tieneHijos && estaExpandida && (
