@@ -17,6 +17,9 @@ import TimelineView from '../components/TimelineView';
 import GalleryView from '../components/GalleryView';
 import Toast from '../components/Toast';
 
+// Sistema para rastrear el nivel de anidamiento de drawers
+let drawerNestingLevel = 0;
+
 // Componente auxiliar para cargar imagen desde filename
 function ImagenDesdeFilename({ fila, className, alt }) {
   const [imagenUrl, setImagenUrl] = useState(null);
@@ -417,6 +420,7 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
   const [filaSeleccionada, setFilaSeleccionada] = useState(null);
   const [showDrawer, setShowDrawer] = useState(false);
   const [drawerExpandido, setDrawerExpandido] = useState(false);
+  const [drawerZIndex, setDrawerZIndex] = useState(100);
   const [nuevoCampo, setNuevoCampo] = useState({ name: "", type: "text", formula: "", visible: true });
   const [sortBy, setSortBy] = useState(null);
   const [sortAsc, setSortAsc] = useState(true);
@@ -774,10 +778,21 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
     setFilas([...filas, nuevaFila]);
   };
 
+  // Obtener el nivel de anidamiento actual
+  const getDrawerNestingLevel = () => {
+    // Contar cuántos drawers están abiertos actualmente
+    const openDrawers = document.querySelectorAll('[data-drawer="table-drawer"]');
+    return openDrawers.length;
+  };
+
   const abrirDrawer = (fila) => {
     const index = filas.findIndex((f) => f === fila);
     setFilaSeleccionada(index);
+    // Calcular z-index basado en el nivel de anidamiento actual
+    const currentLevel = getDrawerNestingLevel();
+    setDrawerZIndex(100 + (currentLevel * 10)); // Incrementar z-index por cada nivel
     setShowDrawer(true);
+    drawerNestingLevel = currentLevel;
   };
 
   const guardarFilas = (filasAGuardar) => {
@@ -799,6 +814,10 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
     setShowDrawer(false);
     setFilaSeleccionada(null);
     setDrawerExpandido(false); // Resetear el estado de expansión al cerrar
+    // Actualizar el nivel de anidamiento después de cerrar
+    setTimeout(() => {
+      drawerNestingLevel = getDrawerNestingLevel();
+    }, 100);
   };
 
   // Función para detectar si la tabla es de tipo Scrum (usa comportamiento guardado o detecta por campos)
@@ -4530,18 +4549,22 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
     <>
       {/* Overlay con animación */}
       <div 
-        className="fixed inset-0 z-[100] bg-black/40 transition-opacity"
+        className="fixed inset-0 bg-black/40 transition-opacity"
         onClick={cerrarDrawer}
-        style={{ animation: 'fadeIn 0.2s ease-out' }}
+        style={{ 
+          animation: 'fadeIn 0.2s ease-out',
+          zIndex: drawerZIndex
+        }}
       />
       {/* Panel lateral con animación */}
       <div 
-        className={`fixed top-0 bottom-0 z-[100] bg-white shadow-2xl overflow-y-auto transition-all duration-300 ease-out ${
+        className={`fixed top-0 bottom-0 bg-white shadow-2xl overflow-y-auto transition-all duration-300 ease-out ${
           drawerExpandido ? 'right-0 w-full' : 'right-0 w-1/2'
         }`}
         style={{ 
           animation: 'slideInRight 0.3s ease-out',
-          boxShadow: '-4px 0 24px rgba(0, 0, 0, 0.15)'
+          boxShadow: '-4px 0 24px rgba(0, 0, 0, 0.15)',
+          zIndex: drawerZIndex + 1
         }}
         onClick={(e) => e.stopPropagation()}
         data-drawer="table-drawer"
