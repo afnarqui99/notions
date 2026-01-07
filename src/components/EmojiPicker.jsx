@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Smile, X } from 'lucide-react';
 
 // Emojis organizados por categorías
@@ -22,8 +22,25 @@ const ALL_EMOJIS = Object.values(EMOJI_CATEGORIES).flat();
 export default function EmojiPicker({ onSelect, onClose, currentEmoji = '' }) {
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('Frecuentes');
   const [busqueda, setBusqueda] = useState('');
+  const [isInModal, setIsInModal] = useState(false);
+  const pickerRef = useRef(null);
 
   const categorias = Object.keys(EMOJI_CATEGORIES);
+
+  // Detectar si estamos dentro de un Portal/modal y actualizar z-index dinámicamente
+  useEffect(() => {
+    const checkModal = () => {
+      const hasModal = typeof document !== 'undefined' && !!document.querySelector('[data-drawer="table-drawer-modal"]');
+      setIsInModal(hasModal);
+      if (pickerRef.current) {
+        pickerRef.current.style.zIndex = hasModal ? '10003' : '50';
+      }
+    };
+    
+    checkModal();
+    const interval = setInterval(checkModal, 100);
+    return () => clearInterval(interval);
+  }, []);
 
   // Inyectar estilos de scrollbar una sola vez
   useEffect(() => {
@@ -82,8 +99,22 @@ export default function EmojiPicker({ onSelect, onClose, currentEmoji = '' }) {
     onClose();
   };
 
+  // Calcular z-index dinámico para estar por encima del menú de sugerencias
+  const getPickerZIndex = () => {
+    if (typeof document === 'undefined') return 50;
+    const openModals = document.querySelectorAll('[data-drawer="table-drawer-modal"]');
+    const level = openModals.length;
+    // El menú de sugerencias tiene: 10000 + (level * 1000) + 100
+    // El EmojiPicker debe estar por encima, así que usamos + 200
+    return 10000 + (level * 1000) + 200;
+  };
+
   return (
-    <div className="absolute z-50 mt-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg shadow-xl w-[420px] overflow-hidden">
+    <div 
+      ref={pickerRef}
+      className="absolute mt-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg shadow-xl w-[420px] overflow-hidden"
+      style={{ zIndex: getPickerZIndex() }}
+    >
       {/* Header */}
       <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">

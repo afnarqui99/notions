@@ -3,6 +3,38 @@ import { CheckCircle, X, AlertCircle, Info } from 'lucide-react';
 
 export default function Toast({ message, type = 'success', duration = 3000, onClose }) {
   const [isVisible, setIsVisible] = useState(true);
+  const [zIndex, setZIndex] = useState(10002);
+
+  // Calcular z-index dinámico basado en el nivel del modal actual
+  useEffect(() => {
+    const calculateZIndex = () => {
+      if (typeof document === 'undefined') return 10002;
+      
+      // Buscar todos los modales abiertos
+      const openModals = document.querySelectorAll('[data-drawer="table-drawer-modal"]');
+      const level = openModals.length;
+      
+      if (level > 0) {
+        // El z-index del modal es: 10000 + (level * 1000) + 1
+        // El Toast debe estar por encima del modal, así que usamos + 10
+        const modalZIndex = 10000 + (level * 1000) + 1;
+        return modalZIndex + 10;
+      }
+      
+      // Si no hay modales, usar el z-index por defecto
+      return 10002;
+    };
+
+    // Actualizar z-index inicial
+    setZIndex(calculateZIndex());
+
+    // Actualizar z-index periódicamente para detectar cambios en los modales
+    const interval = setInterval(() => {
+      setZIndex(calculateZIndex());
+    }, 100);
+
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     if (duration > 0) {
@@ -45,7 +77,7 @@ export default function Toast({ message, type = 'success', duration = 3000, onCl
   return (
     <div
       className={`
-        fixed bottom-4 right-4 z-50
+        fixed bottom-4 right-4
         ${colors[type]}
         border rounded-lg shadow-lg
         px-4 py-3 flex items-center gap-3
@@ -53,6 +85,7 @@ export default function Toast({ message, type = 'success', duration = 3000, onCl
         transition-all duration-300 ease-in-out
         ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}
       `}
+      style={{ zIndex: zIndex }}
     >
       <div className={iconColors[type]}>{icons[type]}</div>
       <p className="flex-1 text-sm font-medium">{message}</p>

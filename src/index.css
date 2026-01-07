@@ -823,3 +823,104 @@ tabla-notion {
   margin-top: 4px;
 }
 
+/* Estilos para modales de pantalla completa - prevenir scrollbar horizontal */
+[data-drawer="table-drawer-modal"] {
+  width: 100vw !important;
+  max-width: 100vw !important;
+  overflow-x: hidden !important;
+  box-sizing: border-box !important;
+}
+
+[data-drawer="table-drawer-modal"] * {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+[data-drawer="table-drawer-modal"] .ProseMirror {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow-x: hidden !important;
+}
+
+[data-drawer="table-drawer-modal"] table {
+  max-width: 100% !important;
+  table-layout: auto !important;
+}
+
+/* Estilos para el menú de sugerencias del plugin Suggestion dentro del Portal */
+/* TipTap Suggestion usa Tippy.js para renderizar su menú */
+/* Asegurar que el menú tenga un z-index muy alto para que sea visible sobre el modal */
+
+/* El contenedor Tippy se renderiza directamente en el body */
+body > [data-tippy-root] {
+  position: fixed !important;
+  pointer-events: auto !important;
+  /* Asegurar que el posicionamiento sea relativo al viewport, no al contenedor */
+  transform: translateZ(0) !important; /* Forzar aceleración de hardware */
+  /* El z-index se calculará dinámicamente, pero asegurar un mínimo alto */
+  z-index: 20000 !important; /* Muy alto para estar por encima de todos los modales */
+}
+
+/* Estilos para el contenedor Tippy (usado por TipTap Suggestion) */
+.tippy-box {
+  position: fixed !important;
+  max-height: 300px !important; /* Limitar altura para evitar scrollbars */
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  /* Asegurar que el posicionamiento sea correcto */
+  transform: translateZ(0) !important;
+  /* Z-index muy alto como fallback, pero se sobrescribirá dinámicamente en JavaScript */
+  z-index: 50000 !important;
+}
+
+/* Cuando el menú está dentro del modal del Portal, asegurar que sea visible */
+[data-drawer="table-drawer-modal"] ~ .tippy-box,
+body > .tippy-box {
+  position: fixed !important;
+  /* Asegurar que el posicionamiento sea relativo al viewport */
+  transform: translateZ(0) !important;
+  /* Z-index muy alto como fallback, pero se sobrescribirá dinámicamente en JavaScript */
+  z-index: 50000 !important;
+}
+
+/* Estilos para el contenido del menú de sugerencias */
+.tippy-content {
+  max-height: 300px !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  /* Z-index muy alto como fallback */
+  z-index: 50000 !important;
+}
+
+/* Prevenir que el modal cause overflow cuando el menú se renderiza */
+[data-drawer="table-drawer-modal"] {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  /* Permitir que el menú de Tippy se renderice fuera del contenedor */
+  position: fixed !important;
+  /* Asegurar que el scroll no afecte el posicionamiento del menú */
+  transform: translateZ(0) !important;
+  /* Asegurar que los modales anteriores no se muestren cuando hay scroll */
+  isolation: isolate !important;
+}
+
+/* Asegurar que el contenedor del editor no cause overflow */
+[data-drawer="table-drawer-modal"] .ProseMirror {
+  overflow: visible !important;
+  position: relative !important;
+}
+
+/* Estilos para cualquier menú desplegable dentro del Portal */
+[data-drawer="table-drawer-modal"] [role="listbox"],
+[data-drawer="table-drawer-modal"] [role="menu"],
+[data-drawer="table-drawer-modal"] .suggestion-menu {
+  z-index: 10001 !important;
+  position: fixed !important;
+}
+
+/* Asegurar que Tippy calcule correctamente la posición cuando está dentro de un Portal */
+.tippy-box[data-placement] {
+  /* Forzar que el posicionamiento sea relativo al viewport */
+  position: fixed !important;
+}
+

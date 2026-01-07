@@ -748,6 +748,9 @@ export const SlashCommand = Extension.create({
               popup.className =
                 'absolute z-50 bg-white border border-gray-300 rounded shadow text-sm';
               popup.style.minWidth = '250px';
+              popup.style.maxHeight = '300px';
+              popup.style.overflowY = 'auto';
+              popup.style.overflowX = 'hidden';
 
               props.items.forEach((item) => {
                 const button = document.createElement('button');
@@ -840,10 +843,41 @@ function updatePopupPosition(popup, clientRect) {
   const rect = clientRect();
   if (!rect) return;
 
-  popup.style.position = 'absolute';
-  popup.style.left = `${rect.left + window.scrollX}px`;
-  popup.style.top = `${rect.top + rect.height + window.scrollY + 6}px`;
-  popup.style.zIndex = '9999';
+  // Calcular el z-index dinámico basado en el nivel de anidamiento actual
+  // Necesitamos estar por encima del modal más reciente
+  const getCurrentModalZIndex = () => {
+    // Contar cuántos modales están abiertos
+    const openModals = document.querySelectorAll('[data-drawer="table-drawer-modal"]');
+    const level = openModals.length;
+    // El z-index del modal más reciente es: 10000 + (level * 1000) + 1 (contenido)
+    // El menú debe estar por encima, así que usamos + 100 para estar seguro
+    return 10000 + (level * 1000) + 100;
+  };
+
+  // Usar position: fixed para que funcione correctamente dentro de Portals
+  // Las coordenadas de clientRect() ya vienen relativas al viewport
+  popup.style.position = 'fixed';
+  popup.style.left = `${rect.left}px`;
+  
+  // Calcular la posición vertical, ajustando si no hay espacio debajo
+  const spaceBelow = window.innerHeight - (rect.top + rect.height);
+  const spaceAbove = rect.top;
+  const menuHeight = Math.min(300, popup.scrollHeight || 300); // Altura máxima del menú
+  
+  let topPosition;
+  if (spaceBelow >= menuHeight || spaceBelow > spaceAbove) {
+    // Hay espacio debajo o es mejor ponerlo debajo
+    topPosition = rect.top + rect.height + 6;
+  } else {
+    // No hay espacio debajo, ponerlo arriba
+    topPosition = rect.top - menuHeight - 6;
+  }
+  
+  // Asegurar que el menú no se salga del viewport
+  topPosition = Math.max(10, Math.min(topPosition, window.innerHeight - menuHeight - 10));
+  
+  popup.style.top = `${topPosition}px`;
+  popup.style.zIndex = getCurrentModalZIndex(); // Z-index dinámico basado en el nivel actual
 }
 
 
