@@ -9,6 +9,7 @@ export default function GlobalSearch({ isOpen, onClose, onSelectResult }) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [filterType, setFilterType] = useState('all'); // 'all', 'page', 'event', 'table'
   const [pageSQLCounts, setPageSQLCounts] = useState({}); // { pageId: count }
+  const [zIndex, setZIndex] = useState(10000);
   const inputRef = useRef(null);
   const resultsRef = useRef(null);
 
@@ -23,6 +24,38 @@ export default function GlobalSearch({ isOpen, onClose, onSelectResult }) {
       setFilterType('all');
       // Indexar si es necesario
       searchIndexService.indexAll();
+    }
+  }, [isOpen]);
+
+  // Calcular z-index dinámico para estar por encima de las páginas visibles
+  useEffect(() => {
+    const calculateZIndex = () => {
+      if (typeof document === 'undefined') return 10000;
+      
+      // Buscar todos los modales abiertos
+      const openModals = document.querySelectorAll('[data-drawer="table-drawer-modal"]');
+      const level = openModals.length;
+      
+      if (level > 0) {
+        // El z-index del modal es: 10000 + (level * 1000) + 1
+        // El modal de búsqueda debe estar por encima, así que usamos + 100
+        return 10000 + (level * 1000) + 100;
+      }
+      
+      // Si no hay modales, usar un z-index alto para estar por encima de las páginas
+      return 10000;
+    };
+
+    if (isOpen) {
+      // Actualizar z-index inicial
+      setZIndex(calculateZIndex());
+
+      // Actualizar z-index periódicamente para detectar cambios en los modales
+      const interval = setInterval(() => {
+        setZIndex(calculateZIndex());
+      }, 100);
+
+      return () => clearInterval(interval);
     }
   }, [isOpen]);
 
@@ -152,8 +185,9 @@ export default function GlobalSearch({ isOpen, onClose, onSelectResult }) {
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-start justify-center pt-[10vh]"
+      className="fixed inset-0 flex items-start justify-center pt-[10vh]"
       onClick={onClose}
+      style={{ zIndex }}
     >
       {/* Backdrop */}
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" />

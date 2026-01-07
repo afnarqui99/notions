@@ -101,7 +101,8 @@ export default function SQLScriptNode({ node, updateAttributes }) {
         pageName: fileData.pageName || null,
       });
 
-      // Guardar versión
+      // Guardar versión en base de datos (archivos JSON)
+      // Esto asegura que el versionamiento sea persistente
       await SQLVersionService.createVersion(currentScriptId, {
         content,
         version: fileData.version || null,
