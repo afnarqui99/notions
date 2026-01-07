@@ -165,12 +165,10 @@ class NotificationService {
   // Iniciar servicio de notificaciones
   start() {
     if (this.isRunning) {
-      console.log('NotificationService ya está corriendo');
       return;
     }
     
     this.isRunning = true;
-    console.log('NotificationService iniciado');
     
     // Verificar inmediatamente
     this.checkUpcomingEvents();

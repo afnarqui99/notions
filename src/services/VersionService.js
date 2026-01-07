@@ -32,11 +32,14 @@ class VersionService {
         }
       };
 
-      // Guardar snapshot
+      // Sanitizar el ID para usar como nombre de archivo
+      const sanitizedId = snapshot.id.replace(/[<>:"/\\|?*]/g, '_');
+      
+      // Guardar snapshot en el subdirectorio versions
       await LocalStorageService.saveJSONFile(
-        `versions/${snapshot.id}.json`,
+        `${sanitizedId}.json`,
         snapshot,
-        'data'
+        'data/versions'
       );
 
       // Actualizar índice de versiones
@@ -65,9 +68,10 @@ class VersionService {
       const versions = await Promise.all(
         index.versions.map(async (versionId) => {
           try {
+            const sanitizedId = versionId.replace(/[<>:"/\\|?*]/g, '_');
             const version = await LocalStorageService.readJSONFile(
-              `versions/${versionId}.json`,
-              'data'
+              `${sanitizedId}.json`,
+              'data/versions'
             );
             return version;
           } catch (error) {
@@ -92,9 +96,10 @@ class VersionService {
    */
   async getVersion(versionId) {
     try {
+      const sanitizedId = versionId.replace(/[<>:"/\\|?*]/g, '_');
       const version = await LocalStorageService.readJSONFile(
-        `versions/${versionId}.json`,
-        'data'
+        `${sanitizedId}.json`,
+        'data/versions'
       );
       return version;
     } catch (error) {
@@ -193,9 +198,10 @@ class VersionService {
       
       for (const version of versionsToDelete) {
         try {
+          const sanitizedId = version.id.replace(/[<>:"/\\|?*]/g, '_');
           await LocalStorageService.deleteJSONFile(
-            `versions/${version.id}.json`,
-            'data'
+            `${sanitizedId}.json`,
+            'data/versions'
           );
         } catch (error) {
           console.error(`Error eliminando versión ${version.id}:`, error);
@@ -219,9 +225,10 @@ class VersionService {
       
       for (const version of versions) {
         try {
+          const sanitizedId = version.id.replace(/[<>:"/\\|?*]/g, '_');
           await LocalStorageService.deleteJSONFile(
-            `versions/${version.id}.json`,
-            'data'
+            `${sanitizedId}.json`,
+            'data/versions'
           );
         } catch (error) {
           console.error(`Error eliminando versión ${version.id}:`, error);
@@ -241,8 +248,8 @@ class VersionService {
   async getVersionIndex(pageId) {
     try {
       const index = await LocalStorageService.readJSONFile(
-        `versions/_index.json`,
-        'data'
+        `_index.json`,
+        'data/versions'
       );
       return index?.[pageId] || null;
     } catch (error) {
@@ -258,8 +265,8 @@ class VersionService {
       let index = {};
       try {
         index = await LocalStorageService.readJSONFile(
-          `versions/_index.json`,
-          'data'
+          `_index.json`,
+          'data/versions'
         ) || {};
       } catch (error) {
         // El índice no existe, crear uno nuevo
@@ -292,9 +299,9 @@ class VersionService {
       }
 
       await LocalStorageService.saveJSONFile(
-        `versions/_index.json`,
+        `_index.json`,
         index,
-        'data'
+        'data/versions'
       );
     } catch (error) {
       console.error('Error actualizando índice de versiones:', error);
@@ -307,16 +314,16 @@ class VersionService {
   async deleteVersionIndex(pageId) {
     try {
       const index = await LocalStorageService.readJSONFile(
-        `versions/_index.json`,
-        'data'
+        `_index.json`,
+        'data/versions'
       ) || {};
 
       delete index[pageId];
 
       await LocalStorageService.saveJSONFile(
-        `versions/_index.json`,
+        `_index.json`,
         index,
-        'data'
+        'data/versions'
       );
     } catch (error) {
       console.error('Error eliminando índice de versiones:', error);
@@ -376,6 +383,7 @@ class VersionService {
 }
 
 export default new VersionService();
+
 
 
 

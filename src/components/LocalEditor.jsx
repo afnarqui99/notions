@@ -2,7 +2,8 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Heading from "@tiptap/extension-heading";
-import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
+import { CodeBlockWithCopyExtension } from "../extensions/CodeBlockWithCopyExtension";
+import { SQLScriptNodeExtension } from "../extensions/SQLScriptNodeExtension";
 import Underline from "@tiptap/extension-underline";
 import TextStyle from "@tiptap/extension-text-style";
 import Table from "@tiptap/extension-table";
@@ -23,7 +24,7 @@ import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import { Toggle } from "../extensions/Toggle";
 import { Comment } from "../extensions/Comment";
-import { Settings, Plus, Image as ImageIcon, Paperclip, Download, Trash2, Tag as TagIcon, FileText, Save, Clock, MessageSquare, MoreVertical } from "lucide-react";
+import { Settings, Plus, Image as ImageIcon, Paperclip, Download, Trash2, Tag as TagIcon, FileText, Save, Clock, MessageSquare, MoreVertical, Database } from "lucide-react";
 import LocalStorageService from "../services/LocalStorageService";
 import Modal from "./Modal";
 import ConfigModal from "./ConfigModal";
@@ -48,6 +49,10 @@ import QuickNote from "./QuickNote";
 import QuickNotesHistory from "./QuickNotesHistory";
 import KeyboardShortcuts from "./KeyboardShortcuts";
 import EmojiPicker from "./EmojiPicker";
+import SQLFileManager from "./SQLFileManager";
+import SQLFileService from "../services/SQLFileService";
+import PageSQLScriptsModal from "./PageSQLScriptsModal";
+import PageIndexService from "../services/PageIndexService";
 
 export default function LocalEditor({ onShowConfig }) {
   // Función helper para extraer emoji del título
@@ -81,7 +86,8 @@ export default function LocalEditor({ onShowConfig }) {
     const emoji = extraerEmojiDelTitulo(tituloTexto);
     if (emoji) {
       const tituloSinEmoji = tituloTexto.trim().substring(emoji.length).trim();
-      return tituloSinEmoji || 'Sin título';
+      // No devolver 'Sin título', devolver string vacío si no hay texto después del emoji
+      return tituloSinEmoji;
     }
     return tituloTexto.trim();
   };
@@ -126,6 +132,10 @@ export default function LocalEditor({ onShowConfig }) {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [emojiPickerPosition, setEmojiPickerPosition] = useState({ top: 0, left: 0 });
   const emojiPickerRef = useRef(null);
+  const [showSQLFileManager, setShowSQLFileManager] = useState(false);
+  const [sqlFileToLoad, setSqlFileToLoad] = useState(null);
+  const [showPageSQLScripts, setShowPageSQLScripts] = useState(false);
+  const [pageSQLScriptsCount, setPageSQLScriptsCount] = useState(0);
   const ultimoContenidoGuardadoRef = useRef(null);
   const [favoritos, setFavoritos] = useState(() => {
     try {
@@ -394,19 +404,24 @@ export default function LocalEditor({ onShowConfig }) {
         }
       }
       
+      const pageData = {
+        ...data,
+        contenido: contenidoParaGuardar,
+        titulo: tituloLimpio,
+        emoji: data.emoji || null, // Preservar el emoji existente
+        tags: data.tags || [], // Preservar tags existentes
+        actualizadoEn: new Date().toISOString(),
+        creadoEn: data.creadoEn || new Date().toISOString()
+      };
+
       await LocalStorageService.saveJSONFile(
         `${paginaSeleccionada}.json`,
-        {
-          ...data,
-          contenido: contenidoParaGuardar,
-          titulo: tituloLimpio,
-          emoji: data.emoji || null, // Preservar el emoji existente
-          tags: data.tags || [], // Preservar tags existentes
-          actualizadoEn: new Date().toISOString(),
-          creadoEn: data.creadoEn || new Date().toISOString()
-        },
+        pageData,
         'data'
       );
+
+      // Actualizar índice de páginas
+      await PageIndexService.updatePageInIndex(paginaSeleccionada, pageData);
 
       ultimoContenidoGuardadoRef.current = contenidoSerializado;
       setHayCambiosSinGuardar(false);
@@ -438,7 +453,8 @@ export default function LocalEditor({ onShowConfig }) {
         codeBlock: false,
         heading: false // Deshabilitar Heading de StarterKit para evitar duplicación
       }),
-      CodeBlockLowlight.configure({ lowlight }),
+      CodeBlockWithCopyExtension,
+      SQLScriptNodeExtension,
       Toggle,
       TablaNotionNode,
       GaleriaImagenesNode,
@@ -519,6 +535,25 @@ export default function LocalEditor({ onShowConfig }) {
         
         // Filtrar valores nulos (notas rápidas excluidas)
         const paginasValidas = paginasData.filter(p => p !== null);
+
+        // Reconstruir índice solo si no existe o si el número de páginas cambió significativamente
+        // Esto evita reconstrucciones innecesarias
+        // Usar setTimeout para evitar actualizaciones durante el renderizado
+        setTimeout(async () => {
+          try {
+            const currentIndex = await PageIndexService.getIndex();
+            const indexPageCount = currentIndex.pages?.length || 0;
+            const actualPageCount = paginasValidas.length;
+            
+            // Solo reconstruir si hay una diferencia significativa (más del 10% o si no hay índice)
+            if (indexPageCount === 0 || Math.abs(actualPageCount - indexPageCount) / Math.max(actualPageCount, 1) > 0.1) {
+              await PageIndexService.rebuildIndex();
+            }
+          } catch (error) {
+            // Si hay error obteniendo el índice, reconstruirlo
+            await PageIndexService.rebuildIndex();
+          }
+        }, 0);
 
         // Ordenar por fecha de creación descendente, pero mantener orden estable
         // Usar ID como segundo criterio para orden estable
@@ -648,6 +683,9 @@ export default function LocalEditor({ onShowConfig }) {
           ultimoContenidoRef.current = JSON.stringify({ type: "doc", content: [{ type: "paragraph" }] });
         }
         setHayCambiosSinGuardar(false);
+        
+        // Verificar scripts SQL asociados a esta página
+        checkPageSQLScripts(paginaSeleccionada);
       } catch (error) {
         // En caso de error, inicializar valores por defecto
         setTitulo("");
@@ -655,6 +693,7 @@ export default function LocalEditor({ onShowConfig }) {
         setPageTags([]);
         editor.commands.setContent({ type: "doc", content: [{ type: "paragraph" }] });
         ultimoContenidoRef.current = JSON.stringify({ type: "doc", content: [{ type: "paragraph" }] });
+        setPageSQLScriptsCount(0);
       }
     };
 
@@ -785,6 +824,53 @@ export default function LocalEditor({ onShowConfig }) {
     };
   }, []);
 
+  // Escuchar evento para abrir gestor de archivos SQL
+  useEffect(() => {
+    const handleOpenSQLFileManager = () => {
+      setShowSQLFileManager(true);
+    };
+
+    window.addEventListener('open-sql-file-manager', handleOpenSQLFileManager);
+    return () => {
+      window.removeEventListener('open-sql-file-manager', handleOpenSQLFileManager);
+    };
+  }, []);
+
+  // Escuchar evento para navegar a una página desde SQLScriptNode
+  useEffect(() => {
+    const handleNavigateToPage = (event) => {
+      const { pageId } = event.detail;
+      if (pageId) {
+        seleccionarPagina(pageId);
+      }
+    };
+
+    window.addEventListener('navigate-to-page', handleNavigateToPage);
+    return () => {
+      window.removeEventListener('navigate-to-page', handleNavigateToPage);
+    };
+  }, []);
+
+  // Escuchar evento para abrir scripts SQL de una página específica
+  useEffect(() => {
+    const handleOpenPageSQLScripts = (event) => {
+      const { pageId } = event.detail;
+      if (pageId) {
+        setPaginaSeleccionada(pageId);
+        seleccionarPagina(pageId);
+        // Esperar un momento para que la página se cargue y luego abrir el modal
+        setTimeout(() => {
+          setShowPageSQLScripts(true);
+        }, 300);
+      }
+    };
+
+    window.addEventListener('open-page-sql-scripts', handleOpenPageSQLScripts);
+    return () => {
+      window.removeEventListener('open-page-sql-scripts', handleOpenPageSQLScripts);
+    };
+  }, []);
+
   // Manejar inserción de plantilla desde slash command
   const handleTemplateInsert = (template) => {
     if (templateInsertEditor.current && template.content) {
@@ -801,7 +887,19 @@ export default function LocalEditor({ onShowConfig }) {
     // Extraer emoji si no se pasó explícitamente
     const emojiFinal = emoji || extraerEmojiDelTitulo(titulo);
     // Quitar el emoji del título para guardarlo limpio
-    const tituloSinEmoji = quitarEmojiDelTitulo(titulo);
+    let tituloSinEmoji = quitarEmojiDelTitulo(titulo);
+    
+    // Validar que después de quitar el emoji, el título no esté vacío
+    // Si solo hay emoji, usar el emoji como título o rechazar la creación
+    if (!tituloSinEmoji || tituloSinEmoji.trim() === '' || tituloSinEmoji === 'Sin título') {
+      // Si el título original tiene contenido (aunque sea solo emoji), usar el título original
+      if (titulo && titulo.trim()) {
+        tituloSinEmoji = titulo.trim();
+      } else {
+        // Si no hay título válido, no crear la página
+        return;
+      }
+    }
 
     // Generar UUID único para la página (usar crypto.randomUUID() si está disponible, sino fallback a timestamp)
     const id = typeof crypto !== 'undefined' && crypto.randomUUID 
@@ -814,9 +912,14 @@ export default function LocalEditor({ onShowConfig }) {
       content: [{ type: "paragraph" }],
     };
     
+    // Validación final: asegurar que el título no esté vacío
+    if (!tituloSinEmoji || tituloSinEmoji.trim() === '') {
+      return; // No crear la página si el título final está vacío
+    }
+
     const nuevaPagina = {
       id,
-      titulo: tituloSinEmoji,
+      titulo: tituloSinEmoji.trim(),
       emoji: emojiFinal || null,
       parentId: parentId || null, // ID de la página padre (null para páginas raíz)
       tags: tags || [], // IDs de tags
@@ -833,8 +936,14 @@ export default function LocalEditor({ onShowConfig }) {
       setTitulo(tituloSinEmoji);
       setTituloPaginaActual(tituloSinEmoji);
       
+      // Actualizar índice de páginas
+      await PageIndexService.updatePageInIndex(id, nuevaPagina);
+      
       // Cargar el contenido en el editor (incluyendo contenido de plantilla si existe)
       editor?.commands.setContent(contenido);
+      
+      // Verificar scripts SQL asociados
+      checkPageSQLScripts(id);
     } catch (error) {
       setModalError({ 
         isOpen: true, 
@@ -844,11 +953,29 @@ export default function LocalEditor({ onShowConfig }) {
     }
   };
 
+  // Verificar scripts SQL asociados a una página
+  const checkPageSQLScripts = async (pageId) => {
+    if (!pageId) {
+      setPageSQLScriptsCount(0);
+      return;
+    }
+    try {
+      const result = await SQLFileService.getFilesByPage(pageId);
+      setPageSQLScriptsCount(result.files?.length || 0);
+    } catch (error) {
+      console.error('Error verificando scripts SQL:', error);
+      setPageSQLScriptsCount(0);
+    }
+  };
+
   const seleccionarPagina = async (paginaId) => {
     if (!paginaId || !editor) return;
     setPaginaSeleccionada(paginaId);
     PageContext.setCurrentPageId(paginaId);
     setSelectorAbierto(false);
+    
+    // Verificar si hay scripts SQL asociados a esta página
+    checkPageSQLScripts(paginaId);
   };
 
   // Función para obtener el título completo de una página (con emoji si existe)
@@ -1490,6 +1617,64 @@ export default function LocalEditor({ onShowConfig }) {
         }}
       />
 
+      {/* Gestor de Archivos SQL */}
+      <SQLFileManager
+        isOpen={showSQLFileManager}
+        onClose={() => {
+          setShowSQLFileManager(false);
+          setSqlFileToLoad(null);
+        }}
+        onSelectFile={async (file) => {
+          // Insertar el archivo SQL en el editor
+          if (editor) {
+            const fileId = file.id || SQLFileService.generateFileId(file.name);
+            editor.chain().focus().insertContent({
+              type: 'sqlScript',
+              attrs: {
+                scriptId: fileId,
+                content: file.content || '',
+                version: file.version || '',
+                fileName: file.name || '',
+                fileDescription: file.description || '',
+                pageId: file.pageId || null,
+                pageName: file.pageName || null,
+              },
+            }).run();
+          }
+        }}
+        onNewFile={() => {
+          // Crear nuevo archivo SQL en el editor
+          if (editor) {
+            const fileId = SQLFileService.generateFileId();
+            editor.chain().focus().insertContent({
+              type: 'sqlScript',
+              attrs: {
+                scriptId: fileId,
+                content: '',
+                version: '',
+                fileName: '',
+                fileDescription: '',
+                pageId: null,
+                pageName: null,
+              },
+            }).run();
+          }
+        }}
+      />
+
+      {/* Modal de Scripts SQL de la Página */}
+      <PageSQLScriptsModal
+        isOpen={showPageSQLScripts}
+        onClose={() => {
+          setShowPageSQLScripts(false);
+          if (paginaSeleccionada) {
+            checkPageSQLScripts(paginaSeleccionada);
+          }
+        }}
+        pageId={paginaSeleccionada}
+        pageName={tituloPaginaActual}
+      />
+
       {/* Modal de Historial de Versiones */}
       <VersionHistory
         isOpen={showVersionHistory}
@@ -1638,32 +1823,52 @@ export default function LocalEditor({ onShowConfig }) {
               <Save className="w-3 h-3" />
               Plantilla
             </button>
+            <button
+              onClick={() => setShowSQLFileManager(true)}
+              className="px-2 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700 flex items-center gap-1 text-xs"
+              title="Gestor de Scripts SQL - Ver todos los scripts versionados"
+            >
+              <Database className="w-3 h-3" />
+              Scripts SQL
+            </button>
           </div>
 
           {/* Título compacto con tags */}
           <PageTagsDisplay tags={pageTags} />
           <div className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 transition-colors">
-            <div className="flex items-center gap-2 px-4 py-2">
-              <input
-                type="text"
-                value={tituloPaginaActual}
-                onChange={(e) => setTituloPaginaActual(e.target.value)}
-                onBlur={actualizarTitulo}
-                placeholder="Título de la página"
-                className="flex-1 text-xl font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400 bg-transparent text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
-              />
-              <button
-                onClick={() => {
-                  // Guardar los tags actuales antes de abrir el modal
-                  pageTagsRef.current = [...pageTags];
-                  setShowTagEditor(true);
-                }}
-                className="px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 transition-colors flex items-center gap-1"
-                title="Editar tags"
-              >
-                <TagIcon className="w-4 h-4" />
-                <span>Tags</span>
-              </button>
+            <div className="flex items-center justify-between px-4 py-2">
+              <div className="flex items-center gap-2 flex-1">
+                <input
+                  type="text"
+                  value={tituloPaginaActual}
+                  onChange={(e) => setTituloPaginaActual(e.target.value)}
+                  onBlur={actualizarTitulo}
+                  placeholder="Título de la página"
+                  className="flex-1 text-xl font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400 bg-transparent text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
+                />
+                <button
+                  onClick={() => {
+                    // Guardar los tags actuales antes de abrir el modal
+                    pageTagsRef.current = [...pageTags];
+                    setShowTagEditor(true);
+                  }}
+                  className="px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 transition-colors flex items-center gap-1"
+                  title="Editar tags"
+                >
+                  <TagIcon className="w-4 h-4" />
+                  <span>Tags</span>
+                </button>
+              </div>
+              {pageSQLScriptsCount > 0 && (
+                <button
+                  onClick={() => setShowPageSQLScripts(true)}
+                  className="ml-4 px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2 text-sm font-medium"
+                  title={`${pageSQLScriptsCount} script${pageSQLScriptsCount !== 1 ? 's' : ''} SQL asociado${pageSQLScriptsCount !== 1 ? 's' : ''}`}
+                >
+                  <Database className="w-4 h-4" />
+                  <span>{pageSQLScriptsCount} SQL</span>
+                </button>
+              )}
             </div>
           </div>
 

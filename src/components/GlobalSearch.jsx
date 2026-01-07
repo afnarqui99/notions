@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
-import { Search, FileText, Calendar, Table, X, Command } from 'lucide-react';
+import { Search, FileText, Calendar, Table, X, Command, Database } from 'lucide-react';
 import searchIndexService from '../services/SearchIndexService';
+import SQLFileService from '../services/SQLFileService';
 
 export default function GlobalSearch({ isOpen, onClose, onSelectResult }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [filterType, setFilterType] = useState('all'); // 'all', 'page', 'event', 'table'
+  const [pageSQLCounts, setPageSQLCounts] = useState({}); // { pageId: count }
   const inputRef = useRef(null);
   const resultsRef = useRef(null);
 
@@ -31,12 +33,32 @@ export default function GlobalSearch({ isOpen, onClose, onSelectResult }) {
     const performSearch = async () => {
       if (query.trim() === '') {
         setResults([]);
+        setPageSQLCounts({});
         return;
       }
       
       const searchResults = await searchIndexService.search(query, { type: filterType });
       setResults(searchResults);
       setSelectedIndex(0);
+      
+      // Verificar scripts SQL para páginas encontradas
+      const pageResults = searchResults.filter(r => r.type === 'page');
+      if (pageResults.length > 0) {
+        const counts = {};
+        await Promise.all(
+          pageResults.map(async (page) => {
+            try {
+              const result = await SQLFileService.getFilesByPage(page.id);
+              counts[page.id] = result.files?.length || 0;
+            } catch (error) {
+              counts[page.id] = 0;
+            }
+          })
+        );
+        setPageSQLCounts(counts);
+      } else {
+        setPageSQLCounts({});
+      }
     };
     
     const timeoutId = setTimeout(performSearch, 200);
@@ -64,6 +86,14 @@ export default function GlobalSearch({ isOpen, onClose, onSelectResult }) {
     if (onSelectResult) {
       onSelectResult(result);
     }
+    onClose();
+  };
+
+  // Manejar clic en scripts SQL de una página
+  const handleViewSQLScripts = async (e, pageId) => {
+    e.stopPropagation();
+    // Disparar evento para abrir el modal de scripts SQL de esa página
+    window.dispatchEvent(new CustomEvent('open-page-sql-scripts', { detail: { pageId } }));
     onClose();
   };
 
@@ -241,6 +271,16 @@ export default function GlobalSearch({ isOpen, onClose, onSelectResult }) {
                       <span className="text-xs text-gray-400 uppercase">
                         {result.type === 'page' ? 'Página' : result.type === 'event' ? 'Evento' : 'Tabla'}
                       </span>
+                      {result.type === 'page' && pageSQLCounts[result.id] > 0 && (
+                        <button
+                          onClick={(e) => handleViewSQLScripts(e, result.id)}
+                          className="ml-auto flex items-center gap-1 px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                          title={`Ver ${pageSQLCounts[result.id]} script${pageSQLCounts[result.id] !== 1 ? 's' : ''} SQL asociado${pageSQLCounts[result.id] !== 1 ? 's' : ''}`}
+                        >
+                          <Database className="w-3 h-3" />
+                          <span>{pageSQLCounts[result.id]} SQL</span>
+                        </button>
+                      )}
                     </div>
                     {result.text && (
                       <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2">
