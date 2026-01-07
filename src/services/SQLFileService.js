@@ -92,10 +92,19 @@ class SQLFileService {
   }
 
   /**
-   * Obtener scripts SQL asociados a una página
+   * Obtener scripts SQL asociados a una página (OPTIMIZADO - usa índice)
    */
   async getFilesByPage(pageId) {
-    return await SQLFileIndexService.getFilesPaginated({ pageId, limit: 1000 });
+    if (!pageId) {
+      return { files: [], total: 0, hasMore: false };
+    }
+    try {
+      const result = await SQLFileIndexService.getFilesPaginated({ pageId, limit: 1000 });
+      return result;
+    } catch (error) {
+      console.error('Error obteniendo archivos por página:', error);
+      return { files: [], total: 0, hasMore: false };
+    }
   }
 
   /**
@@ -114,14 +123,6 @@ class SQLFileService {
       console.error('Error obteniendo páginas:', error);
       return [];
     }
-  }
-
-  /**
-   * Obtener archivos SQL por página
-   */
-  async getFilesByPage(pageId) {
-    const allFiles = await this.getAllFiles();
-    return allFiles.filter(file => file.pageId === pageId);
   }
 
   /**
