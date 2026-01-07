@@ -73,7 +73,7 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
             e.preventDefault();
             e.stopPropagation();
           }}
-          className="absolute top-2 right-2 p-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors flex items-center gap-1 text-xs z-10"
+          className="absolute top-2 right-2 p-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors flex items-center gap-1 text-xs z-40"
           title="Copiar código"
           type="button"
         >

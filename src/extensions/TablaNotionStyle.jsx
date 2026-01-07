@@ -778,7 +778,14 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
     setShowDrawer(true);
   };
 
+  const guardarFilas = (filasAGuardar) => {
+    // Actualizar los atributos del nodo con las nuevas filas
+    updateAttributes({ filas: filasAGuardar });
+  };
+
   const cerrarDrawer = () => {
+    // Guardar antes de cerrar
+    guardarFilas(filas);
     // Los datos se guardan automáticamente en el nodo del editor
     // No necesitamos Firebase, se guarda en el contenido del editor
     setShowDrawer(false);
@@ -4515,13 +4522,13 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
     <>
       {/* Overlay con animación */}
       <div 
-        className="fixed inset-0 z-50 bg-black/40 transition-opacity"
+        className="fixed inset-0 z-[100] bg-black/40 transition-opacity"
         onClick={cerrarDrawer}
         style={{ animation: 'fadeIn 0.2s ease-out' }}
       />
       {/* Panel lateral con animación */}
       <div 
-        className={`fixed top-0 bottom-0 z-50 bg-white shadow-2xl overflow-y-auto transition-all duration-300 ease-out ${
+        className={`fixed top-0 bottom-0 z-[100] bg-white shadow-2xl overflow-y-auto transition-all duration-300 ease-out ${
           drawerExpandido ? 'right-0 w-full' : 'right-0 w-1/2'
         }`}
         style={{ 
@@ -4535,6 +4542,19 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
             {filaSeleccionada !== null ? filas[filaSeleccionada]?.Name || "Sin nombre" : "Editar fila"}
           </h2>
           <div className="flex items-center gap-2">
+            {/* Botón de guardar visible siempre */}
+            <button 
+              onClick={() => {
+                guardarFilas(filas);
+              }}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm font-medium shadow-md"
+              title="Guardar cambios"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              Guardar
+            </button>
             <button 
               onClick={() => {
                 setShowColumnasSugeridasModal(true);
