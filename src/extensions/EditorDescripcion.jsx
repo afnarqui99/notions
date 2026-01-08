@@ -5,6 +5,7 @@ import Placeholder from '@tiptap/extension-placeholder';
 import { SlashCommand } from './SlashCommand';
 import Heading from "@tiptap/extension-heading";
 import { CodeBlockWithCopyExtension } from "./CodeBlockWithCopyExtension";
+import { MarkdownNodeExtension } from "./MarkdownNodeExtension";
 import Underline from "@tiptap/extension-underline";
 import TextStyle from "@tiptap/extension-text-style";
 import Table from "@tiptap/extension-table";
@@ -35,6 +36,7 @@ export default function EditorDescripcion({ content, onChange, autoFocus = false
     extensions: [
       StarterKit.configure({ codeBlock: false }),
       CodeBlockWithCopyExtension,
+      MarkdownNodeExtension,
       Toggle,
       TablaNotionNode,
       GaleriaImagenesNode,
@@ -66,15 +68,26 @@ export default function EditorDescripcion({ content, onChange, autoFocus = false
     ],
     content: content || { type: 'doc', content: [{ type: 'paragraph' }] },
     onUpdate: ({ editor }) => {
+      // Evitar actualizaciones si estamos procesando contenido desde fuera
+      if (procesandoContenidoRef.current) return;
+      
       isUpdatingFromEditor.current = true;
       const json = editor.getJSON();
       const limpio = removeUndefinedFields(json);
-      lastContentRef.current = JSON.stringify(limpio);
-      // Usar setTimeout para asegurar que onChange se ejecute fuera del ciclo de renderizado
-      // Esto evita el error "Cannot update a component while rendering a different component"
-      setTimeout(() => {
-        onChange(limpio);
-      }, 0);
+      const contentStr = JSON.stringify(limpio);
+      
+      // Solo actualizar si el contenido realmente cambió
+      if (contentStr !== lastContentRef.current) {
+        lastContentRef.current = contentStr;
+        // Usar setTimeout para asegurar que onChange se ejecute fuera del ciclo de renderizado
+        // Esto evita el error "Cannot update a component while rendering a different component"
+        setTimeout(() => {
+          if (!procesandoContenidoRef.current) {
+            onChange(limpio);
+          }
+        }, 0);
+      }
+      
       // Resetear la bandera después de un breve delay
       setTimeout(() => {
         isUpdatingFromEditor.current = false;
@@ -208,12 +221,15 @@ export default function EditorDescripcion({ content, onChange, autoFocus = false
     };
   }, [editor, autoFocus]);
 
+  // Ref para evitar actualizaciones durante el procesamiento
+  const procesandoContenidoRef = useRef(false);
+  
   // Actualizar el contenido cuando cambia desde fuera (solo si no estamos actualizando desde el editor)
   useEffect(() => {
     if (!editor) return;
     
-    // No actualizar si acabamos de actualizar desde el editor
-    if (isUpdatingFromEditor.current) return;
+    // No actualizar si acabamos de actualizar desde el editor o si estamos procesando
+    if (isUpdatingFromEditor.current || procesandoContenidoRef.current) return;
 
     // Validar y normalizar el contenido antes de establecerlo
     let contentToCompare;
@@ -267,6 +283,9 @@ export default function EditorDescripcion({ content, onChange, autoFocus = false
     
     // Solo actualizar si el contenido realmente cambió y no es el mismo que acabamos de enviar
     if (contentStr !== newContentStr && newContentStr !== lastContentRef.current) {
+      // Marcar que estamos procesando para evitar bucles
+      procesandoContenidoRef.current = true;
+      
       // Usar requestAnimationFrame y setTimeout para asegurar que se ejecute fuera del ciclo de renderizado
       // Esto evita el error "Cannot update a component while rendering a different component"
       let timeoutId = null;
@@ -277,6 +296,8 @@ export default function EditorDescripcion({ content, onChange, autoFocus = false
               editor.commands.setContent(contentToCompare, false, {
                 preserveWhitespace: 'full',
               });
+              // Actualizar lastContentRef después de establecer el contenido
+              lastContentRef.current = newContentStr;
             } catch (error) {
               // Si hay un error al establecer el contenido, usar un documento vacío válido
               console.warn('Error al establecer contenido en el editor, usando documento vacío:', error);
@@ -285,6 +306,7 @@ export default function EditorDescripcion({ content, onChange, autoFocus = false
                 editor.commands.setContent({ type: 'doc', content: [{ type: 'paragraph' }] }, false, {
                   preserveWhitespace: 'full',
                 });
+                lastContentRef.current = JSON.stringify(emptyDoc);
               } catch (fallbackError) {
                 console.error('Error al establecer documento vacío:', fallbackError);
                 // Si aún falla, intentar con un documento completamente nuevo
@@ -294,7 +316,14 @@ export default function EditorDescripcion({ content, onChange, autoFocus = false
                   console.error('Error al limpiar el editor:', clearError);
                 }
               }
+            } finally {
+              // Liberar el flag después de un breve delay
+              setTimeout(() => {
+                procesandoContenidoRef.current = false;
+              }, 100);
             }
+          } else {
+            procesandoContenidoRef.current = false;
           }
         }, 0);
       });
@@ -304,6 +333,7 @@ export default function EditorDescripcion({ content, onChange, autoFocus = false
         if (timeoutId) {
           clearTimeout(timeoutId);
         }
+        procesandoContenidoRef.current = false;
       };
     }
   }, [content, editor]);

@@ -442,6 +442,8 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
   
   // Cache para datos de tablas vinculadas
   const cacheDatosTablas = useRef({});
+  const precargandoTablasRef = useRef(false); // Flag para evitar precargas simultáneas
+  const evaluandoFormulasRef = useRef(false); // Flag para evitar disparar eventos durante evaluación de fórmulas
   
   // Función para cargar datos de una tabla vinculada
   const cargarDatosTablaVinculada = (tableIdBuscado) => {
@@ -467,62 +469,77 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
       return;
     }
     
-    for (const vinculacion of tablasVinculadas) {
-      const tableIdBuscado = vinculacion.tableId;
-      
-      // Si ya está en cache, saltar
-      if (cacheDatosTablas.current[tableIdBuscado]) {
-        continue;
-      }
-      
-      try {
-        // Buscar la tabla en el registro
-        const tablaInfo = TableRegistryService.getTable(tableIdBuscado);
-        if (!tablaInfo || !tablaInfo.paginaId) {
-          continue;
-        }
-        
-        // Cargar la página
-        const paginaData = await LocalStorageService.readJSONFile(`${tablaInfo.paginaId}.json`, 'data');
-        if (!paginaData || !paginaData.contenido) {
-          continue;
-        }
-        
-        // Buscar el nodo de tabla en el contenido
-        const encontrarTablaEnContenido = (content) => {
-          if (!content || !content.content) return null;
-          
-          for (const node of content.content) {
-            if (node.type === 'tablaNotion' && node.attrs?.tableId === tableIdBuscado) {
-              return node.attrs;
-            }
-            // Buscar recursivamente en nodos hijos
-            if (node.content) {
-              const encontrado = encontrarTablaEnContenido(node);
-              if (encontrado) return encontrado;
-            }
-          }
-          return null;
-        };
-        
-        const tablaData = encontrarTablaEnContenido(paginaData.contenido);
-        if (tablaData) {
-          cacheDatosTablas.current[tableIdBuscado] = {
-            filas: tablaData.filas || [],
-            propiedades: tablaData.propiedades || []
-          };
-        }
-      } catch (error) {
-        // Error cargando datos de tabla vinculada
-      }
+    // Evitar precargas simultáneas
+    if (precargandoTablasRef.current) {
+      return;
     }
     
-    // Forzar re-evaluación de fórmulas después de cargar
-    if (Object.keys(cacheDatosTablas.current).length > 0) {
-      // Disparar evento para re-evaluar fórmulas
-      window.dispatchEvent(new CustomEvent('tablasVinculadasCargadas', {
-        detail: { tableId: tableId }
-      }));
+    precargandoTablasRef.current = true;
+    
+    try {
+      for (const vinculacion of tablasVinculadas) {
+        const tableIdBuscado = vinculacion.tableId;
+        
+        // Si ya está en cache, saltar
+        if (cacheDatosTablas.current[tableIdBuscado]) {
+          continue;
+        }
+        
+        try {
+          // Buscar la tabla en el registro
+          const tablaInfo = TableRegistryService.getTable(tableIdBuscado);
+          if (!tablaInfo || !tablaInfo.paginaId) {
+            continue;
+          }
+          
+          // Cargar la página
+          const paginaData = await LocalStorageService.readJSONFile(`${tablaInfo.paginaId}.json`, 'data');
+          if (!paginaData || !paginaData.contenido) {
+            continue;
+          }
+          
+          // Buscar el nodo de tabla en el contenido
+          const encontrarTablaEnContenido = (content) => {
+            if (!content || !content.content) return null;
+            
+            for (const node of content.content) {
+              if (node.type === 'tablaNotion' && node.attrs?.tableId === tableIdBuscado) {
+                return node.attrs;
+              }
+              // Buscar recursivamente en nodos hijos
+              if (node.content) {
+                const encontrado = encontrarTablaEnContenido(node);
+                if (encontrado) return encontrado;
+              }
+            }
+            return null;
+          };
+          
+          const tablaData = encontrarTablaEnContenido(paginaData.contenido);
+          if (tablaData) {
+            cacheDatosTablas.current[tableIdBuscado] = {
+              filas: tablaData.filas || [],
+              propiedades: tablaData.propiedades || []
+            };
+          }
+        } catch (error) {
+          // Error cargando datos de tabla vinculada
+        }
+      }
+      
+      // Forzar re-evaluación de fórmulas después de cargar
+      // Solo disparar evento si realmente se cargaron datos nuevos
+      const datosCargados = Object.keys(cacheDatosTablas.current).length > 0;
+      if (datosCargados && !evaluandoFormulasRef.current) {
+        // Usar setTimeout para evitar disparar el evento durante el renderizado
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('tablasVinculadasCargadas', {
+            detail: { tableId: tableId }
+          }));
+        }, 0);
+      }
+    } finally {
+      precargandoTablasRef.current = false;
     }
   };
 
@@ -3062,8 +3079,51 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
         delete cacheDatosTablas.current[tableIdActualizada];
         precargarDatosTablasVinculadas();
         
-        // Re-evaluar todas las fórmulas
-        const nuevasFilas = filas.map(fila => {
+        // Re-evaluar todas las fórmulas usando función de actualización
+        setFilas(prevFilas => {
+          const nuevasFilas = prevFilas.map(fila => {
+            const nuevasProps = { ...fila.properties };
+            Object.keys(nuevasProps).forEach(propName => {
+              const prop = propiedades.find(p => p.name === propName);
+              if (prop && prop.type === "formula" && prop.formula) {
+                try {
+                  const evaluator = new FormulaEvaluator(
+                    fila,
+                    prevFilas,
+                    sprintConfig,
+                    tablasVinculadas,
+                    tableId,
+                    cargarDatosTablaVinculada
+                  );
+                  const resultado = evaluator.evaluate(prop.formula);
+                  nuevasProps[propName] = {
+                    ...nuevasProps[propName],
+                    value: resultado !== undefined && resultado !== null ? String(resultado) : ""
+                  };
+                } catch (error) {
+                  // Error re-evaluando fórmula
+                }
+              }
+            });
+            return { ...fila, properties: nuevasProps };
+          });
+          return nuevasFilas;
+        });
+      }
+    };
+    
+    const handlerTablasCargadas = () => {
+      // Evitar re-evaluaciones simultáneas
+      if (evaluandoFormulasRef.current) {
+        return;
+      }
+      
+      evaluandoFormulasRef.current = true;
+      
+      // Re-evaluar fórmulas cuando se cargan datos de tablas vinculadas
+      // Usar función de actualización para evitar dependencia de filas
+      setFilas(prevFilas => {
+        const nuevasFilas = prevFilas.map(fila => {
           const nuevasProps = { ...fila.properties };
           Object.keys(nuevasProps).forEach(propName => {
             const prop = propiedades.find(p => p.name === propName);
@@ -3071,7 +3131,7 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
               try {
                 const evaluator = new FormulaEvaluator(
                   fila,
-                  filas,
+                  prevFilas,
                   sprintConfig,
                   tablasVinculadas,
                   tableId,
@@ -3089,39 +3149,14 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
           });
           return { ...fila, properties: nuevasProps };
         });
-        setFilas(nuevasFilas);
-      }
-    };
-    
-    const handlerTablasCargadas = () => {
-      // Re-evaluar fórmulas cuando se cargan datos de tablas vinculadas
-      const nuevasFilas = filas.map(fila => {
-        const nuevasProps = { ...fila.properties };
-        Object.keys(nuevasProps).forEach(propName => {
-          const prop = propiedades.find(p => p.name === propName);
-          if (prop && prop.type === "formula" && prop.formula) {
-            try {
-              const evaluator = new FormulaEvaluator(
-                fila,
-                filas,
-                sprintConfig,
-                tablasVinculadas,
-                tableId,
-                cargarDatosTablaVinculada
-              );
-              const resultado = evaluator.evaluate(prop.formula);
-              nuevasProps[propName] = {
-                ...nuevasProps[propName],
-                value: resultado !== undefined && resultado !== null ? String(resultado) : ""
-              };
-            } catch (error) {
-              // Error re-evaluando fórmula
-            }
-          }
-        });
-        return { ...fila, properties: nuevasProps };
+        
+        // Liberar el flag después de un breve delay
+        setTimeout(() => {
+          evaluandoFormulasRef.current = false;
+        }, 100);
+        
+        return nuevasFilas;
       });
-      setFilas(nuevasFilas);
     };
     
     window.addEventListener('tablaActualizada', handlerTablaActualizada);
@@ -3131,15 +3166,25 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
       window.removeEventListener('tablaActualizada', handlerTablaActualizada);
       window.removeEventListener('tablasVinculadasCargadas', handlerTablasCargadas);
     };
-  }, [tablasVinculadas, tableId, filas, propiedades, sprintConfig]);
+  }, [tablasVinculadas, tableId, propiedades, sprintConfig]); // Removido 'filas' de dependencias
 
   // Efecto para disparar evento cuando esta tabla cambia
   useEffect(() => {
+    // No disparar evento si estamos evaluando fórmulas (evitar bucles)
+    if (evaluandoFormulasRef.current || precargandoTablasRef.current) {
+      return;
+    }
+    
     if (tableId && (filas.length > 0 || propiedades.length > 0)) {
-      // Disparar evento para notificar a otras tablas que esta tabla cambió
-      window.dispatchEvent(new CustomEvent('tablaActualizada', {
-        detail: { tableId }
-      }));
+      // Usar setTimeout para evitar disparar el evento durante el renderizado
+      setTimeout(() => {
+        if (!evaluandoFormulasRef.current && !precargandoTablasRef.current) {
+          // Disparar evento para notificar a otras tablas que esta tabla cambió
+          window.dispatchEvent(new CustomEvent('tablaActualizada', {
+            detail: { tableId }
+          }));
+        }
+      }, 0);
     }
   }, [filas, propiedades, tableId]);
 
