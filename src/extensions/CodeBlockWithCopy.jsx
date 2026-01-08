@@ -15,14 +15,14 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
   const wrapperRef = useRef(null);
   const fullscreenRef = useRef(null);
 
-  // Actualizar el contenido del modal cuando cambia el nodo (solo si está en fullscreen)
+  // Actualizar el contenido del modal cuando se abre (solo la primera vez)
   useEffect(() => {
-    if (isFullscreen) {
+    if (isFullscreen && !fullscreenContent) {
       const currentText = getCodeText();
       setFullscreenContent(currentText);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFullscreen, node.textContent]);
+  }, [isFullscreen]);
 
   // Detectar si estamos dentro del drawer y si el drawer está abierto
   useEffect(() => {
@@ -146,7 +146,59 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
   };
 
   const handleExitFullscreen = () => {
+    // Guardar cambios antes de cerrar
+    if (fullscreenContent !== getCodeText() && editor) {
+      updateEditorContent(fullscreenContent);
+    }
     setIsFullscreen(false);
+  };
+
+  // Función para actualizar el contenido del editor
+  const updateEditorContent = (newContent) => {
+    if (!editor) return;
+
+    const { state } = editor;
+    const { doc } = state;
+    
+    // Buscar el nodo codeBlock actual por su posición en el documento
+    // Usamos el nodo actual del componente
+    let targetPos = null;
+    const currentText = getCodeText();
+    
+    doc.descendants((node, pos) => {
+      if (node.type.name === 'codeBlock' && 
+          node.attrs.language === 'json') {
+        // Comparar el contenido del nodo con el contenido actual
+        const nodeText = node.textContent;
+        if (nodeText === currentText || 
+            (currentText && nodeText.includes(currentText.substring(0, 50)))) {
+          targetPos = pos;
+          return false;
+        }
+      }
+    });
+
+    if (targetPos !== null) {
+      const tr = state.tr;
+      const targetNode = doc.nodeAt(targetPos);
+      if (targetNode) {
+        const from = targetPos + 1;
+        const to = from + targetNode.content.size;
+        tr.replaceWith(from, to, state.schema.text(newContent));
+        tr.setMeta('jsonFormatter', true);
+        editor.view.dispatch(tr);
+        
+        // Actualizar el contenido del modal después de guardar
+        setTimeout(() => {
+          setFullscreenContent(newContent);
+        }, 100);
+      }
+    }
+  };
+
+  // Manejar cambios en el textarea del modal
+  const handleFullscreenContentChange = (e) => {
+    setFullscreenContent(e.target.value);
   };
 
   // Cerrar fullscreen con Escape
@@ -169,9 +221,10 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
     e.preventDefault();
     e.stopPropagation();
     
-    if (!editor || language !== 'json') return;
+    if (language !== 'json') return;
 
-    let currentText = getCodeText();
+    // Si estamos en fullscreen, usar el contenido del modal, sino el del editor
+    let currentText = isFullscreen ? fullscreenContent : getCodeText();
     if (!currentText || !currentText.trim()) return;
 
     // Limpiar el texto: eliminar espacios al inicio y final
@@ -243,6 +296,15 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
       return;
     }
 
+    // Si estamos en fullscreen, actualizar solo el contenido del modal
+    if (isFullscreen) {
+      setFullscreenContent(formatted);
+      return;
+    }
+
+    // Si no estamos en fullscreen, actualizar el editor
+    if (!editor) return;
+
     // Encontrar la posición del nodo en el editor
     const { state } = editor;
     const { doc } = state;
@@ -268,13 +330,6 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
         tr.replaceWith(from, to, state.schema.text(formatted));
         tr.setMeta('jsonFormatter', true);
         editor.view.dispatch(tr);
-        
-        // Actualizar el contenido del modal si está abierto
-        if (isFullscreen) {
-          setTimeout(() => {
-            setFullscreenContent(formatted);
-          }, 100);
-        }
       }
     }
   };
@@ -432,6 +487,21 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
                 )}
               </button>
               <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (editor && fullscreenContent !== getCodeText()) {
+                    updateEditorContent(fullscreenContent);
+                  }
+                }}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors flex items-center gap-2"
+                title="Guardar cambios"
+                type="button"
+              >
+                <Check className="w-4 h-4" />
+                <span>Guardar</span>
+              </button>
+              <button
                 onClick={handleExitFullscreen}
                 className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors flex items-center gap-2"
                 title="Salir de pantalla completa"
@@ -443,30 +513,26 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
             </div>
           </div>
           
-          {/* Contenido del código */}
+          {/* Contenido del código editable */}
           <div className="flex-1 overflow-auto p-6">
-            <pre className="bg-gray-900 text-gray-100 rounded-lg p-6 overflow-x-auto h-full">
-              <code 
-                ref={fullscreenRef}
-                className={`language-${language}`}
-                style={{ 
-                  fontFamily: 'monospace',
-                  fontSize: '1rem',
-                  lineHeight: '1.6',
-                  color: '#e5e7eb',
-                  background: 'transparent',
-                  padding: 0,
-                  margin: 0,
-                  outline: 'none',
-                  display: 'block',
-                  whiteSpace: 'pre',
-                  wordBreak: 'normal',
-                  overflowWrap: 'normal',
-                }}
-              >
-                {fullscreenContent || getCodeText()}
-              </code>
-            </pre>
+            <textarea
+              ref={fullscreenRef}
+              value={fullscreenContent || getCodeText()}
+              onChange={handleFullscreenContentChange}
+              className="w-full h-full bg-gray-900 text-gray-100 rounded-lg p-6 font-mono text-base resize-none border-none outline-none focus:ring-2 focus:ring-blue-500"
+              style={{
+                fontFamily: 'monospace',
+                fontSize: '1rem',
+                lineHeight: '1.6',
+                color: '#e5e7eb',
+                whiteSpace: 'pre',
+                wordBreak: 'normal',
+                overflowWrap: 'normal',
+                tabSize: 2,
+              }}
+              spellCheck={false}
+              placeholder="Escribe o pega tu código JSON aquí..."
+            />
           </div>
         </div>,
         document.body
