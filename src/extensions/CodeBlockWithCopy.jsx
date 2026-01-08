@@ -382,24 +382,18 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
   // Inicializar búsqueda cuando se abre el panel de búsqueda
   useEffect(() => {
     if (showSearch && searchTerm) {
-      const content = isFullscreen ? (fullscreenRef.current?.value || fullscreenContent) : getCodeText();
-      if (content) {
-        performSearch(content, searchTerm);
-      }
+      // Usar un pequeño delay para asegurar que el DOM esté listo
+      setTimeout(() => {
+        const content = isFullscreen && fullscreenRef.current 
+          ? fullscreenRef.current.value 
+          : (isFullscreen ? fullscreenContent : getCodeText());
+        if (content) {
+          performSearch(content, searchTerm);
+        }
+      }, 0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showSearch]);
-
-  // Actualizar búsqueda cuando cambia el contenido en fullscreen
-  useEffect(() => {
-    if (showSearch && searchTerm && isFullscreen && fullscreenRef.current) {
-      const content = fullscreenRef.current.value;
-      if (content) {
-        performSearch(content, searchTerm);
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fullscreenContent, isFullscreen, showSearch]);
 
   // Detectar si estamos dentro del drawer y si el drawer está abierto
   useEffect(() => {
@@ -648,54 +642,81 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
     // Limpiar el término de búsqueda (trim y normalizar espacios)
     const cleanTerm = term.trim();
     
-    // Para búsqueda más robusta, usar indexOf primero para verificar que existe
-    const firstIndex = text.indexOf(cleanTerm);
-    if (firstIndex === -1) {
-      // Si no se encuentra con indexOf, intentar búsqueda case-insensitive
-      const lowerText = text.toLowerCase();
-      const lowerTerm = cleanTerm.toLowerCase();
-      const firstIndexLower = lowerText.indexOf(lowerTerm);
-      
-      if (firstIndexLower === -1) {
-        console.log('No se encontró el término:', { term: cleanTerm, textLength: text.length, textSample: text.substring(0, 200) });
-        setSearchResults([]);
-        setCurrentResultIndex(-1);
-        return;
-      }
+    if (!cleanTerm) {
+      setSearchResults([]);
+      setCurrentResultIndex(-1);
+      return;
     }
 
     // Escapar caracteres especiales para la búsqueda regex
+    // IMPORTANTE: No escapar números ni letras, solo caracteres especiales de regex
     const escapedTerm = cleanTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const searchRegex = new RegExp(escapedTerm, 'gi');
+    
+    // Crear regex con flag global e insensitive
+    let searchRegex;
+    try {
+      searchRegex = new RegExp(escapedTerm, 'gi');
+    } catch (error) {
+      console.error('Error al crear regex:', error, { term: cleanTerm, escapedTerm });
+      setSearchResults([]);
+      setCurrentResultIndex(-1);
+      return;
+    }
+    
     const results = [];
     let match;
     let lastIndex = -1;
+    let iterations = 0;
+    const maxIterations = 10000; // Prevenir bucles infinitos
 
     // Reiniciar lastIndex para buscar desde el inicio
     searchRegex.lastIndex = 0;
 
-    while ((match = searchRegex.exec(text)) !== null) {
+    while ((match = searchRegex.exec(text)) !== null && iterations < maxIterations) {
+      iterations++;
+      
       // Evitar bucles infinitos si el regex no avanza
       if (match.index === lastIndex && match[0].length === 0) {
         break;
       }
-      lastIndex = match.index;
       
-      results.push({
-        index: match.index,
-        length: match[0].length,
-        text: match[0]
-      });
+      // Verificar que la coincidencia es válida
+      if (match.index >= 0 && match[0].length > 0) {
+        lastIndex = match.index;
+        
+        results.push({
+          index: match.index,
+          length: match[0].length,
+          text: match[0]
+        });
+      } else {
+        break;
+      }
     }
 
-    console.log('Búsqueda realizada:', { 
-      term: cleanTerm, 
-      textLength: text.length, 
-      resultsCount: results.length, 
-      results: results.slice(0, 5), // Solo mostrar primeros 5 para no saturar
-      firstResult: results[0],
-      textSample: text.substring(Math.max(0, results[0]?.index - 20 || 0), Math.min(text.length, (results[0]?.index || 0) + 50))
-    });
+    // Logging mejorado para debugging
+    if (results.length === 0) {
+      // Si no hay resultados, buscar manualmente para ver qué pasa
+      const manualIndex = text.indexOf(cleanTerm);
+      console.log('Búsqueda sin resultados:', { 
+        term: cleanTerm,
+        escapedTerm,
+        textLength: text.length,
+        manualIndex,
+        textContainsTerm: manualIndex !== -1,
+        textSample: text.substring(0, 500),
+        isFullscreen,
+        hasRef: !!fullscreenRef.current
+      });
+    } else {
+      console.log('Búsqueda realizada:', { 
+        term: cleanTerm, 
+        textLength: text.length, 
+        resultsCount: results.length, 
+        firstResult: results[0],
+        textSample: text.substring(Math.max(0, results[0]?.index - 20 || 0), Math.min(text.length, (results[0]?.index || 0) + 50))
+      });
+    }
     
     setSearchResults(results);
     if (results.length > 0) {
@@ -788,21 +809,24 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
     const term = e.target.value;
     setSearchTerm(term);
     
-    // Obtener el contenido actual - siempre usar el más reciente
+    // Obtener el contenido actual - SIEMPRE usar el más reciente del textarea
     let content;
     if (isFullscreen) {
-      // En fullscreen, usar fullscreenContent o el textarea directamente
+      // En fullscreen, SIEMPRE usar el textarea directamente (más confiable)
       if (fullscreenRef.current) {
         content = fullscreenRef.current.value;
       } else {
+        // Fallback solo si no hay ref
         content = fullscreenContent || getCodeText();
       }
     } else {
       content = getCodeText();
     }
     
-    // Realizar la búsqueda con el contenido más reciente
-    performSearch(content, term);
+    // Realizar la búsqueda inmediatamente con el contenido más reciente
+    if (content) {
+      performSearch(content, term);
+    }
   };
 
   // Limpiar búsqueda
