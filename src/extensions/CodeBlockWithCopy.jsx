@@ -134,6 +134,9 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
     let currentText = getCodeText();
     if (!currentText || !currentText.trim()) return;
 
+    // Limpiar el texto: eliminar espacios al inicio y final
+    currentText = currentText.trim();
+
     // Función para formatear JSON
     let formatted;
     try {
@@ -145,11 +148,17 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
       try {
         // Reemplazar todas las comillas simples por dobles
         const convertedText = currentText.replace(/'/g, '"');
+        console.log('Texto original:', currentText);
+        console.log('Texto convertido:', convertedText);
         const parsed = JSON.parse(convertedText);
         formatted = JSON.stringify(parsed, null, 2);
       } catch (secondError) {
-        // Si aún falla, mostrar un mensaje
-        alert('El contenido no es un JSON válido: ' + secondError.message);
+        // Si aún falla, mostrar un mensaje con más detalles
+        console.error('Error al formatear JSON:', secondError);
+        console.error('Texto original:', currentText);
+        const convertedText = currentText.replace(/'/g, '"');
+        console.error('Texto después de convertir comillas:', convertedText);
+        alert('El contenido no es un JSON válido.\n\nError: ' + secondError.message + '\n\nTexto convertido: ' + convertedText.substring(0, 100));
         return;
       }
     }
