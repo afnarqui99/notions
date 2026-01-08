@@ -1553,12 +1553,18 @@ export default function LocalEditor({ onShowConfig }) {
         return;
       }
       
-      // Guardar con el nuevo título
+      // Extraer emoji del nuevo título
+      const nuevoEmoji = extraerEmojiDelTitulo(nuevoTitulo);
+      // Quitar el emoji del título para guardarlo limpio
+      const tituloSinEmoji = quitarEmojiDelTitulo(nuevoTitulo);
+      
+      // Guardar con el nuevo título y emoji
       await LocalStorageService.saveJSONFile(
         `${paginaId}.json`,
         {
           ...data,
-          titulo: nuevoTitulo.trim(),
+          titulo: tituloSinEmoji,
+          emoji: nuevoEmoji || null,
           actualizadoEn: new Date().toISOString(),
           creadoEn: data.creadoEn || new Date().toISOString()
         },
@@ -1567,15 +1573,22 @@ export default function LocalEditor({ onShowConfig }) {
       
       // Actualizar la lista de páginas
       const nuevasPaginas = paginas.map(p => 
-        p.id === paginaId ? { ...p, titulo: nuevoTitulo.trim() } : p
+        p.id === paginaId ? { ...p, titulo: tituloSinEmoji, emoji: nuevoEmoji || null } : p
       );
       setPaginas(nuevasPaginas);
       
       // Si es la página seleccionada, actualizar el título
       if (paginaSeleccionada === paginaId) {
-        setTitulo(nuevoTitulo.trim());
-        setTituloPaginaActual(nuevoTitulo.trim());
+        setTitulo(tituloSinEmoji);
+        setTituloPaginaActual(tituloSinEmoji);
       }
+      
+      // Actualizar índice de páginas
+      await PageIndexService.updatePageInIndex(paginaId, {
+        ...data,
+        titulo: tituloSinEmoji,
+        emoji: nuevoEmoji || null
+      });
       
       setToast({
         message: 'Nombre de página actualizado',
@@ -1584,6 +1597,71 @@ export default function LocalEditor({ onShowConfig }) {
     } catch (error) {
       setToast({
         message: 'Error al renombrar la página',
+        type: 'error'
+      });
+    }
+  };
+
+  const cambiarParentIdPagina = async (paginaId, nuevoParentId) => {
+    try {
+      // Cargar datos actuales de la página
+      const data = await LocalStorageService.readJSONFile(`${paginaId}.json`, 'data');
+      if (!data) {
+        return;
+      }
+      
+      // Verificar que no se esté creando un ciclo (la página destino no puede ser hija de la página origen)
+      const esDescendiente = (id, parentId) => {
+        if (!parentId) return false;
+        if (id === parentId) return true;
+        const parent = paginas.find(p => p.id === parentId);
+        if (!parent || !parent.parentId) return false;
+        return esDescendiente(id, parent.parentId);
+      };
+      
+      if (esDescendiente(paginaId, nuevoParentId)) {
+        setToast({
+          message: 'No se puede mover una página dentro de sus propios descendientes',
+          type: 'error'
+        });
+        return;
+      }
+      
+      // Guardar con el nuevo parentId
+      await LocalStorageService.saveJSONFile(
+        `${paginaId}.json`,
+        {
+          ...data,
+          parentId: nuevoParentId || null,
+          actualizadoEn: new Date().toISOString()
+        },
+        'data'
+      );
+      
+      // Actualizar la lista de páginas
+      const nuevasPaginas = paginas.map(p => 
+        p.id === paginaId 
+          ? { ...p, parentId: nuevoParentId || null } 
+          : p
+      );
+      setPaginas(nuevasPaginas);
+      
+      // Actualizar índice de páginas
+      await PageIndexService.updatePageInIndex(paginaId, {
+        ...data,
+        parentId: nuevoParentId || null
+      });
+      
+      // Disparar evento para recargar páginas
+      window.dispatchEvent(new Event('paginasReordenadas'));
+      
+      setToast({
+        message: nuevoParentId ? 'Página movida correctamente' : 'Página convertida en página principal',
+        type: 'success'
+      });
+    } catch (error) {
+      setToast({
+        message: 'Error al mover la página',
         type: 'error'
       });
     }
@@ -1900,6 +1978,7 @@ export default function LocalEditor({ onShowConfig }) {
         onEliminarPagina={abrirModalEliminar}
         onReordenarPaginas={setPaginas}
         onRenombrarPagina={renombrarPagina}
+        onCambiarParentId={cambiarParentIdPagina}
       />
 
       {/* Búsqueda Global */}
