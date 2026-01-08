@@ -188,6 +188,7 @@ Escribe `/` en cualquier parte del editor para acceder a comandos rápidos:
 - **`/titulo2`** o **`/h2`** - Subtítulo
 - **`/parrafo`** - Texto normal
 - **`/codigo`** - Bloque de código
+- **`/json`** - Formatea y valida JSON con resaltado de sintaxis
 - **`/toggle`** - Bloque desplegable
 
 #### 🔗 Enlaces

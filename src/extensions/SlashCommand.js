@@ -732,6 +732,19 @@ export const SlashCommand = Extension.create({
                 .run(),
           },
           {
+            icon: '📋',
+            label: 'JSON',
+            description: 'Formatea y valida JSON con resaltado de sintaxis',
+            keywords: ['json', 'formatear', 'formatter', 'validate'],
+            command: ({ editor, range }) =>
+              editor
+                .chain()
+                .focus()
+                .deleteRange(range)
+                .setNode('codeBlock', { language: 'json' })
+                .run(),
+          },
+          {
             icon: '🖼️',
             label: 'Insertar imagen',
             description: 'Sube una imagen con título, descripción y fecha',
