@@ -1,15 +1,28 @@
 import { NodeViewWrapper, NodeViewContent } from '@tiptap/react';
 import { useState, useRef, useEffect } from 'react';
-import { Copy, Check, Code2 } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Copy, Check, Code2, Maximize2, Minimize2 } from 'lucide-react';
 
 export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
   const [copied, setCopied] = useState(false);
   const [isInDrawer, setIsInDrawer] = useState(false);
   const [isInModal, setIsInModal] = useState(false);
   const [shouldShowButton, setShouldShowButton] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [fullscreenContent, setFullscreenContent] = useState('');
   const language = node.attrs.language || '';
   const contentRef = useRef(null);
   const wrapperRef = useRef(null);
+  const fullscreenRef = useRef(null);
+
+  // Actualizar el contenido del modal cuando cambia el nodo (solo si está en fullscreen)
+  useEffect(() => {
+    if (isFullscreen) {
+      const currentText = getCodeText();
+      setFullscreenContent(currentText);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFullscreen, node.textContent]);
 
   // Detectar si estamos dentro del drawer y si el drawer está abierto
   useEffect(() => {
@@ -125,6 +138,33 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
     }
   };
 
+  const handleFullscreen = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setFullscreenContent(getCodeText());
+    setIsFullscreen(true);
+  };
+
+  const handleExitFullscreen = () => {
+    setIsFullscreen(false);
+  };
+
+  // Cerrar fullscreen con Escape
+  useEffect(() => {
+    if (!isFullscreen) return;
+
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        setIsFullscreen(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isFullscreen]);
+
   const handleFormat = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -228,6 +268,13 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
         tr.replaceWith(from, to, state.schema.text(formatted));
         tr.setMeta('jsonFormatter', true);
         editor.view.dispatch(tr);
+        
+        // Actualizar el contenido del modal si está abierto
+        if (isFullscreen) {
+          setTimeout(() => {
+            setFullscreenContent(formatted);
+          }, 100);
+        }
       }
     }
   };
@@ -281,19 +328,33 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
             zIndex: isInModal ? 10002 : 110 // Mayor z-index cuando está en el Portal
           }}>
             {language === 'json' && (
-              <button
-                onClick={handleFormat}
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                }}
-                className="p-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors flex items-center gap-1 text-xs"
-                title="Formatear JSON"
-                type="button"
-              >
-                <Code2 className="w-3 h-3" />
-                <span>Formatear</span>
-              </button>
+              <>
+                <button
+                  onClick={handleFullscreen}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                  className="p-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors flex items-center gap-1 text-xs"
+                  title="Pantalla completa"
+                  type="button"
+                >
+                  <Maximize2 className="w-3 h-3" />
+                </button>
+                <button
+                  onClick={handleFormat}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                  className="p-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors flex items-center gap-1 text-xs"
+                  title="Formatear JSON"
+                  type="button"
+                >
+                  <Code2 className="w-3 h-3" />
+                  <span>Formatear</span>
+                </button>
+              </>
             )}
             <button
               onClick={handleCopy}
@@ -320,6 +381,96 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
           </div>
         )}
       </div>
+      {isFullscreen && language === 'json' && createPortal(
+        <div 
+          className="fixed inset-0 z-[10001] bg-gray-900 flex flex-col"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setIsFullscreen(false);
+            }
+          }}
+        >
+          {/* Header con botones */}
+          <div className="flex items-center justify-between p-4 bg-gray-800 border-b border-gray-700">
+            <h2 className="text-white text-lg font-semibold">JSON - Pantalla Completa</h2>
+            <div className="flex gap-2">
+              <button
+                onClick={handleFormat}
+                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors flex items-center gap-2"
+                title="Formatear JSON"
+                type="button"
+              >
+                <Code2 className="w-4 h-4" />
+                <span>Formatear</span>
+              </button>
+              <button
+                onClick={async (e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  try {
+                    await navigator.clipboard.writeText(fullscreenContent || getCodeText());
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  } catch (err) {
+                    console.error('Error al copiar:', err);
+                  }
+                }}
+                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors flex items-center gap-2"
+                title="Copiar código"
+                type="button"
+              >
+                {copied ? (
+                  <>
+                    <Check className="w-4 h-4" />
+                    <span>Copiado</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4" />
+                    <span>Copiar</span>
+                  </>
+                )}
+              </button>
+              <button
+                onClick={handleExitFullscreen}
+                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors flex items-center gap-2"
+                title="Salir de pantalla completa"
+                type="button"
+              >
+                <Minimize2 className="w-4 h-4" />
+                <span>Salir</span>
+              </button>
+            </div>
+          </div>
+          
+          {/* Contenido del código */}
+          <div className="flex-1 overflow-auto p-6">
+            <pre className="bg-gray-900 text-gray-100 rounded-lg p-6 overflow-x-auto h-full">
+              <code 
+                ref={fullscreenRef}
+                className={`language-${language}`}
+                style={{ 
+                  fontFamily: 'monospace',
+                  fontSize: '1rem',
+                  lineHeight: '1.6',
+                  color: '#e5e7eb',
+                  background: 'transparent',
+                  padding: 0,
+                  margin: 0,
+                  outline: 'none',
+                  display: 'block',
+                  whiteSpace: 'pre',
+                  wordBreak: 'normal',
+                  overflowWrap: 'normal',
+                }}
+              >
+                {fullscreenContent || getCodeText()}
+              </code>
+            </pre>
+          </div>
+        </div>,
+        document.body
+      )}
     </NodeViewWrapper>
   );
 }
