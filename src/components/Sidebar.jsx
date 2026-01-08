@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';
-import { Search, Star, ChevronDown, Settings, Plus, Trash2, Github, ChevronRight, Pencil, Tag as TagIcon, X, Moon, Sun, Database } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import { Search, Star, ChevronDown, Settings, Plus, Trash2, Github, ChevronRight, Pencil, Tag as TagIcon, X, Moon, Sun, Database, Smile } from 'lucide-react';
 import TagService from '../services/TagService';
 import { useTheme } from '../contexts/ThemeContext';
 import SQLFileService from '../services/SQLFileService';
+import EmojiPicker from './EmojiPicker';
 
 export default function Sidebar({ 
   paginas = [], 
@@ -15,7 +17,8 @@ export default function Sidebar({
   onSidebarStateChange,
   onEliminarPagina,
   onReordenarPaginas,
-  onRenombrarPagina
+  onRenombrarPagina,
+  onCambiarParentId
 }) {
   const { theme, toggleTheme } = useTheme();
   const [favoritos, setFavoritos] = useState(() => {
@@ -389,12 +392,30 @@ export default function Sidebar({
     return null;
   };
 
-  // Toggle expansión de una página
-  const toggleExpansion = (paginaId) => {
-    setPaginasExpandidas(prev => ({
-      ...prev,
-      [paginaId]: !prev[paginaId]
-    }));
+  // Función simple para detectar si un carácter es emoji
+  const isEmoji = (char) => {
+    if (!char) return false;
+    const code = char.codePointAt(0);
+    return (
+      (code >= 0x1F300 && code <= 0x1F9FF) ||
+      (code >= 0x2600 && code <= 0x26FF) ||
+      (code >= 0x2700 && code <= 0x27BF) ||
+      (code >= 0x1F600 && code <= 0x1F64F) ||
+      (code >= 0x1F680 && code <= 0x1F6FF) ||
+      (code >= 0x2190 && code <= 0x21FF) ||
+      (code >= 0x2300 && code <= 0x23FF) ||
+      (code >= 0x2B50 && code <= 0x2B55) ||
+      code === 0x3030 || code === 0x3299 ||
+      (code >= 0x1F900 && code <= 0x1F9FF)
+    );
+  };
+
+  // Extraer emoji actual del título
+  const obtenerEmojiActual = (titulo) => {
+    const trimmed = titulo.trim();
+    if (!trimmed) return '';
+    const firstChar = trimmed[0];
+    return isEmoji(firstChar) ? firstChar : '';
   };
 
   // Estado para drag and drop
@@ -404,6 +425,51 @@ export default function Sidebar({
   // Estado para edición de nombres
   const [paginaEditando, setPaginaEditando] = useState(null);
   const [nuevoNombre, setNuevoNombre] = useState('');
+  const [mostrarEmojiPicker, setMostrarEmojiPicker] = useState(false);
+  const [emojiPickerPaginaId, setEmojiPickerPaginaId] = useState(null);
+  const emojiPickerRef = useRef(null);
+  const emojiButtonRef = useRef(null);
+
+  // Manejar selección de emoji
+  const handleEmojiSelect = (emoji) => {
+    setNuevoNombre(prev => {
+      // Si ya hay un emoji al inicio, reemplazarlo
+      const trimmed = prev.trim();
+      const firstChar = trimmed[0];
+      if (firstChar && isEmoji(firstChar)) {
+        return emoji + trimmed.substring(firstChar.length).trim();
+      }
+      // Si no hay emoji, agregarlo al inicio
+      return emoji + (trimmed ? ' ' + trimmed : '');
+    });
+    setMostrarEmojiPicker(false);
+    setEmojiPickerPaginaId(null);
+  };
+
+  // Cerrar emoji picker con Escape
+  useEffect(() => {
+    if (!mostrarEmojiPicker) return;
+
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        setMostrarEmojiPicker(false);
+        setEmojiPickerPaginaId(null);
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [mostrarEmojiPicker]);
+
+  // Toggle expansión de una página
+  const toggleExpansion = (paginaId) => {
+    setPaginasExpandidas(prev => ({
+      ...prev,
+      [paginaId]: !prev[paginaId]
+    }));
+  };
 
   // Componente recursivo para renderizar una página y sus hijos
   const PaginaItem = ({ pagina, nivel = 0, todasLasPaginas }) => {
@@ -451,9 +517,30 @@ export default function Sidebar({
       e.stopPropagation();
       
       if (paginaArrastrando && paginaArrastrando !== pagina.id) {
-        // Reordenar: mover la página arrastrada antes de la página destino
-        const parentId = pagina.parentId; // Usar el mismo parentId (páginas hermanas)
-        reordenarPaginas(paginaArrastrando, pagina.id, parentId);
+        const paginaOrigen = todasLasPaginas.find(p => p.id === paginaArrastrando);
+        const paginaDestino = pagina;
+        
+        if (!paginaOrigen) {
+          setPaginaArrastrando(null);
+          setPaginaSobre(null);
+          return;
+        }
+        
+        // Verificar si se está moviendo entre diferentes niveles
+        const mismoParent = (paginaOrigen.parentId === paginaDestino.parentId) || 
+                           (!paginaOrigen.parentId && !paginaDestino.parentId);
+        
+        if (mismoParent) {
+          // Mismo nivel: solo reordenar
+          const parentId = pagina.parentId;
+          reordenarPaginas(paginaArrastrando, pagina.id, parentId);
+        } else {
+          // Diferente nivel: cambiar parentId
+          // Si se arrastra sobre una página, convertirla en hija de esa página
+          if (onCambiarParentId) {
+            onCambiarParentId(paginaArrastrando, paginaDestino.id);
+          }
+        }
       }
       
       setPaginaArrastrando(null);
@@ -512,34 +599,117 @@ export default function Sidebar({
           {/* Título o Input de edición */}
           <div className="flex-1 min-w-0">
             {paginaEditando === pagina.id ? (
-              <input
-                type="text"
-                value={nuevoNombre}
-                onChange={(e) => setNuevoNombre(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    if (onRenombrarPagina && nuevoNombre.trim()) {
-                      onRenombrarPagina(pagina.id, nuevoNombre.trim());
-                    }
-                    setPaginaEditando(null);
-                    setNuevoNombre('');
-                  } else if (e.key === 'Escape') {
-                    setPaginaEditando(null);
-                    setNuevoNombre('');
-                  }
-                }}
-                onBlur={() => {
-                  if (onRenombrarPagina && nuevoNombre.trim()) {
-                    onRenombrarPagina(pagina.id, nuevoNombre.trim());
-                  }
-                  setPaginaEditando(null);
-                  setNuevoNombre('');
-                }}
-                onClick={(e) => e.stopPropagation()}
-                className="w-full text-left bg-white dark:bg-gray-800 border border-blue-500 dark:border-blue-400 rounded px-1 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400 text-gray-900 dark:text-gray-100"
-                autoFocus
-              />
+              <div className="relative">
+                <div className="flex items-center gap-1">
+                  <div
+                    ref={emojiButtonRef}
+                    onMouseDown={(e) => {
+                      // Prevenir que el input pierda el foco
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setMostrarEmojiPicker(!mostrarEmojiPicker);
+                      setEmojiPickerPaginaId(pagina.id);
+                    }}
+                    className="p-0.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors flex-shrink-0 cursor-pointer"
+                    title="Seleccionar emoji"
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setMostrarEmojiPicker(!mostrarEmojiPicker);
+                        setEmojiPickerPaginaId(pagina.id);
+                      }
+                    }}
+                  >
+                    <Smile className="w-3 h-3 text-gray-500 dark:text-gray-400" />
+                  </div>
+                  <input
+                    type="text"
+                    value={nuevoNombre}
+                    onChange={(e) => setNuevoNombre(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (onRenombrarPagina && nuevoNombre.trim()) {
+                          onRenombrarPagina(pagina.id, nuevoNombre.trim());
+                        }
+                        setPaginaEditando(null);
+                        setNuevoNombre('');
+                        setMostrarEmojiPicker(false);
+                        setEmojiPickerPaginaId(null);
+                      } else if (e.key === 'Escape') {
+                        setPaginaEditando(null);
+                        setNuevoNombre('');
+                        setMostrarEmojiPicker(false);
+                        setEmojiPickerPaginaId(null);
+                      }
+                    }}
+                    onBlur={(e) => {
+                      // Si el emoji picker está abierto, no cerrar la edición
+                      if (mostrarEmojiPicker) {
+                        return;
+                      }
+                      
+                      // Delay para permitir que otros eventos se procesen
+                      setTimeout(() => {
+                        // Si el emoji picker se abrió durante el delay, no cerrar
+                        if (mostrarEmojiPicker) {
+                          return;
+                        }
+                        
+                        if (onRenombrarPagina && nuevoNombre.trim()) {
+                          onRenombrarPagina(pagina.id, nuevoNombre.trim());
+                        }
+                        setPaginaEditando(null);
+                        setNuevoNombre('');
+                        setMostrarEmojiPicker(false);
+                        setEmojiPickerPaginaId(null);
+                      }, 150);
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex-1 text-left bg-white dark:bg-gray-800 border border-blue-500 dark:border-blue-400 rounded px-1 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400 text-gray-900 dark:text-gray-100"
+                    autoFocus
+                  />
+                </div>
+                {mostrarEmojiPicker && emojiPickerPaginaId === pagina.id && createPortal(
+                  <div 
+                    className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50"
+                    onClick={(e) => {
+                      if (e.target === e.currentTarget) {
+                        setMostrarEmojiPicker(false);
+                        setEmojiPickerPaginaId(null);
+                      }
+                    }}
+                    onMouseDown={(e) => {
+                      if (e.target === e.currentTarget) {
+                        e.stopPropagation();
+                      }
+                    }}
+                  >
+                    <div 
+                      ref={emojiPickerRef}
+                      onClick={(e) => e.stopPropagation()}
+                      onMouseDown={(e) => e.stopPropagation()}
+                    >
+                      <EmojiPicker
+                        onSelect={handleEmojiSelect}
+                        onClose={() => {
+                          setMostrarEmojiPicker(false);
+                          setEmojiPickerPaginaId(null);
+                        }}
+                        currentEmoji={obtenerEmojiActual(nuevoNombre)}
+                      />
+                    </div>
+                  </div>,
+                  document.body
+                )}
+              </div>
             ) : (
               <>
                 <span 
@@ -585,7 +755,9 @@ export default function Sidebar({
                 onClick={(e) => {
                   e.stopPropagation();
                   setPaginaEditando(pagina.id);
-                  setNuevoNombre(pagina.titulo || '');
+                  // Incluir emoji en el nombre si existe
+                  const emojiActual = obtenerEmojiPagina(pagina);
+                  setNuevoNombre(emojiActual ? `${emojiActual} ${pagina.titulo || ''}`.trim() : (pagina.titulo || ''));
                 }}
                 className="p-0.5 hover:bg-blue-100 rounded transition-colors cursor-pointer"
                 title="Editar nombre"
@@ -596,7 +768,9 @@ export default function Sidebar({
                     e.preventDefault();
                     e.stopPropagation();
                     setPaginaEditando(pagina.id);
-                    setNuevoNombre(pagina.titulo || '');
+                    // Incluir emoji en el nombre si existe
+                    const emojiActual = obtenerEmojiPagina(pagina);
+                    setNuevoNombre(emojiActual ? `${emojiActual} ${pagina.titulo || ''}`.trim() : (pagina.titulo || ''));
                   }
                 }}
               >

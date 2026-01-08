@@ -232,7 +232,10 @@ export default function SQLScriptNode({ node, updateAttributes }) {
 
   const handleExportTXT = async () => {
     try {
-      let txtContent = `Script SQL: ${fileName}\n`;
+      // Si no hay nombre de archivo, usar un nombre por defecto
+      const nombreArchivo = fileName || 'script-sql';
+      
+      let txtContent = `Script SQL: ${nombreArchivo}\n`;
       txtContent += `========================================\n\n`;
       
       if (fileDescription) {
@@ -248,13 +251,13 @@ export default function SQLScriptNode({ node, updateAttributes }) {
       }
       
       txtContent += `========================================\n\n`;
-      txtContent += content;
+      txtContent += content || '';
 
       const blob = new Blob([txtContent], { type: 'text/plain;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `${fileName.replace(/[^a-z0-9]/gi, '_')}.txt`;
+      link.download = `${nombreArchivo.replace(/[^a-z0-9]/gi, '_')}.txt`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -317,6 +320,19 @@ export default function SQLScriptNode({ node, updateAttributes }) {
             )}
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
+            {content && content.trim() && (
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleExportTXT();
+                }}
+                className="p-1.5 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+                title="Descargar como .txt"
+              >
+                <FileDown className="w-4 h-4" />
+              </button>
+            )}
             <button
               onClick={handleSaveVersion}
               className="p-1.5 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
