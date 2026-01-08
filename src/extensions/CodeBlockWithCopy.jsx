@@ -382,13 +382,24 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
   // Inicializar búsqueda cuando se abre el panel de búsqueda
   useEffect(() => {
     if (showSearch && searchTerm) {
-      const content = isFullscreen ? fullscreenContent : getCodeText();
+      const content = isFullscreen ? (fullscreenRef.current?.value || fullscreenContent) : getCodeText();
       if (content) {
         performSearch(content, searchTerm);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showSearch]);
+
+  // Actualizar búsqueda cuando cambia el contenido en fullscreen
+  useEffect(() => {
+    if (showSearch && searchTerm && isFullscreen && fullscreenRef.current) {
+      const content = fullscreenRef.current.value;
+      if (content) {
+        performSearch(content, searchTerm);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fullscreenContent, isFullscreen, showSearch]);
 
   // Detectar si estamos dentro del drawer y si el drawer está abierto
   useEffect(() => {
@@ -608,22 +619,53 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
       return;
     }
 
-    // Obtener el texto del contenido o del editor
+    // Obtener el texto del contenido pasado como parámetro
     let text = content;
-    if (!text) {
-      text = getCodeText();
+    
+    // Si no hay contenido, intentar obtenerlo del textarea en fullscreen o del editor
+    if (!text || text.trim() === '') {
+      if (isFullscreen && fullscreenRef.current) {
+        text = fullscreenRef.current.value;
+      } else {
+        text = getCodeText();
+      }
     }
     
     // Asegurarse de que tenemos texto
-    if (!text || typeof text !== 'string') {
-      console.warn('No se pudo obtener el texto para buscar', { text, content, term });
+    if (!text || typeof text !== 'string' || text.trim() === '') {
+      console.warn('No se pudo obtener el texto para buscar', { 
+        text: text ? text.substring(0, 100) : 'null/undefined', 
+        content: content ? content.substring(0, 100) : 'null/undefined', 
+        term,
+        isFullscreen,
+        hasFullscreenRef: !!fullscreenRef.current
+      });
       setSearchResults([]);
       setCurrentResultIndex(-1);
       return;
     }
 
-    // Escapar caracteres especiales para la búsqueda
-    const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Limpiar el término de búsqueda (trim y normalizar espacios)
+    const cleanTerm = term.trim();
+    
+    // Para búsqueda más robusta, usar indexOf primero para verificar que existe
+    const firstIndex = text.indexOf(cleanTerm);
+    if (firstIndex === -1) {
+      // Si no se encuentra con indexOf, intentar búsqueda case-insensitive
+      const lowerText = text.toLowerCase();
+      const lowerTerm = cleanTerm.toLowerCase();
+      const firstIndexLower = lowerText.indexOf(lowerTerm);
+      
+      if (firstIndexLower === -1) {
+        console.log('No se encontró el término:', { term: cleanTerm, textLength: text.length, textSample: text.substring(0, 200) });
+        setSearchResults([]);
+        setCurrentResultIndex(-1);
+        return;
+      }
+    }
+
+    // Escapar caracteres especiales para la búsqueda regex
+    const escapedTerm = cleanTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const searchRegex = new RegExp(escapedTerm, 'gi');
     const results = [];
     let match;
@@ -646,7 +688,14 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
       });
     }
 
-    console.log('Búsqueda realizada:', { term, textLength: text.length, resultsCount: results.length, results });
+    console.log('Búsqueda realizada:', { 
+      term: cleanTerm, 
+      textLength: text.length, 
+      resultsCount: results.length, 
+      results: results.slice(0, 5), // Solo mostrar primeros 5 para no saturar
+      firstResult: results[0],
+      textSample: text.substring(Math.max(0, results[0]?.index - 20 || 0), Math.min(text.length, (results[0]?.index || 0) + 50))
+    });
     
     setSearchResults(results);
     if (results.length > 0) {
@@ -739,15 +788,20 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
     const term = e.target.value;
     setSearchTerm(term);
     
-    // Obtener el contenido actual
+    // Obtener el contenido actual - siempre usar el más reciente
     let content;
     if (isFullscreen) {
-      content = fullscreenContent;
+      // En fullscreen, usar fullscreenContent o el textarea directamente
+      if (fullscreenRef.current) {
+        content = fullscreenRef.current.value;
+      } else {
+        content = fullscreenContent || getCodeText();
+      }
     } else {
       content = getCodeText();
     }
     
-    // Realizar la búsqueda
+    // Realizar la búsqueda con el contenido más reciente
     performSearch(content, term);
   };
 
