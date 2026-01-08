@@ -131,18 +131,27 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
     
     if (!editor || language !== 'json') return;
 
-    const currentText = getCodeText();
+    let currentText = getCodeText();
     if (!currentText || !currentText.trim()) return;
 
     // Función para formatear JSON
     let formatted;
     try {
+      // Primero intentar parsear directamente
       const parsed = JSON.parse(currentText);
       formatted = JSON.stringify(parsed, null, 2);
     } catch (error) {
-      // Si no es JSON válido, mostrar un mensaje o no hacer nada
-      alert('El contenido no es un JSON válido');
-      return;
+      // Si falla, intentar convertir comillas simples a dobles
+      try {
+        // Reemplazar todas las comillas simples por dobles
+        const convertedText = currentText.replace(/'/g, '"');
+        const parsed = JSON.parse(convertedText);
+        formatted = JSON.stringify(parsed, null, 2);
+      } catch (secondError) {
+        // Si aún falla, mostrar un mensaje
+        alert('El contenido no es un JSON válido: ' + secondError.message);
+        return;
+      }
     }
 
     // Si el formato no cambió, no hacer nada
