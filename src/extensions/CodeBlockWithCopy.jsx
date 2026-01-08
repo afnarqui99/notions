@@ -141,17 +141,23 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
     const cleanAndConvertJSON = (text) => {
       let result = text;
       
-      // Paso 1: Reemplazar valores JavaScript no válidos en JSON
+      // Paso 1: Reemplazar valores de Python a JSON
+      // None -> null (Python)
+      result = result.replace(/\bNone\b/g, 'null');
+      // True -> true (Python)
+      result = result.replace(/\bTrue\b/g, 'true');
+      // False -> false (Python)
+      result = result.replace(/\bFalse\b/g, 'false');
+      
+      // Paso 2: Reemplazar valores JavaScript no válidos en JSON
       // NaN -> null
       result = result.replace(/\bNaN\b/g, 'null');
       // undefined -> null
       result = result.replace(/\bundefined\b/g, 'null');
-      // Asegurar que true, false, null estén en minúsculas
-      result = result.replace(/\bTrue\b/g, 'true');
-      result = result.replace(/\bFalse\b/g, 'false');
+      // Asegurar que null esté en minúsculas (por si acaso)
       result = result.replace(/\bNull\b/g, 'null');
       
-      // Paso 2: Convertir comillas simples a dobles
+      // Paso 3: Convertir comillas simples a dobles
       result = result.replace(/'/g, '"');
       
       return result;
@@ -174,9 +180,11 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
       } catch (secondError) {
         // Si aún falla, intentar usar eval (solo para objetos JavaScript válidos)
         try {
+          // Limpiar el texto antes de usar eval
+          const cleanedForEval = cleanAndConvertJSON(currentText);
           // Usar eval para convertir objetos JavaScript a JSON
           // Esto maneja casos como {key: value} sin comillas
-          const evalResult = eval('(' + currentText + ')');
+          const evalResult = eval('(' + cleanedForEval + ')');
           formatted = JSON.stringify(evalResult, null, 2);
         } catch (thirdError) {
           // Si todo falla, mostrar un mensaje con más detalles
