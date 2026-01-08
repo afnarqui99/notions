@@ -137,6 +137,26 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
     // Limpiar el texto: eliminar espacios al inicio y final
     currentText = currentText.trim();
 
+    // Función para limpiar y convertir JSON con comillas simples
+    const cleanAndConvertJSON = (text) => {
+      let result = text;
+      
+      // Paso 1: Reemplazar valores JavaScript no válidos en JSON
+      // NaN -> null
+      result = result.replace(/\bNaN\b/g, 'null');
+      // undefined -> null
+      result = result.replace(/\bundefined\b/g, 'null');
+      // Asegurar que true, false, null estén en minúsculas
+      result = result.replace(/\bTrue\b/g, 'true');
+      result = result.replace(/\bFalse\b/g, 'false');
+      result = result.replace(/\bNull\b/g, 'null');
+      
+      // Paso 2: Convertir comillas simples a dobles
+      result = result.replace(/'/g, '"');
+      
+      return result;
+    };
+
     // Función para formatear JSON
     let formatted;
     try {
@@ -144,22 +164,29 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
       const parsed = JSON.parse(currentText);
       formatted = JSON.stringify(parsed, null, 2);
     } catch (error) {
-      // Si falla, intentar convertir comillas simples a dobles
+      // Si falla, intentar limpiar y convertir
       try {
-        // Reemplazar todas las comillas simples por dobles
-        const convertedText = currentText.replace(/'/g, '"');
+        const cleanedText = cleanAndConvertJSON(currentText);
         console.log('Texto original:', currentText);
-        console.log('Texto convertido:', convertedText);
-        const parsed = JSON.parse(convertedText);
+        console.log('Texto limpiado:', cleanedText);
+        const parsed = JSON.parse(cleanedText);
         formatted = JSON.stringify(parsed, null, 2);
       } catch (secondError) {
-        // Si aún falla, mostrar un mensaje con más detalles
-        console.error('Error al formatear JSON:', secondError);
-        console.error('Texto original:', currentText);
-        const convertedText = currentText.replace(/'/g, '"');
-        console.error('Texto después de convertir comillas:', convertedText);
-        alert('El contenido no es un JSON válido.\n\nError: ' + secondError.message + '\n\nTexto convertido: ' + convertedText.substring(0, 100));
-        return;
+        // Si aún falla, intentar usar eval (solo para objetos JavaScript válidos)
+        try {
+          // Usar eval para convertir objetos JavaScript a JSON
+          // Esto maneja casos como {key: value} sin comillas
+          const evalResult = eval('(' + currentText + ')');
+          formatted = JSON.stringify(evalResult, null, 2);
+        } catch (thirdError) {
+          // Si todo falla, mostrar un mensaje con más detalles
+          console.error('Error al formatear JSON:', thirdError);
+          console.error('Texto original:', currentText);
+          const cleanedText = cleanAndConvertJSON(currentText);
+          console.error('Texto después de limpiar:', cleanedText);
+          alert('El contenido no es un JSON válido.\n\nError: ' + thirdError.message + '\n\nRevisa la consola para más detalles.');
+          return;
+        }
       }
     }
 
