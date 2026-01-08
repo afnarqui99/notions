@@ -1,7 +1,7 @@
 import { NodeViewWrapper, NodeViewContent } from '@tiptap/react';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Copy, Check, Code2, Maximize2, Minimize2 } from 'lucide-react';
+import { Copy, Check, Code2, Maximize2, Minimize2, Search, X, ChevronUp, ChevronDown } from 'lucide-react';
 
 export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
   const [copied, setCopied] = useState(false);
@@ -10,10 +10,15 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
   const [shouldShowButton, setShouldShowButton] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fullscreenContent, setFullscreenContent] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [currentResultIndex, setCurrentResultIndex] = useState(-1);
+  const [showSearch, setShowSearch] = useState(false);
   const language = node.attrs.language || '';
   const contentRef = useRef(null);
   const wrapperRef = useRef(null);
   const fullscreenRef = useRef(null);
+  const searchInputRef = useRef(null);
 
   // Actualizar el contenido del modal cuando se abre (solo la primera vez)
   useEffect(() => {
@@ -23,6 +28,367 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFullscreen]);
+
+  // Función auxiliar para limpiar resaltados
+  const clearHighlights = (element) => {
+    if (!element) return;
+    const highlights = element.querySelectorAll('.search-highlight, .search-highlight-current');
+    highlights.forEach(el => {
+      const parent = el.parentNode;
+      if (parent) {
+        const textNode = document.createTextNode(el.textContent);
+        parent.replaceChild(textNode, el);
+        parent.normalize();
+      }
+    });
+  };
+
+  // Función auxiliar para aplicar resaltados
+  const applyHighlights = useCallback(() => {
+    // Intentar obtener el elemento code de diferentes formas
+    let codeElement = contentRef.current;
+    
+    console.log('applyHighlights: Buscando elemento', {
+      hasContentRef: !!contentRef.current,
+      hasWrapperRef: !!wrapperRef.current,
+      contentRefTag: contentRef.current?.tagName,
+      contentRefClassName: contentRef.current?.className
+    });
+    
+    // Si contentRef existe pero no es un code, buscar dentro de él
+    if (codeElement && codeElement.tagName !== 'CODE') {
+      const codeInside = codeElement.querySelector('code');
+      if (codeInside) {
+        codeElement = codeInside;
+        console.log('applyHighlights: Encontrado code dentro de contentRef');
+      }
+    }
+    
+    // Si contentRef no está disponible, intentar encontrarlo en wrapperRef
+    if (!codeElement && wrapperRef.current) {
+      codeElement = wrapperRef.current.querySelector('code');
+      if (codeElement) {
+        console.log('applyHighlights: Usando elemento de wrapperRef');
+      }
+    }
+    
+    // Si aún no está disponible, intentar encontrarlo directamente en wrapperRef
+    if (!codeElement && wrapperRef.current) {
+      codeElement = wrapperRef.current.querySelector('[class*="language-"]') || 
+                    wrapperRef.current.querySelector('code') ||
+                    wrapperRef.current.querySelector('pre code');
+      if (codeElement) {
+        console.log('applyHighlights: Encontrado elemento alternativo');
+      }
+    }
+    
+    // Último intento: buscar en todo el documento dentro del wrapper
+    if (!codeElement && wrapperRef.current) {
+      const allCodes = wrapperRef.current.getElementsByTagName('code');
+      if (allCodes.length > 0) {
+        codeElement = allCodes[0];
+        console.log('applyHighlights: Usando primer code encontrado en wrapper');
+      }
+    }
+    
+    console.log('applyHighlights llamado:', { 
+      hasContentRef: !!contentRef.current,
+      hasCodeElement: !!codeElement,
+      showSearch, 
+      searchTerm, 
+      isFullscreen, 
+      resultsCount: searchResults.length 
+    });
+    
+    if (!codeElement || !showSearch || !searchTerm || isFullscreen || searchResults.length === 0) {
+      console.log('applyHighlights: Condiciones no cumplidas, saliendo', {
+        hasCodeElement: !!codeElement,
+        showSearch,
+        searchTerm,
+        isFullscreen,
+        resultsCount: searchResults.length
+      });
+      return;
+    }
+    console.log('applyHighlights: Limpiando resaltados anteriores');
+    
+    // Limpiar resaltados anteriores
+    clearHighlights(codeElement);
+
+    // Guardar referencia al elemento para usar en el closure
+    const elementToHighlight = codeElement;
+    
+    // Esperar un momento para que el DOM esté estable, pero usar requestAnimationFrame para mejor sincronización
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        // Verificar que el elemento aún existe
+        if (!elementToHighlight || !document.contains(elementToHighlight)) {
+          console.log('Elemento no disponible o removido del DOM');
+          return;
+        }
+        
+        const text = getCodeText();
+        if (!text) {
+          console.log('No se pudo obtener el texto para resaltar');
+          return;
+        }
+        
+        console.log('Aplicando resaltados:', { 
+          searchResults: searchResults.length, 
+          currentIndex: currentResultIndex,
+          textLength: text.length,
+          searchTerm,
+          elementTag: elementToHighlight.tagName
+        });
+
+        // Crear un TreeWalker para encontrar todos los nodos de texto
+        const walker = document.createTreeWalker(
+          elementToHighlight,
+          NodeFilter.SHOW_TEXT,
+          null,
+          false
+        );
+
+        let textNode;
+        let currentIndex = 0;
+        const textNodes = [];
+
+        // Recopilar todos los nodos de texto con sus índices
+        while ((textNode = walker.nextNode())) {
+          // Saltar nodos que ya son parte de un highlight
+          if (textNode.parentElement?.classList?.contains('search-highlight') || 
+              textNode.parentElement?.classList?.contains('search-highlight-current')) {
+            continue;
+          }
+          
+          const textLength = textNode.textContent.length;
+          textNodes.push({
+            node: textNode,
+            start: currentIndex,
+            end: currentIndex + textLength
+          });
+          currentIndex += textLength;
+        }
+
+        console.log('Nodos de texto encontrados:', textNodes.length);
+
+        // Ordenar resultados por índice descendente para procesarlos de atrás hacia adelante
+        const sortedResults = [...searchResults].sort((a, b) => b.index - a.index);
+
+        let highlightsApplied = 0;
+
+        // Procesar cada resultado
+        for (const result of sortedResults) {
+          const isCurrent = searchResults.indexOf(result) === currentResultIndex;
+          
+          // Encontrar el nodo de texto que contiene este resultado
+          for (const textNodeInfo of textNodes) {
+            if (result.index >= textNodeInfo.start && result.index < textNodeInfo.end) {
+              const node = textNodeInfo.node;
+              
+            // Verificar que el nodo aún existe y no ha sido modificado
+            if (!node.parentNode || !elementToHighlight.contains(node)) {
+              console.log('Nodo no válido, saltando');
+              continue;
+            }
+
+              const nodeText = node.textContent;
+              const relativeStart = result.index - textNodeInfo.start;
+              const relativeEnd = Math.min(result.index + result.length - textNodeInfo.start, nodeText.length);
+
+              // Verificar que el texto coincide
+              const actualMatch = nodeText.substring(relativeStart, relativeEnd);
+              if (actualMatch.toLowerCase() !== result.text.toLowerCase()) {
+                console.log('Texto no coincide:', { actualMatch, expected: result.text });
+                continue;
+              }
+
+              // Dividir el nodo en tres partes: antes, coincidencia, después
+              const beforeText = nodeText.substring(0, relativeStart);
+              const matchText = nodeText.substring(relativeStart, relativeEnd);
+              const afterText = nodeText.substring(relativeEnd);
+
+              // Crear los elementos
+              const fragment = document.createDocumentFragment();
+              if (beforeText) {
+                fragment.appendChild(document.createTextNode(beforeText));
+              }
+              const highlightSpan = document.createElement('span');
+              highlightSpan.className = isCurrent ? 'search-highlight-current' : 'search-highlight';
+              highlightSpan.textContent = matchText;
+              highlightSpan.setAttribute('data-search-index', searchResults.indexOf(result).toString());
+              fragment.appendChild(highlightSpan);
+              if (afterText) {
+                fragment.appendChild(document.createTextNode(afterText));
+              }
+
+              // Reemplazar el nodo original
+              const parent = node.parentNode;
+              if (parent && parent.contains(node)) {
+                try {
+                  parent.replaceChild(fragment, node);
+                  highlightsApplied++;
+                  console.log('Resaltado aplicado:', { index: result.index, isCurrent, matchText });
+                } catch (error) {
+                  console.error('Error al reemplazar nodo:', error);
+                }
+              }
+
+              // Actualizar los índices de los nodos restantes
+              textNodeInfo.start = result.index + result.length;
+              break;
+            }
+          }
+        }
+
+        console.log('Resaltados aplicados:', highlightsApplied, 'de', searchResults.length);
+
+        // Normalizar el DOM
+        elementToHighlight.normalize();
+      }, 50);
+    });
+  }, [showSearch, searchTerm, searchResults, currentResultIndex, isFullscreen]);
+
+  // Efecto para resaltar coincidencias en el modo fullscreen (usando overlay)
+  useEffect(() => {
+    if (!showSearch || !searchTerm || !isFullscreen || searchResults.length === 0 || !fullscreenRef.current) {
+      // Limpiar overlay si existe
+      const existingOverlay = document.getElementById('search-highlight-overlay');
+      if (existingOverlay && existingOverlay.parentElement) {
+        existingOverlay.parentElement.removeChild(existingOverlay);
+      }
+      return;
+    }
+
+    const textarea = fullscreenRef.current;
+    const content = fullscreenContent || getCodeText();
+    if (!content) return;
+
+    // Obtener estilos calculados del textarea
+    const computedStyle = window.getComputedStyle(textarea);
+    const fontSize = parseFloat(computedStyle.fontSize) || 16;
+    const lineHeight = parseFloat(computedStyle.lineHeight) || fontSize * 1.6;
+    const paddingTop = parseFloat(computedStyle.paddingTop) || 24;
+    const paddingLeft = parseFloat(computedStyle.paddingLeft) || 24;
+    
+    // Crear o actualizar overlay para resaltados
+    let overlay = document.getElementById('search-highlight-overlay');
+    const textareaParent = textarea.parentElement;
+    
+    if (!overlay && textareaParent) {
+      overlay = document.createElement('div');
+      overlay.id = 'search-highlight-overlay';
+      textareaParent.style.position = 'relative';
+      textareaParent.appendChild(overlay);
+    }
+
+    if (!overlay) return;
+
+    // Configurar overlay para que coincida exactamente con el textarea
+    const textareaRect = textarea.getBoundingClientRect();
+    const parentRect = textareaParent.getBoundingClientRect();
+    
+    overlay.style.cssText = `
+      position: absolute;
+      pointer-events: none;
+      top: ${textareaRect.top - parentRect.top + paddingTop}px;
+      left: ${textareaRect.left - parentRect.left + paddingLeft}px;
+      width: ${textarea.clientWidth - (paddingLeft * 2)}px;
+      height: ${textarea.clientHeight - (paddingTop * 2)}px;
+      z-index: 10;
+      font-family: ${computedStyle.fontFamily};
+      font-size: ${fontSize}px;
+      line-height: ${lineHeight}px;
+      white-space: pre;
+      word-break: normal;
+      overflow-wrap: normal;
+      color: transparent;
+      overflow: hidden;
+    `;
+
+    // Calcular posiciones de los resaltados
+    const getLineAndColumn = (text, index) => {
+      const textBefore = text.substring(0, index);
+      const lines = textBefore.split('\n');
+      const lineNum = lines.length - 1;
+      const colNum = lines[lines.length - 1].length;
+      return { line: lineNum, col: colNum };
+    };
+    
+    // Limpiar overlay anterior
+    overlay.innerHTML = '';
+    
+    // Crear spans para cada resultado
+    searchResults.forEach((result, index) => {
+      const isCurrent = index === currentResultIndex;
+      const { line, col } = getLineAndColumn(content, result.index);
+      
+      // Calcular posición exacta
+      const top = line * lineHeight;
+      const charWidth = fontSize * 0.6; // Aproximado para fuente monospace
+      const left = col * charWidth;
+      
+      const span = document.createElement('span');
+      span.style.cssText = `
+        position: absolute;
+        top: ${top}px;
+        left: ${left}px;
+        background-color: ${isCurrent ? '#FFC107' : '#FFEB3B'};
+        color: #000000;
+        padding: 0;
+        border-radius: 1px;
+        font-weight: ${isCurrent ? '600' : '500'};
+        ${isCurrent ? 'box-shadow: 0 0 0 1px rgba(255, 193, 7, 0.5);' : ''}
+        pointer-events: none;
+        white-space: pre;
+        line-height: ${lineHeight}px;
+      `;
+      span.textContent = result.text;
+      overlay.appendChild(span);
+    });
+
+    // Sincronizar scroll del overlay con el textarea
+    const syncScroll = () => {
+      overlay.scrollTop = textarea.scrollTop;
+      overlay.scrollLeft = textarea.scrollLeft;
+    };
+    
+    textarea.addEventListener('scroll', syncScroll);
+    syncScroll();
+    
+    // Actualizar posición cuando cambie el tamaño de la ventana
+    const updatePosition = () => {
+      const textareaRect = textarea.getBoundingClientRect();
+      const parentRect = textareaParent.getBoundingClientRect();
+      overlay.style.top = `${textareaRect.top - parentRect.top + paddingTop}px`;
+      overlay.style.left = `${textareaRect.left - parentRect.left + paddingLeft}px`;
+    };
+    
+    window.addEventListener('resize', updatePosition);
+    const resizeObserver = new ResizeObserver(updatePosition);
+    resizeObserver.observe(textarea);
+
+    return () => {
+      textarea.removeEventListener('scroll', syncScroll);
+      window.removeEventListener('resize', updatePosition);
+      resizeObserver.disconnect();
+      if (overlay && overlay.parentElement) {
+        overlay.parentElement.removeChild(overlay);
+      }
+    };
+  }, [showSearch, searchTerm, isFullscreen, searchResults, currentResultIndex, fullscreenContent]);
+
+
+  // Inicializar búsqueda cuando se abre el panel de búsqueda
+  useEffect(() => {
+    if (showSearch && searchTerm) {
+      const content = isFullscreen ? fullscreenContent : getCodeText();
+      if (content) {
+        performSearch(content, searchTerm);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showSearch]);
 
   // Detectar si estamos dentro del drawer y si el drawer está abierto
   useEffect(() => {
@@ -119,10 +485,34 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
 
   // Obtener el texto del código para copiar
   const getCodeText = () => {
+    // Intentar obtener el texto del elemento del DOM
     if (contentRef.current) {
-      return contentRef.current.textContent || '';
+      const text = contentRef.current.textContent || contentRef.current.innerText || '';
+      if (text.trim()) {
+        return text;
+      }
     }
-    return node.textContent || '';
+    
+    // Si no hay texto en el ref, usar el nodo directamente
+    if (node && node.textContent) {
+      return node.textContent;
+    }
+    
+    // Último recurso: intentar obtener del editor
+    if (editor) {
+      const { state } = editor;
+      const { doc } = state;
+      let text = '';
+      doc.descendants((n) => {
+        if (n.type.name === 'codeBlock' && n.attrs.language === language) {
+          text = n.textContent;
+          return false;
+        }
+      });
+      if (text) return text;
+    }
+    
+    return '';
   };
 
   const handleCopy = async (e) => {
@@ -141,8 +531,13 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
   const handleFullscreen = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    setFullscreenContent(getCodeText());
+    const currentText = getCodeText();
+    setFullscreenContent(currentText);
     setIsFullscreen(true);
+    // Si hay búsqueda activa, actualizarla con el nuevo contenido
+    if (searchTerm) {
+      performSearch(currentText, searchTerm);
+    }
   };
 
   const handleExitFullscreen = () => {
@@ -199,6 +594,169 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
   // Manejar cambios en el textarea del modal
   const handleFullscreenContentChange = (e) => {
     setFullscreenContent(e.target.value);
+    // Si hay búsqueda activa, actualizar resultados
+    if (searchTerm) {
+      performSearch(e.target.value, searchTerm);
+    }
+  };
+
+  // Función para buscar en el contenido
+  const performSearch = (content, term) => {
+    if (!term || !term.trim()) {
+      setSearchResults([]);
+      setCurrentResultIndex(-1);
+      return;
+    }
+
+    // Obtener el texto del contenido o del editor
+    let text = content;
+    if (!text) {
+      text = getCodeText();
+    }
+    
+    // Asegurarse de que tenemos texto
+    if (!text || typeof text !== 'string') {
+      console.warn('No se pudo obtener el texto para buscar', { text, content, term });
+      setSearchResults([]);
+      setCurrentResultIndex(-1);
+      return;
+    }
+
+    // Escapar caracteres especiales para la búsqueda
+    const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const searchRegex = new RegExp(escapedTerm, 'gi');
+    const results = [];
+    let match;
+    let lastIndex = -1;
+
+    // Reiniciar lastIndex para buscar desde el inicio
+    searchRegex.lastIndex = 0;
+
+    while ((match = searchRegex.exec(text)) !== null) {
+      // Evitar bucles infinitos si el regex no avanza
+      if (match.index === lastIndex && match[0].length === 0) {
+        break;
+      }
+      lastIndex = match.index;
+      
+      results.push({
+        index: match.index,
+        length: match[0].length,
+        text: match[0]
+      });
+    }
+
+    console.log('Búsqueda realizada:', { term, textLength: text.length, resultsCount: results.length, results });
+    
+    setSearchResults(results);
+    if (results.length > 0) {
+      setCurrentResultIndex(0);
+      scrollToResult(0, results);
+    } else {
+      setCurrentResultIndex(-1);
+    }
+  };
+
+  // Función para resaltar coincidencias en el texto
+  const highlightMatches = (text, term) => {
+    if (!term || !term.trim()) {
+      return text;
+    }
+
+    const regex = new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    const parts = text.split(regex);
+    
+    return parts.map((part, index) => {
+      if (regex.test(part)) {
+        return (
+          <mark key={index} className="bg-yellow-400 dark:bg-yellow-600 text-gray-900 dark:text-gray-100">
+            {part}
+          </mark>
+        );
+      }
+      return part;
+    });
+  };
+
+  // Función para desplazarse a un resultado específico
+  const scrollToResult = (index, results = searchResults) => {
+    if (index < 0 || index >= results.length) return;
+
+    const result = results[index];
+    const textarea = fullscreenRef.current;
+    const codeElement = contentRef.current;
+    const wrapperElement = wrapperRef.current;
+
+    if (isFullscreen && textarea) {
+      const content = fullscreenContent || getCodeText();
+      
+      // Guardar la posición actual del cursor
+      const currentCursorPos = textarea.selectionStart;
+      const currentSelectionEnd = textarea.selectionEnd;
+      
+      // Calcular la posición de scroll para centrar el resultado
+      const textBeforeMatch = content.substring(0, result.index);
+      const linesBefore = textBeforeMatch.split('\n').length - 1;
+      const lineHeight = 24; // Aproximado basado en fontSize y lineHeight
+      const textareaHeight = textarea.clientHeight;
+      const scrollPosition = linesBefore * lineHeight - (textareaHeight / 2);
+      
+      // Hacer scroll sin mover el cursor
+      textarea.scrollTop = Math.max(0, scrollPosition);
+      
+      // Restaurar la posición del cursor después de un pequeño delay
+      // Solo si el usuario no estaba seleccionando texto (cursor y selección en la misma posición)
+      setTimeout(() => {
+        if (currentCursorPos === currentSelectionEnd) {
+          // El usuario no tenía texto seleccionado, mantener la posición del cursor
+          textarea.setSelectionRange(currentCursorPos, currentCursorPos);
+        } else {
+          // El usuario tenía texto seleccionado, restaurar la selección
+          textarea.setSelectionRange(currentCursorPos, currentSelectionEnd);
+        }
+      }, 0);
+    }
+  };
+
+  // Navegar al siguiente resultado
+  const goToNextResult = () => {
+    if (searchResults.length === 0) return;
+    const nextIndex = (currentResultIndex + 1) % searchResults.length;
+    setCurrentResultIndex(nextIndex);
+    scrollToResult(nextIndex);
+  };
+
+  // Navegar al resultado anterior
+  const goToPreviousResult = () => {
+    if (searchResults.length === 0) return;
+    const prevIndex = currentResultIndex <= 0 ? searchResults.length - 1 : currentResultIndex - 1;
+    setCurrentResultIndex(prevIndex);
+    scrollToResult(prevIndex);
+  };
+
+  // Manejar cambio en el término de búsqueda
+  const handleSearchChange = (e) => {
+    const term = e.target.value;
+    setSearchTerm(term);
+    
+    // Obtener el contenido actual
+    let content;
+    if (isFullscreen) {
+      content = fullscreenContent;
+    } else {
+      content = getCodeText();
+    }
+    
+    // Realizar la búsqueda
+    performSearch(content, term);
+  };
+
+  // Limpiar búsqueda
+  const clearSearch = () => {
+    setSearchTerm('');
+    setSearchResults([]);
+    setCurrentResultIndex(-1);
+    setShowSearch(false);
   };
 
   // Cerrar fullscreen con Escape
@@ -334,21 +892,74 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
     }
   };
 
+  // Inyectar estilos CSS para el resaltado
+  useEffect(() => {
+    const styleId = 'code-block-search-highlight-styles';
+    if (!document.getElementById(styleId)) {
+      const style = document.createElement('style');
+      style.id = styleId;
+      style.textContent = `
+        .search-highlight {
+          background-color: #FFEB3B !important;
+          color: #000000 !important;
+          padding: 1px 2px !important;
+          border-radius: 3px !important;
+          font-weight: 500 !important;
+        }
+        .search-highlight-current {
+          background-color: #FFC107 !important;
+          color: #000000 !important;
+          padding: 1px 2px !important;
+          border-radius: 3px !important;
+          font-weight: 600 !important;
+          box-shadow: 0 0 0 2px rgba(255, 193, 7, 0.5) !important;
+          outline: 2px solid #FFC107 !important;
+        }
+      `;
+      document.head.appendChild(style);
+    }
+    return () => {
+      // No remover los estilos ya que pueden ser usados por otros componentes
+    };
+  }, []);
+
   // Actualizar referencia cuando el componente se monta
   useEffect(() => {
     // Buscar el elemento code dentro del NodeViewContent
     const findCodeElement = () => {
+      // Primero intentar con contentRef
       if (contentRef.current) {
         const codeEl = contentRef.current.querySelector('code') || contentRef.current;
         if (codeEl && codeEl !== contentRef.current) {
+          // Guardar el elemento original en una variable temporal
+          const originalRef = contentRef.current;
+          // Actualizar la referencia
           contentRef.current = codeEl;
+          console.log('Elemento code encontrado en contentRef');
+        }
+      }
+      
+      // Si contentRef no está disponible, intentar con wrapperRef
+      if (!contentRef.current && wrapperRef.current) {
+        const codeEl = wrapperRef.current.querySelector('code');
+        if (codeEl) {
+          // Usar una variable para mantener la referencia
+          // No podemos cambiar contentRef directamente, pero podemos usar el elemento encontrado
+          console.log('Elemento code encontrado en wrapperRef');
         }
       }
     };
     
-    // Intentar encontrar el elemento después de que se renderice
-    const timeout = setTimeout(findCodeElement, 0);
-    return () => clearTimeout(timeout);
+    // Intentar encontrar el elemento múltiples veces
+    const timeout1 = setTimeout(findCodeElement, 0);
+    const timeout2 = setTimeout(findCodeElement, 100);
+    const timeout3 = setTimeout(findCodeElement, 300);
+    
+    return () => {
+      clearTimeout(timeout1);
+      clearTimeout(timeout2);
+      clearTimeout(timeout3);
+    };
   }, []);
 
   return (
@@ -358,7 +969,7 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
       as="pre" 
       style={{ position: 'relative' }}
     >
-      <div className="bg-gray-900 text-gray-100 rounded-lg p-4 overflow-x-auto relative" style={{ position: 'relative' }}>
+      <div className="bg-gray-900 text-gray-100 rounded-lg p-4 overflow-auto relative max-h-[600px]" style={{ position: 'relative' }}>
         <NodeViewContent 
           ref={contentRef}
           as="code" 
@@ -446,18 +1057,35 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
           }}
         >
           {/* Header con botones */}
-          <div className="flex items-center justify-between p-4 bg-gray-800 border-b border-gray-700">
-            <h2 className="text-white text-lg font-semibold">JSON - Pantalla Completa</h2>
-            <div className="flex gap-2">
-              <button
-                onClick={handleFormat}
-                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors flex items-center gap-2"
-                title="Formatear JSON"
-                type="button"
-              >
-                <Code2 className="w-4 h-4" />
-                <span>Formatear</span>
-              </button>
+          <div className="flex flex-col bg-gray-800 border-b border-gray-700">
+            <div className="flex items-center justify-between p-4">
+              <h2 className="text-white text-lg font-semibold">JSON - Pantalla Completa</h2>
+              <div className="flex gap-2">
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setShowSearch(!showSearch);
+                    if (!showSearch && searchInputRef.current) {
+                      setTimeout(() => searchInputRef.current?.focus(), 0);
+                    }
+                  }}
+                  className={`px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors flex items-center gap-2 ${showSearch ? 'bg-blue-600' : ''}`}
+                  title="Buscar en JSON"
+                  type="button"
+                >
+                  <Search className="w-4 h-4" />
+                  <span>Buscar</span>
+                </button>
+                <button
+                  onClick={handleFormat}
+                  className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors flex items-center gap-2"
+                  title="Formatear JSON"
+                  type="button"
+                >
+                  <Code2 className="w-4 h-4" />
+                  <span>Formatear</span>
+                </button>
               <button
                 onClick={async (e) => {
                   e.preventDefault();
@@ -510,7 +1138,68 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
                 <Minimize2 className="w-4 h-4" />
                 <span>Salir</span>
               </button>
+              </div>
             </div>
+            {/* Barra de búsqueda en fullscreen */}
+            {showSearch && (
+              <div className="px-4 py-3 bg-gray-750 border-b border-gray-700 flex items-center gap-2">
+              <Search className="w-4 h-4 text-gray-400 flex-shrink-0" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchTerm}
+                onChange={handleSearchChange}
+                placeholder="Buscar en JSON..."
+                className="flex-1 bg-gray-900 text-gray-100 border border-gray-600 rounded px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    clearSearch();
+                  } else if (e.key === 'Enter' && e.shiftKey) {
+                    e.preventDefault();
+                    goToPreviousResult();
+                  } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    goToNextResult();
+                  }
+                }}
+              />
+              {searchTerm && (
+                <>
+                  <span className="text-sm text-gray-400 flex-shrink-0">
+                    {searchResults.length > 0 
+                      ? `${currentResultIndex + 1} / ${searchResults.length}`
+                      : '0 resultados'}
+                  </span>
+                  <button
+                    onClick={goToPreviousResult}
+                    disabled={searchResults.length === 0}
+                    className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    title="Resultado anterior (Shift+Enter)"
+                    type="button"
+                  >
+                    <ChevronUp className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={goToNextResult}
+                    disabled={searchResults.length === 0}
+                    className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    title="Siguiente resultado (Enter)"
+                    type="button"
+                  >
+                    <ChevronDown className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={clearSearch}
+                    className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors"
+                    title="Cerrar búsqueda (Esc)"
+                    type="button"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </>
+              )}
+              </div>
+            )}
           </div>
           
           {/* Contenido del código editable */}
