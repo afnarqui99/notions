@@ -847,6 +847,32 @@ export default function LocalEditor({ onShowConfig }) {
     };
   }, []);
 
+  // Escuchar evento para abrir notas rápidas desde comando /nota
+  useEffect(() => {
+    let isOpening = false; // Flag para evitar aperturas múltiples
+    
+    const handleOpenQuickNote = (e) => {
+      // Prevenir aperturas duplicadas si ya está abierto o si se está abriendo
+      if (isOpening || showQuickNote) {
+        e?.stopPropagation?.();
+        return;
+      }
+      
+      isOpening = true;
+      setShowQuickNote(true);
+      
+      // Resetear el flag después de un momento
+      setTimeout(() => {
+        isOpening = false;
+      }, 100);
+    };
+
+    window.addEventListener('open-quick-note', handleOpenQuickNote);
+    return () => {
+      window.removeEventListener('open-quick-note', handleOpenQuickNote);
+    };
+  }, [showQuickNote]);
+
   // Escuchar evento para navegar a una página desde SQLScriptNode
   useEffect(() => {
     const handleNavigateToPage = (event) => {

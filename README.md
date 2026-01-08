@@ -1,542 +1,420 @@
-# Notion Local Editor
+# 📝 Notas afnarqui - Editor Local de Notion
 
-Editor de Notion completamente offline que funciona sin internet, sin login y guarda todo localmente en archivos JSON y carpetas del sistema.
+Editor de Notion completamente offline que funciona sin internet, sin login y guarda todo localmente en archivos JSON y carpetas del sistema. Ideal para gestión de proyectos, notas, sprints Scrum, tablas dinámicas y más.
 
-## Características
+---
 
-- ✅ **Sin login** - Acceso directo al editor
-- ✅ **Funciona offline** - No requiere conexión a internet
-- ✅ **Almacenamiento local** - Guarda en archivos JSON y carpetas del sistema
-- ✅ **Dashboard de configuración** - Selecciona dónde guardar tus archivos
-- ✅ **Mismas funcionalidades** - Todas las características del editor original de Notion
+## 🚀 Cómo Ejecutar la Aplicación
 
-## Instalación
+### Opción 1: Modo Desarrollo (Recomendado para desarrolladores)
+
+#### Prerequisitos
+- Node.js v18 o superior instalado
+- npm o yarn
+
+#### Pasos:
 
 ```bash
-# Instalar dependencias
+# 1. Clonar o descargar el repositorio
+git clone [url-del-repositorio]
+cd notion-local-editor
+
+# 2. Instalar dependencias
 npm install
 
-# Iniciar servidor de desarrollo
+# 3. Iniciar servidor de desarrollo
 npm run dev
-
-# Construir para producción
-npm run build
 ```
 
-## Configuración
+La aplicación se abrirá en tu navegador en `http://localhost:5173`
 
-1. Al iniciar la aplicación, verás el dashboard de configuración
-2. Activa "Guardar archivos localmente en el sistema de archivos"
-3. Selecciona la carpeta donde quieres guardar tus archivos
+**Nota**: En modo desarrollo, los datos se guardan en el almacenamiento del navegador (localStorage/IndexedDB).
+
+---
+
+### Opción 2: Ejecutar como Aplicación de Escritorio (Electron)
+
+#### Modo Desarrollo con Electron:
+
+```bash
+# Terminal 1: Iniciar servidor de desarrollo
+npm run dev
+
+# Terminal 2: Ejecutar Electron
+npm run electron:dev
+```
+
+---
+
+### Opción 3: Generar y Ejecutar el Ejecutable (Distribución)
+
+#### Para Generar el Ejecutable:
+
+```bash
+# Generar instalador + ZIP portable
+npm run electron:build:both
+
+# O solo instalador
+npm run electron:build:win
+
+# O solo ZIP portable
+npm run electron:build:zip
+```
+
+#### Archivos Generados:
+
+Se generarán en la carpeta `release/`:
+- **Instalador**: `Notas afnarqui Setup 1.0.0.exe` (para instalación normal)
+- **ZIP Portable**: `Notas afnarqui 1.0.0-win-x64.zip` (no requiere instalación)
+
+#### Para Ejecutar el Ejecutable:
+
+**Si instalaste con el .exe:**
+1. Busca "Notas afnarqui" en el menú de inicio
+2. Haz doble clic en el acceso directo
+3. La aplicación se abre automáticamente
+
+**Si usas el ZIP portable:**
+1. Extrae el archivo ZIP en cualquier carpeta
+2. Ejecuta `Notas afnarqui.exe`
+3. ¡Listo! No requiere instalación
+
+---
+
+## 🎯 Qué Puedes Hacer con Esta Aplicación
+
+### 📚 Gestión de Documentos y Notas
+
+- ✅ **Crear páginas ilimitadas** con título, emoji y contenido rico
+- ✅ **Editor de texto enriquecido** estilo Notion con formato completo
+- ✅ **Organización jerárquica** de páginas (páginas padre/hijo)
+- ✅ **Sistema de tags** para categorizar páginas
+- ✅ **Búsqueda global** en todas tus páginas, eventos y tablas
+- ✅ **Comentarios** en páginas para anotaciones
+- ✅ **Notas rápidas** con auto-guardado
+- ✅ **Enlaces entre páginas** para navegación rápida
+
+### 📊 Tablas Dinámicas Estilo Notion
+
+- ✅ **Tablas personalizables** con múltiples tipos de columnas:
+  - Texto, Números, Fechas
+  - Checkboxes, Porcentajes
+  - Select con colores, Tags múltiples
+  - Fórmulas calculadas automáticamente
+- ✅ **Vistas múltiples**:
+  - Vista tabla (estándar)
+  - Vista Kanban (drag & drop entre columnas)
+  - Vista Timeline
+  - Vista Gallery
+- ✅ **Filtros y ordenamiento** avanzados
+- ✅ **Vinculación entre tablas** para datos relacionados
+- ✅ **Gráficos y visualizaciones** integradas
+
+### 💰 Gestión Financiera
+
+- ✅ **Sistema financiero completo** con plantilla preconfigurada
+- ✅ **Tablas de Ingresos, Egresos y Deudas** interconectadas
+- ✅ **Resumen financiero** con gráficas automáticas
+- ✅ **Cálculos automáticos** de totales y balances
+
+### 🗄️ Scripts SQL con Versionado
+
+- ✅ **Editor de scripts SQL** integrado
+- ✅ **Sistema de versionado** tipo Git
+- ✅ **Historial de versiones** completo
+- ✅ **Comparación entre versiones**
+- ✅ **Exportar a PDF o TXT**
+- ✅ **Asociación con páginas** para organización
+
+### 📅 Calendario y Eventos
+
+- ✅ **Calendario interactivo** con múltiples vistas
+- ✅ **Gestión de eventos** con detalles completos
+- ✅ **Notificaciones** de eventos
+- ✅ **Búsqueda en eventos** desde búsqueda global
+
+### 📁 Gestión de Archivos
+
+- ✅ **Galería de imágenes** organizadas
+- ✅ **Galería de archivos** para cualquier tipo de archivo
+- ✅ **Almacenamiento local** en tu sistema de archivos
+- ✅ **Drag & drop** para subir archivos
+
+### 🎨 Formato de Texto
+
+- ✅ **Títulos** (H1, H2, H3, H4, H5, H6)
+- ✅ **Listas** numeradas, con viñetas y de tareas
+- ✅ **Bloques de código** con resaltado de sintaxis
+- ✅ **Enlaces** externos e internos
+- ✅ **Imágenes** con título y descripción
+- ✅ **Bloques desplegables** (toggle)
+- ✅ **Texto enriquecido** (negrita, cursiva, subrayado)
+
+### 🔍 Comandos Rápidos (Slash Commands)
+
+Escribe `/` en cualquier parte del editor para acceder a comandos rápidos:
+
+#### 📋 Gestión de Proyectos
+- **`/board`** o **`/kanban`** - Crea un tablero Kanban con columnas To Do, In Progress, Done
+- **`/tabla`** - Crea una tabla dinámica estilo Notion
+- **`/reuniones`** - Template completo para actas de reunión
+
+#### 💰 Finanzas
+- **`/financiero`** - Sistema financiero completo con Ingresos, Egresos y Deudas
+
+#### 🗄️ Base de Datos
+- **`/sql`** - Abre el gestor de scripts SQL con versionado
+
+#### 📅 Calendario
+- **`/calendario`** - Inserta un calendario interactivo
+
+#### 📁 Archivos
+- **`/galeria-imagenes`** - Crea una galería de imágenes
+- **`/galeria-archivos`** - Crea una galería para cualquier tipo de archivo
+- **`/imagen`** - Inserta una imagen
+
+#### 📝 Notas y Documentación
+- **`/nota`** - Abre el modal de notas rápidas
+- **`/plantilla`** - Inserta contenido de una plantilla guardada
+
+#### 📋 Listas
+- **`/lista-numerada`** - Lista ordenada (1, 2, 3...)
+- **`/lista-viñetas`** - Lista con bullets (• • •)
+- **`/tareas`** - Lista de tareas con checkboxes
+- **`/convertir-tareas`** - Convierte texto con [x] y [ ] en checkboxes
+
+#### ✏️ Formato
+- **`/titulo1`** o **`/h1`** - Título grande
+- **`/titulo2`** o **`/h2`** - Subtítulo
+- **`/parrafo`** - Texto normal
+- **`/codigo`** - Bloque de código
+- **`/toggle`** - Bloque desplegable
+
+#### 🔗 Enlaces
+- **`/enlace`** - Crea enlace a otra página
+
+#### 🎨 Visual
+- **`/iconos`** o **`/emoji`** - Selector de emojis
+- **`/tolist`** - Convierte bloque a lista
+
+---
+
+## 📖 Guía Rápida de Uso
+
+### Primera Vez - Configuración
+
+1. **Al iniciar la aplicación** por primera vez, verás el dashboard de configuración
+2. **Activa** "Guardar archivos localmente en el sistema de archivos"
+3. **Selecciona** la carpeta donde quieres guardar tus archivos
 4. El sistema creará automáticamente:
    - `data/` - Para archivos JSON de páginas
    - `files/` - Para imágenes y archivos adjuntos
 
-## Estructura de Archivos
-
-```
-notion-local-editor/
-├── src/
-│   ├── components/
-│   │   ├── ConfigDashboard.jsx      # Dashboard de configuración
-│   │   └── LocalEditor.jsx          # Editor adaptado sin Firebase
-│   ├── services/
-│   │   └── LocalStorageService.js  # Servicio de almacenamiento local
-│   ├── extensions/                  # Extensiones de TipTap
-│   │   ├── TablaNotionNode.js
-│   │   ├── Toggle.js
-│   │   ├── SlashCommand.js
-│   │   └── ...
-│   ├── App.jsx                      # App principal sin login
-│   ├── main.jsx                     # Punto de entrada
-│   └── index.css                    # Estilos
-├── package.json
-└── vite.config.js
-```
-
-## Uso
-
-1. **Primera vez**: Configura la carpeta de almacenamiento
-2. **Crear página**: Haz clic en "Nueva" para crear una nueva página
-3. **Editar**: Escribe normalmente, el contenido se guarda automáticamente
-4. **Subir archivos**: Usa los botones para insertar imágenes o archivos
-
-## Notas Técnicas
-
-- Usa la **File System Access API** del navegador para acceso al sistema de archivos
-- Si la API no está disponible, usa **localStorage/IndexedDB** como fallback
-- Los archivos se guardan en formato JSON
-- Las imágenes se guardan en la carpeta `files/` y se referencian relativamente
-
-## Requisitos del Navegador
-
-- Chrome 86+ (recomendado para File System Access API)
-- Edge 86+
-- Opera 72+
-
-Para otros navegadores, se usará el almacenamiento del navegador como fallback.
-
-## Ejecutar con Electron
-
-La aplicación puede ejecutarse como aplicación de escritorio usando Electron.
-
-### Modo Desarrollo
-
-Para probar la aplicación con Electron en modo desarrollo:
-
-```bash
-# Asegúrate de tener el servidor de desarrollo corriendo en otra terminal
-npm run dev
-
-# En otra terminal, ejecuta Electron
-npm run electron:dev
-```
-
-### Generar Ejecutable para Windows
-
-Para crear un instalador ejecutable de Windows (.exe) que no requiere Node.js:
-
-```bash
-# 1. Instalar todas las dependencias (incluye Electron)
-npm install
-
-# 2. Generar el ejecutable
-npm run electron:build:win
-```
-
-El instalador se generará en:
-```
-release/Notion Local Editor Setup 1.0.0.exe
-```
-
-**Características del ejecutable:**
-- ✅ No requiere Node.js instalado
-- ✅ Instalación simple (solo hacer doble clic)
-- ✅ Auto-inicio al iniciar Windows
-- ✅ Crea accesos directos en escritorio y menú de inicio
-- ✅ Desinstalación fácil desde el Panel de Control
-
-**Distribución:**
-1. Comparte el archivo `.exe` generado
-2. El usuario solo necesita hacer doble clic e instalar
-3. La aplicación se ejecutará automáticamente al iniciar Windows
-
-**Nota:** El instalador es grande (~100-150 MB) porque incluye Node.js y todas las dependencias empaquetadas.
-
-## Desarrollo
-
-Este proyecto está basado en el componente `EditorNotionLike` del proyecto principal, pero adaptado para:
-- Eliminar dependencias de Firebase
-- Usar almacenamiento local
-- Eliminar sistema de autenticación
-- Agregar dashboard de configuración
-
-## 🎯 Cómo Usar Esta Aplicación para Metodología Scrum
-
-Esta aplicación está diseñada especialmente para gestionar sprints Scrum de manera eficiente. Aquí te mostramos cómo usarla paso a paso:
-
-### ⚡ Inicio Rápido: Tu Primer Sprint en 3 Pasos
-
-#### 1️⃣ Crear una Nueva Página para tu Sprint
+### Crear Tu Primera Página
 
 1. Haz clic en el botón **"+"** (Nueva página) en la barra lateral
-2. Escribe el título de tu sprint, por ejemplo: **`📋 Sprint 2025-01`**
-   - Incluye un emoji al inicio para identificarlo fácilmente (puedes usar el selector de emojis con Windows + .)
+2. Escribe el título (puedes incluir un emoji al inicio)
 3. Presiona Enter o haz clic en "Crear Página"
+4. ¡Comienza a escribir! El contenido se guarda automáticamente
 
-#### 2️⃣ Insertar una Tabla e Inicializar la Plantilla Scrum
+### Usar Comandos Rápidos
 
-1. Dentro de la página, escribe `/` para abrir el menú de comandos
-2. Selecciona **"Tabla estilo Notion"**
-3. En la tabla creada, haz clic en el botón **"⋯"** (tres puntos) en la esquina superior derecha
-4. Selecciona **"🎯 Plantilla Scrum"**
-5. ¡Listo! El sistema agregará automáticamente:
-   - ✅ Todas las columnas necesarias para Scrum
-   - ✅ 5 tareas de ejemplo preconfiguradas
-   - ✅ Todas las fórmulas calculadas automáticamente
-   - ✅ Fechas del sprint configuradas (15 días hábiles)
+1. En cualquier parte del editor, escribe **`/`**
+2. Aparecerá un menú con todos los comandos disponibles
+3. Escribe para filtrar o selecciona con el mouse
+4. Presiona Enter para insertar
 
-#### 3️⃣ Configurar las Fechas de tu Sprint
+### Crear un Tablero Kanban
 
-1. En la parte superior de la tabla, verás los controles de configuración del sprint:
-   - **Sprint Start Date**: Fecha de inicio del sprint
-   - **Sprint End Date**: Fecha de fin del sprint (automáticamente 15 días hábiles después)
-   - **Horas Diarias**: Horas que trabajas por día (por defecto: 8 horas)
-2. Ajusta estas fechas según tu sprint real
-3. Las fórmulas se recalcularán automáticamente
+1. Escribe **`/board`** en el editor
+2. Se creará una tabla con columnas: Name, Estado, Prioridad, Asignado, Fecha, Descripción
+3. Haz clic en el botón de vistas (arriba a la derecha) y selecciona **Kanban**
+4. Arrastra las tarjetas entre columnas para cambiar su estado
 
-### 📊 Columnas Principales que Usarás
+### Gestionar un Sprint Scrum
 
-Una vez cargada la plantilla, tendrás estas columnas disponibles:
+1. Crea una nueva página para tu sprint: **`📋 Sprint 2025-01`**
+2. Escribe **`/tabla`** para crear una tabla
+3. Haz clic en **"⋯"** (tres puntos) → **"🎯 Plantilla Scrum"**
+4. Se cargarán automáticamente todas las columnas y fórmulas necesarias
+5. Configura las fechas del sprint y comienza a agregar tareas
 
-#### Columnas para Editar Manualmente:
+### Tomar Notas Rápidas
 
-- **Name**: Nombre de la tarea
-- **Estado**: Estado de la tarea (TO DO, IN PROGRESS, DONE, etc.) - Selección rápida
-- **Priority**: Prioridad (Critical, Medium, Low)
-- **Time Estimated**: Tiempo estimado en horas (ej: 8, 16, 24)
-- **Time Spent**: Tiempo real trabajado en horas (actualízalo diariamente)
-- **Progress**: Progreso de 0 a 100 (ej: 0, 25, 50, 75, 100)
-- **Objective**: Objetivo total (normalmente 100)
-
-#### Columnas Calculadas Automáticamente:
-
-- **Percent**: Muestra el porcentaje de progreso visualmente (➖➖➖ 75%)
-- **Percent Total**: Porcentaje de tiempo usado vs tiempo estimado
-- **Dias Transcurridos**: Días hábiles desde el inicio del sprint
-- **Dias Faltantes**: Días hábiles restantes hasta el fin del sprint
-- **Horas Disponibles**: Horas disponibles hasta la fecha actual
-- **Horas Totales Sprint**: Total de horas del sprint completo
-- **Sobrecarga**: ⚠️ Te alerta si una tarea excede las horas disponibles
-
-### 🚀 Flujo de Trabajo Diario Típico
-
-**Al inicio del día:**
-1. Abre tu página del sprint
-2. Revisa **"Dias Faltantes"** para saber cuánto tiempo queda
-3. Revisa **"Horas Disponibles"** para planificar tu día
-
-**Mientras trabajas:**
-1. Actualiza el **"Estado"** de tus tareas:
-   - `TO DO` → `IN PROGRESS` cuando empiezas
-   - `IN PROGRESS` → `DONE` cuando terminas
-2. Actualiza **"Time Spent"** con las horas trabajadas
-3. Actualiza **"Progress"** con el porcentaje completado (0-100)
-
-**Al final del día:**
-1. Revisa **"Percent Total"** para ver si estás dentro del tiempo estimado
-2. Revisa **"Sobrecarga"** para identificar tareas que necesitan ajuste
-3. Planifica el siguiente día basándote en **"Dias Faltantes"**
-
-### 📈 Ejemplo Práctico Completo
-
-Imagina que tienes un sprint de 15 días hábiles (26 Dic 2025 - 08 Ene 2026):
-
-```
-Sprint Config:
-├── Sprint Start Date: 2025-12-26
-├── Sprint End Date: 2026-01-08
-├── Horas Diarias: 8 horas
-└── Current Date: 2025-12-30
-
-Tareas del Sprint:
-┌─────────────────┬──────────┬───────┬─────────────────┬─────────────┬──────────┐
-│ Name            │ Estado   │ Prior │ Time Estimated  │ Time Spent  │ Progress │
-├─────────────────┼──────────┼───────┼─────────────────┼─────────────┼──────────┤
-│ Crear API Login │ DONE     │ High  │ 16              │ 14          │ 100      │
-│ Dashboard UI    │ IN PROGR │ High  │ 24              │ 12          │ 50       │
-│ Tests Unitarios │ TO DO    │ Med   │ 8               │ 0           │ 0        │
-│ Documentación   │ TO DO    │ Low   │ 8               │ 0           │ 0        │
-│ Bug Fixes       │ IN PROGR │ High  │ 16              │ 6           │ 30       │
-└─────────────────┴──────────┴───────┴─────────────────┴─────────────┴──────────┘
-
-Columnas Calculadas (Automáticas):
-├── Dias Transcurridos: 3 días hábiles
-├── Dias Faltantes: 12 días hábiles
-├── Horas Disponibles: 24 horas (3 días × 8 horas)
-├── Horas Totales Sprint: 120 horas (15 días × 8 horas)
-└── Sobrecarga: "⚠️ Sobrecarga" en Dashboard UI (24h > 24h disponibles)
-```
-
-### 💡 Consejos para Maximizar el Uso
-
-1. **Usa la Plantilla Scrum**: Siempre inicia con la plantilla, no crees las columnas manualmente
-2. **Actualiza Daily**: Actualiza `Time Spent` y `Progress` al final de cada día
-3. **Revisa Sobrecarga**: Si ves ⚠️, considera dividir la tarea o ajustar estimaciones
-4. **Organiza por Prioridad**: Usa la columna `Priority` para filtrar tareas importantes
-5. **Mantén Actualizada Current Date**: Actualiza la fecha actual periódicamente para cálculos precisos
-
-### 🎯 Gestión de Múltiples Sprints
-
-Si trabajas con múltiples sprints (cada 15 días), te recomendamos:
-
-1. **Crea un Dashboard Principal** con una lista de todos tus sprints
-2. **Usa nomenclatura clara**: `Sprint 2025-01`, `Sprint 2025-02`, etc.
-3. **Organiza por trimestres** si tienes muchos sprints
-4. **Mantén el sprint activo** fácilmente accesible desde tu dashboard
-
-Para más detalles sobre organización diaria, consulta: `GUIA_ORGANIZACION_DIARIA.md`
+1. Escribe **`/nota`** o usa el atajo de teclado
+2. Se abre el modal de notas rápidas
+3. Escribe tu nota - se guarda automáticamente
+4. Accede al historial desde el mismo modal
 
 ---
 
-## 📋 Guía Detallada: Columnas y Fórmulas para Gestión de Tareas
+## ⌨️ Atajos de Teclado
 
-### Columnas Base para Controlar el Estado y Progreso
+- **`Ctrl/Cmd + K`** - Búsqueda global
+- **`Ctrl/Cmd + N`** - Nueva página
+- **`Ctrl/Cmd + /`** - Ver todos los atajos de teclado
+- **`Esc`** - Cerrar modales/búsqueda
+- **`/`** - Abrir menú de comandos rápidos
 
-#### Columnas Principales (Editable por el usuario)
+---
 
-**1. Progress (Número)**
-- **Qué es**: Progreso actual de la tarea (0-100 o cualquier número)
-- **Cómo usarla**: Ingresa el valor numérico del progreso actual
-- **Ejemplo**: Si una tarea está al 75% completa, ingresa `75`
+## 🎯 Casos de Uso Principales
 
-**2. Objective (Número)**
-- **Qué es**: Meta u objetivo total de la tarea
-- **Cómo usarla**: Ingresa el valor objetivo (normalmente 100)
-- **Ejemplo**: Si quieres que la tarea se complete al 100%, ingresa `100`
+### 1. Gestión de Proyectos con Kanban
+- Crea tableros Kanban para visualizar el flujo de trabajo
+- Usa drag & drop para mover tareas entre estados
+- Filtra por asignado, prioridad o fecha
 
-**3. Type (Tags)**
-- **Qué es**: Estado de la tarea
-- **Opciones disponibles**:
-  - `TO DO` (Gris) - Tarea pendiente
-  - `IN PROGRESS` (Azul) - Tarea en progreso
-  - `DONE` (Verde) - Tarea completada
-  - `STOPPED` (Rojo) - Tarea detenida
-  - `REOPENED` (Naranja) - Tarea reabierta
-  - `UNDER REVIEW` (Morado) - Tarea en revisión
-  - `QA` (Cyan) - Tarea en QA
-- **Cómo usarla**: Haz clic en la columna Type y selecciona el estado correspondiente
+### 2. Sprints Scrum
+- Gestiona sprints de 15 días con plantilla preconfigurada
+- Tracking automático de tiempo y progreso
+- Alertas de sobrecarga de trabajo
 
-**4. Time Spent (Número)**
-- **Qué es**: Tiempo gastado en horas
-- **Cómo usarla**: Ingresa las horas trabajadas
-- **Ejemplo**: Si trabajaste 8 horas, ingresa `8`
+### 3. Finanzas Personales
+- Controla ingresos, egresos y deudas
+- Visualiza resúmenes financieros con gráficas
+- Todo interconectado automáticamente
 
-**5. Time Estimated (Número)**
-- **Qué es**: Tiempo estimado en horas
-- **Cómo usarla**: Ingresa las horas estimadas para completar la tarea
-- **Ejemplo**: Si estimas 16 horas, ingresa `16`
+### 4. Base de Conocimiento
+- Organiza notas y documentación en páginas
+- Enlaza páginas relacionadas
+- Búsqueda global en todo el contenido
 
-**6. Priority (Tags)**
-- **Qué es**: Prioridad de la tarea
-- **Opciones disponibles**:
-  - `Critical` (Rojo) - Prioridad crítica
-  - `Medium` (Amarillo) - Prioridad media
-  - `Low` (Verde) - Prioridad baja
-- **Cómo usarla**: Haz clic en la columna Priority y selecciona la prioridad
+### 5. Actas de Reunión
+- Template completo para reuniones
+- Action items con seguimiento
+- Historial de decisiones
 
-### 🧮 Fórmulas Calculadas (Automáticas)
+### 6. Desarrollo de Software
+- Scripts SQL con versionado tipo Git
+- Documentación técnica con código resaltado
+- Tracking de tareas y bugs
 
-**1. Percent (Fórmula)**
-- **Qué calcula**: Porcentaje de progreso basado en Progress/Objective
-- **Fórmula**: `if(((prop("Progress") / prop("Objective")) >= 1), "✅", if(and(empty(prop("Progress")), !empty(prop("Objective"))), "0%", substring("➖➖➖➖", 0, floor((prop("Progress") / prop("Objective")) * 10)) + " " + format(round((prop("Progress") / prop("Objective")) * 100)) + "%"))`
-- **Qué muestra**:
-  - Si Progress >= Objective: `✅` (completado)
-  - Si Progress = 0 y hay Objective: `0%`
-  - Si hay progreso: `➖➖ 75%` (barras visuales + porcentaje)
-- **Ejemplo**: Si Progress=75 y Objective=100, muestra `➖➖➖ 75%`
+---
 
-**2. Percent Total (Fórmula)**
-- **Qué calcula**: Porcentaje de tiempo usado vs tiempo estimado
-- **Fórmula**: `if((prop("Time Estimated") > 0), format(round((prop("Time Spent") * 100) / prop("Time Estimated"))) + "%", "0%")`
-- **Qué muestra**: Porcentaje de tiempo gastado
-- **Ejemplo**: Si Time Spent=12 y Time Estimated=16, muestra `75%`
+## 🔧 Configuración y Personalización
 
-**3. missing percentage (Fórmula)**
-- **Qué calcula**: Porcentaje faltante (solo si la tarea NO está DONE)
-- **Fórmula**: `if((prop("Type") == "DONE"), 0, if((prop("Time Estimated") > 0), format(round((prop("Time Spent") * 100) / prop("Time Estimated"))) + "%", "0%"))`
-- **Qué muestra**:
-  - Si Type = "DONE": `0`
-  - Si Type != "DONE": Porcentaje de tiempo usado
-- **Ejemplo**: Si Type="IN PROGRESS", Time Spent=8, Time Estimated=16, muestra `50%`
+### Cambiar Ubicación de Archivos
 
-### 🔄 Cómo Cambiar el Estado de una Tarea
+1. Ve a Configuración (⚙️ en el menú)
+2. Haz clic en "Seleccionar Carpeta"
+3. Elige la nueva ubicación
+4. Los archivos se moverán automáticamente
 
-**Para ver el progreso:**
+### Exportar e Importar
 
-1. **Actualiza Progress**: 
-   - Edita la columna "Progress" con el valor actual (ej: 50, 75, 100)
-   - La columna "Percent" se actualizará automáticamente mostrando el porcentaje
+- **Exportar página a PDF**: Usa el botón de exportar en la barra superior
+- **Importar páginas**: Ve a Configuración → Importar
 
-2. **Actualiza Type**:
-   - Haz clic en la columna "Type"
-   - Selecciona el estado correspondiente:
-     - `TO DO` → Tarea pendiente
-     - `IN PROGRESS` → Tarea en progreso
-     - `DONE` → Tarea completada
-     - `QA` → Tarea en pruebas
-     - `UNDER REVIEW` → Tarea en revisión
+### Temas
 
-3. **Actualiza Time Spent**:
-   - Edita la columna "Time Spent" con las horas trabajadas
-   - La columna "Percent Total" se actualizará automáticamente
+- La aplicación soporta modo claro y oscuro automático
+- Se adapta según las preferencias de tu sistema
 
-**Flujo de trabajo típico:**
+---
+
+## 📊 Estructura de Archivos Guardados
 
 ```
-1. Crear tarea → Type: "TO DO", Progress: 0
-2. Empezar trabajo → Type: "IN PROGRESS", Progress: 25
-3. Avanzar → Type: "IN PROGRESS", Progress: 50, Time Spent: 8
-4. Casi terminado → Type: "IN PROGRESS", Progress: 90, Time Spent: 14
-5. Completar → Type: "DONE", Progress: 100, Time Spent: 16
+tu-carpeta-seleccionada/
+├── data/
+│   ├── pagina-1.json
+│   ├── pagina-2.json
+│   ├── _index.json          # Índice de páginas
+│   ├── sql-files/           # Scripts SQL
+│   └── sql-versions/        # Versiones de scripts SQL
+├── files/
+│   ├── imagen-123.jpg
+│   ├── documento.pdf
+│   └── ...
+└── config.json              # Configuración de la app
 ```
 
-### 📊 Columnas Adicionales (Opcionales)
+---
 
-- **Start Date**: Fecha de inicio
-- **End Date**: Fecha de fin
-- **Created**: Fecha de creación
-- **Tasks Completed**: Número de subtareas completadas
-- **Total Tasks**: Número total de subtareas
-- **Assign**: Personas asignadas (tags)
-- **Tags**: Etiquetas adicionales (tags)
+## 🛠️ Requisitos Técnicos
 
-### 💡 Consejos
+### Para Desarrollo:
+- Node.js v18 o superior
+- npm o yarn
+- Navegador moderno (Chrome 86+, Edge 86+, Firefox 90+)
 
-1. **Siempre establece Objective**: Para que las fórmulas funcionen correctamente, asegúrate de tener un valor en "Objective" (normalmente 100)
+### Para Ejecutable:
+- Windows 10 o superior (x64)
+- ~150 MB de espacio en disco
+- No requiere Node.js instalado (incluido en el ejecutable)
 
-2. **Actualiza Type según el estado real**: La columna Type es la más importante para el seguimiento visual
+---
 
-3. **Time Spent y Time Estimated**: Úsalos para tracking de tiempo. La fórmula "Percent Total" te mostrará si estás dentro del tiempo estimado
+## 📚 Documentación Adicional
 
-4. **Priority**: Úsala para filtrar y ordenar tareas importantes
+- **`GUIA_DISTRIBUCION.md`** - Cómo generar el ZIP con el ejecutable
+- **`COMANDOS_Y_SUGERENCIAS.md`** - Lista completa de comandos y sugerencias
 
-5. **Las fórmulas se calculan automáticamente**: No necesitas editarlas manualmente, solo actualiza las columnas base (Progress, Objective, Time Spent, Time Estimated, Type)
+---
 
-## 📅 Fórmulas del Sprint (Generales para Todas las Filas)
+## 🐛 Solución de Problemas
 
-Las fórmulas del sprint son **generales** y se aplican a todas las filas de la grid. Estas fórmulas calculan días hábiles, horas disponibles y sobrecarga de trabajo basándose en las fechas y horas del sprint.
+### La aplicación no guarda archivos
+- Verifica que hayas configurado una carpeta en Configuración
+- Asegúrate de tener permisos de escritura en esa carpeta
 
-### Columnas Base del Sprint (Se Agregan Automáticamente con la Plantilla)
+### Los archivos no se cargan
+- Verifica que la carpeta configurada sea la correcta
+- Revisa que los archivos JSON estén en la carpeta `data/`
 
-**✅ La plantilla Scrum agrega automáticamente todas estas columnas base con valores por defecto:**
+### El ejecutable no funciona
+- Verifica que tu Windows sea de 64 bits
+- Asegúrate de tener Visual C++ Redistributables instalados (si aplica)
+- Ejecuta como administrador si es necesario
 
-**1. Sprint Start Date (Texto)**
-- **Valor por defecto**: Fecha actual (se calcula automáticamente cuando cargas la plantilla)
-- **Qué es**: Fecha de inicio del sprint
-- **Importante**: Esta fecha es la misma para todas las filas (general del sprint)
-- **Puedes cambiarla**: Edita el valor en cualquier fila y se aplicará a todas
+---
 
-**2. Sprint End Date (Texto)**
-- **Valor por defecto**: 15 días hábiles después de la fecha actual (se calcula automáticamente)
-- **Qué es**: Fecha de fin del sprint (los sprints duran 15 días hábiles)
-- **Importante**: Esta fecha es la misma para todas las filas (general del sprint)
-- **Puedes cambiarla**: Edita el valor en cualquier fila y se aplicará a todas
+## 🔒 Privacidad y Seguridad
 
-**3. Horas Diarias Sprint (Número)**
-- **Valor por defecto**: `8` (horas trabajadas por día hábil)
-- **Qué es**: Horas trabajadas por día hábil
-- **Importante**: Este valor es el mismo para todas las filas (general del sprint)
-- **Puedes cambiarlo**: Edita el valor en cualquier fila y se aplicará a todas
+- ✅ **100% Offline** - Todos los datos se guardan localmente
+- ✅ **Sin conexión a internet** - No envía datos a servidores externos
+- ✅ **Sin tracking** - No recopilamos información de uso
+- ✅ **Tus datos, tu control** - Archivos accesibles directamente en tu sistema
 
-**4. Current Date (Texto)**
-- **Valor por defecto**: Fecha actual (se calcula automáticamente cuando cargas la plantilla)
-- **Qué es**: Fecha actual del sprint
-- **Importante**: Esta fecha es la misma para todas las filas (general del sprint)
-- **Puedes actualizarla**: Cambia el valor cuando necesites actualizar la fecha actual
+---
 
-**5. Objective (Número)**
-- **Valor por defecto**: `100` (objetivo por defecto para todas las tareas)
-- **Qué es**: Meta u objetivo total de la tarea
-- **Importante**: Este valor es individual por tarea, pero viene con 100 por defecto
+## 📝 Características Principales Resumidas
 
-### Fórmulas Calculadas Automáticamente
+| Característica | Descripción |
+|----------------|-------------|
+| 🚫 **Sin Login** | Acceso directo, sin autenticación |
+| 📴 **Offline** | Funciona completamente sin internet |
+| 💾 **Local** | Guarda todo en tu sistema de archivos |
+| 📊 **Tablas Dinámicas** | Estilo Notion con múltiples vistas |
+| 📅 **Calendario** | Gestión de eventos integrada |
+| 💰 **Finanzas** | Sistema financiero completo |
+| 🗄️ **SQL Versionado** | Scripts SQL con control de versiones |
+| 🔍 **Búsqueda Global** | Busca en páginas, tablas y eventos |
+| 📝 **Notas Rápidas** | Modal de notas con auto-guardado |
+| 🎨 **Rich Text** | Editor completo estilo Notion |
+| 📋 **Kanban** | Tableros con drag & drop |
+| 🤝 **Comentarios** | Sistema de comentarios en páginas |
+| 📁 **Galerías** | Organización de imágenes y archivos |
+| 🔗 **Enlaces** | Navegación entre páginas |
+| 🏷️ **Tags** | Sistema de etiquetas para organización |
 
-Una vez que creas las columnas base, el sistema crea automáticamente estas fórmulas:
+---
 
-**1. Dias Transcurridos (Fórmula)**
-- **Qué calcula**: Días hábiles transcurridos desde el inicio del sprint hasta la fecha actual
-- **Fórmula**: `if(and(!empty(prop("Sprint Start Date")), !empty(prop("Current Date"))), calcularDiasHabiles(prop("Sprint Start Date"), prop("Current Date")), 0)`
-- **Qué muestra**: Número de días hábiles (excluye sábados y domingos)
-- **Ejemplo**: Si el sprint inició el 26/12/2025 y hoy es 20/12/2025, muestra `0` (aún no ha iniciado)
+## 🎉 ¡Comienza Ahora!
 
-**2. Dias Faltantes (Fórmula)**
-- **Qué calcula**: Días hábiles faltantes desde la fecha actual hasta el fin del sprint
-- **Fórmula**: `if(and(!empty(prop("Current Date")), !empty(prop("Sprint End Date"))), calcularDiasHabiles(prop("Current Date"), prop("Sprint End Date")), 0)`
-- **Qué muestra**: Número de días hábiles restantes
-- **Ejemplo**: Si hoy es 20/12/2025 y el sprint termina el 08/01/2026, muestra los días hábiles entre esas fechas
+1. **Descarga o clona** el repositorio
+2. **Ejecuta** `npm install`
+3. **Inicia** con `npm run dev` (desarrollo) o genera el ejecutable con `npm run electron:build:both`
+4. **Configura** tu carpeta de almacenamiento
+5. **¡Crea tu primera página y comienza a organizarte!**
 
-**3. Dias Totales Sprint (Fórmula)**
-- **Qué calcula**: Total de días hábiles del sprint completo
-- **Fórmula**: `if(and(!empty(prop("Sprint Start Date")), !empty(prop("Sprint End Date"))), calcularDiasHabiles(prop("Sprint Start Date"), prop("Sprint End Date")), 0)`
-- **Qué muestra**: Total de días hábiles del sprint
-- **Ejemplo**: Si el sprint va del 26/12/2025 al 08/01/2026, calcula los días hábiles totales
+---
 
-**4. Horas Disponibles (Fórmula)**
-- **Qué calcula**: Horas disponibles basadas en días transcurridos y horas diarias
-- **Fórmula**: `if(and(!empty(prop("Dias Transcurridos")), !empty(prop("Horas Diarias"))), prop("Dias Transcurridos") * prop("Horas Diarias"), 0)`
-- **Qué muestra**: Horas disponibles hasta la fecha actual
-- **Ejemplo**: Si han transcurrido 5 días hábiles y trabajas 8 horas diarias, muestra `40`
+## 📄 Licencia
 
-**5. Horas Totales Sprint (Fórmula)**
-- **Qué calcula**: Total de horas del sprint completo
-- **Fórmula**: `if(and(!empty(prop("Sprint Start Date")), !empty(prop("Sprint End Date")), !empty(prop("Horas Diarias"))), calcularDiasHabiles(prop("Sprint Start Date"), prop("Sprint End Date")) * prop("Horas Diarias"), 0)`
-- **Qué muestra**: Total de horas disponibles en todo el sprint
-- **Ejemplo**: Si el sprint tiene 10 días hábiles y trabajas 8 horas diarias, muestra `80`
+Este proyecto es de uso libre. Todos los datos son tuyos y se guardan localmente.
 
-**6. Sobrecarga (Fórmula)**
-- **Qué calcula**: Indica si el tiempo estimado de una tarea excede las horas disponibles
-- **Fórmula**: `if(and(!empty(prop("Time Estimated")), !empty(prop("Horas Disponibles"))), if((prop("Time Estimated") > prop("Horas Disponibles")), "⚠️ Sobrecarga", "✅ OK"), "N/A")`
-- **Qué muestra**: 
-  - `⚠️ Sobrecarga` si Time Estimated > Horas Disponibles
-  - `✅ OK` si Time Estimated <= Horas Disponibles
-  - `N/A` si faltan datos
-- **Ejemplo**: Si Time Estimated = 50 y Horas Disponibles = 40, muestra `⚠️ Sobrecarga`
+---
 
-### Función calcularDiasHabiles
-
-La función `calcularDiasHabiles(fechaInicio, fechaFin)` calcula los días hábiles entre dos fechas, **excluyendo sábados y domingos**.
-
-**Cómo funciona**:
-- Recibe dos fechas en formato texto (ej: `"2025-12-26"`)
-- Cuenta solo los días de lunes a viernes
-- Retorna el número de días hábiles
-
-**Ejemplo**:
-- Fecha inicio: `2025-12-26` (viernes)
-- Fecha fin: `2026-01-08` (miércoles)
-- Días hábiles: Cuenta del 26/12 (viernes) al 08/01 (miércoles), excluyendo sábados y domingos
-
-### Cómo Usar la Plantilla del Sprint
-
-1. **Carga la plantilla Scrum**:
-   - Haz clic en el botón "🎯 Plantilla Scrum" en la tabla
-   - Esto agregará automáticamente todas las columnas base del sprint con valores calculados:
-     - `Sprint Start Date`: Fecha actual (hoy)
-     - `Sprint End Date`: 15 días hábiles después de hoy (los sprints duran 15 días)
-     - `Horas Diarias Sprint`: `8` horas por día
-     - `Current Date`: Fecha actual (hoy)
-     - `Objective`: `100` (para todas las tareas)
-
-2. **Las fórmulas se crean automáticamente**:
-   - El sistema detecta las columnas base y crea automáticamente todas las fórmulas calculadas
-   - No necesitas crear las fórmulas manualmente
-   - Las fórmulas incluyen: Dias Transcurridos, Dias Faltantes, Dias Totales Sprint, Horas Disponibles, Horas Totales Sprint, Sobrecarga
-
-3. **Personaliza los valores del sprint** (opcional):
-   - Edita `Sprint Start Date` con la fecha real de inicio de tu sprint
-   - Edita `Sprint End Date` con la fecha real de fin de tu sprint
-   - Edita `Horas Diarias Sprint` con las horas que trabajas por día
-   - Edita `Current Date` con la fecha actual (o déjala para actualizarla manualmente)
-   - **Nota**: Estos valores son generales y se aplican a todas las filas
-
-4. **Usa las fórmulas**:
-   - `Horas Disponibles`: Te dice cuántas horas tienes disponibles hasta hoy
-   - `Horas Totales Sprint`: Te dice el total de horas del sprint completo
-   - `Sobrecarga`: Te alerta si una tarea excede las horas disponibles
-
-### Ejemplo Completo
-
-**Configuración del Sprint**:
-- Sprint Start Date: `2025-12-26`
-- Sprint End Date: `2026-01-08`
-- Horas Diarias: `8`
-- Current Date: `2025-12-20`
-
-**Resultados automáticos**:
-- Dias Transcurridos: `0` (el sprint aún no ha iniciado)
-- Dias Faltantes: Calcula días hábiles desde 20/12 hasta 08/01
-- Dias Totales Sprint: Calcula días hábiles desde 26/12 hasta 08/01
-- Horas Disponibles: `0` (aún no ha iniciado el sprint)
-- Horas Totales Sprint: Dias Totales Sprint × 8 horas
-
-### Notas Importantes
-
-1. **Las columnas base son generales**: Los valores de `Sprint Start Date`, `Sprint End Date`, `Horas Diarias` y `Current Date` son los mismos para todas las filas del sprint.
-
-2. **Formato de fechas**: Usa el formato `YYYY-MM-DD` (ej: `2025-12-26`)
-
-3. **Días hábiles**: La función excluye automáticamente sábados y domingos
-
-4. **Actualización automática**: Las fórmulas se recalculan automáticamente cuando cambias las fechas o valores base
-
-5. **Detección automática**: El sistema detecta las columnas base por su nombre (no importa mayúsculas/minúsculas), así que puedes usar cualquier variación de los nombres válidos
-
-
-
-
-
-
-
-
-
+**¿Necesitas ayuda?** Revisa la documentación adicional o crea un issue en el repositorio.

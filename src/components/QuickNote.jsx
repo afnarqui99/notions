@@ -19,15 +19,21 @@ export default function QuickNote({ isOpen, onClose, onShowHistory, initialNote 
       Placeholder.configure({ placeholder: 'Escribe tu nota rápida...' }),
     ],
     content: '',
-    onUpdate: () => {
+    onUpdate: ({ editor }) => {
       setSaved(false);
       // Auto-guardado después de 2 segundos de inactividad
+      // Solo si hay contenido y no se está guardando ya
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
       }
-      saveTimeoutRef.current = setTimeout(() => {
-        handleSave();
-      }, 2000);
+      if (editor && !isSavingRef.current) {
+        const text = editor.getText();
+        if (text.trim()) {
+          saveTimeoutRef.current = setTimeout(() => {
+            handleSave();
+          }, 2000);
+        }
+      }
     },
   });
 
@@ -68,10 +74,13 @@ export default function QuickNote({ isOpen, onClose, onShowHistory, initialNote 
           editor.commands.setContent({ type: 'doc', content: [] });
         }
       } else {
-        // Si no hay nota inicial, limpiar
+        // Si no hay nota inicial, crear una nueva nota vacía
+        // Pero no crear el ID hasta que el usuario escriba algo
         editor.commands.setContent('');
         setCurrentNoteId(null);
         setSaved(false);
+        // Limpiar cualquier referencia de guardado anterior
+        isSavingRef.current = false;
       }
     }
   }, [isOpen, initialNote, editor]);
@@ -141,6 +150,12 @@ export default function QuickNote({ isOpen, onClose, onShowHistory, initialNote 
       return; // No guardar si está vacío
     }
 
+    // Si hay un guardado pendiente, cancelarlo
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
+    }
+
     isSavingRef.current = true;
     setSaving(true);
     try {
@@ -177,14 +192,19 @@ export default function QuickNote({ isOpen, onClose, onShowHistory, initialNote 
       saveTimeoutRef.current = null;
     }
     
-    // Guardar antes de cerrar si hay contenido y no se está guardando ya
+    // Guardar antes de cerrar solo si hay contenido, no se está guardando ya, y no hay una nota guardada recientemente
     if (editor && !isSavingRef.current) {
       const text = editor.getText();
       if (text.trim()) {
-        // Usar handleSave que ya tiene la lógica correcta
-        await handleSave();
-        // Esperar un momento para que se complete el guardado
-        await new Promise(resolve => setTimeout(resolve, 200));
+        // Solo guardar si no hay currentNoteId o si el contenido ha cambiado desde la última vez que se guardó
+        // Para evitar guardados duplicados, verificamos si ya se guardó recientemente
+        const shouldSave = !saved; // Solo guardar si no se guardó recientemente
+        
+        if (shouldSave) {
+          await handleSave();
+          // Esperar un momento para que se complete el guardado
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
       }
     }
     onClose();

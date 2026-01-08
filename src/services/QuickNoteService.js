@@ -10,16 +10,28 @@ class QuickNoteService {
    */
   async saveNote(noteData) {
     try {
+      // Si ya existe un ID, cargar la nota existente para preservar createdAt
+      let existingNote = null;
+      if (noteData.id) {
+        try {
+          existingNote = await this.getNote(noteData.id);
+        } catch (error) {
+          // Si no existe, continuar creando una nueva
+        }
+      }
+      
       const noteId = noteData.id || `quick-note-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
       
       const note = {
         id: noteId,
         content: noteData.content || null,
         text: noteData.text || '',
-        createdAt: noteData.createdAt || new Date().toISOString(),
+        // Preservar createdAt si es una actualización, usar el proporcionado o crear uno nuevo
+        createdAt: existingNote?.createdAt || noteData.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
 
+      // Guardar en archivo JSON por página (directorio data)
       await LocalStorageService.saveJSONFile(
         `${noteId}.json`,
         note,

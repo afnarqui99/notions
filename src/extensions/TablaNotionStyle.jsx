@@ -256,8 +256,25 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
         nuevaFila.image = `./files/${nuevaFila.imageFilename}`;
       }
       
+      // Sincronizar Name desde properties.Name si existe y no hay Name en nivel superior
       if (nuevaFila.properties) {
         nuevaFila.properties = { ...nuevaFila.properties };
+        
+        // Si hay properties.Name pero no Name en nivel superior, sincronizar
+        if (nuevaFila.properties.Name && !nuevaFila.Name) {
+          const nameValue = nuevaFila.properties.Name.value || nuevaFila.properties.Name;
+          nuevaFila.Name = typeof nameValue === 'string' ? nameValue : String(nameValue || '');
+        }
+        
+        // Si hay Name en nivel superior pero no en properties, sincronizar
+        if (nuevaFila.Name && (!nuevaFila.properties.Name || !nuevaFila.properties.Name.value)) {
+          if (!nuevaFila.properties.Name) {
+            nuevaFila.properties.Name = { value: nuevaFila.Name, type: 'text' };
+          } else {
+            nuevaFila.properties.Name.value = nuevaFila.Name;
+          }
+        }
+        
         // Asegurar que las propiedades de tipo formula tengan el campo formula
         Object.keys(nuevaFila.properties).forEach(key => {
           if (nuevaFila.properties[key]?.type === "formula") {
@@ -285,21 +302,143 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
 
   // Estado para tableId y nombreTabla
   const [tableId, setTableId] = useState(() => {
-    // Si no existe tableId, generar uno nuevo
+    // Si no existe tableId, generar uno nuevo pero NO actualizar aquí (causa setState durante render)
     if (!node.attrs.tableId) {
-      const newTableId = TableRegistryService.generateTableId();
-      // Actualizar el nodo inmediatamente
-      updateAttributes({ tableId: newTableId });
-      return newTableId;
+      return TableRegistryService.generateTableId();
     }
     return node.attrs.tableId;
   });
+
+  // Actualizar tableId en el nodo si se generó uno nuevo (fuera del render)
+  useEffect(() => {
+    if (!node.attrs.tableId && tableId) {
+      // Usar setTimeout para asegurar que se ejecute fuera del ciclo de renderizado
+      const timeoutId = setTimeout(() => {
+        updateAttributes({ tableId });
+      }, 0);
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [tableId]); // Solo tableId como dependencia para evitar loops
   const [nombreTabla, setNombreTabla] = useState(() => {
     return node.attrs.nombreTabla || null;
   });
   const [tablasVinculadas, setTablasVinculadas] = useState(() => {
     return node.attrs.tablasVinculadas || [];
   });
+  
+  // Ref para evitar inicialización múltiple
+  const inicializacionFinancieraRef = useRef(false);
+  
+  // Inicializar propiedades automáticamente si es una tabla financiera sin propiedades
+  useEffect(() => {
+    // Solo inicializar una vez cuando se cumplan las condiciones
+    if (!inicializacionFinancieraRef.current && comportamiento === 'financiero' && propiedades.length === 0 && nombreTabla) {
+      inicializacionFinancieraRef.current = true; // Marcar como inicializado
+      
+      let columnasAAgregar = [];
+      
+      // Determinar qué columnas agregar según el nombre de la tabla
+      if (nombreTabla === 'Ingresos' || nombreTabla === '💰 Ingresos') {
+        columnasAAgregar = [
+          ...obtenerColumnasFinancieras().filter(col => 
+            col.name === "Persona" || col.name === "Ingresos" || col.name === "Fecha Movimiento" || 
+            col.name === "Descripción" || col.name === "Total Ingresos"
+          ),
+          { name: "Concepto", type: "select", visible: true, descripcion: "Concepto del ingreso" },
+          { name: "Categoría", type: "tags", visible: true, descripcion: "Categoría del ingreso" }
+        ];
+        // Cambiar Ingresos a tipo number para poder agregar valores numéricos
+        columnasAAgregar = columnasAAgregar.map(col => 
+          col.name === "Ingresos" ? { ...col, type: "number", totalizar: true } : 
+          col.name === "Descripción" ? { ...col, visible: true } : col
+        );
+      } else if (nombreTabla === 'Egresos' || nombreTabla === '💸 Egresos') {
+        columnasAAgregar = [
+          ...obtenerColumnasFinancieras().filter(col => 
+            col.name === "Persona" || col.name === "Egresos" || col.name === "Fecha Movimiento" || 
+            col.name === "Descripción" || col.name === "Total Egresos"
+          ),
+          { name: "Concepto", type: "select", visible: true, descripcion: "Concepto del egreso" },
+          { name: "Categoría", type: "tags", visible: true, descripcion: "Categoría del egreso" }
+        ];
+        // Cambiar Egresos a tipo number para poder agregar valores numéricos
+        columnasAAgregar = columnasAAgregar.map(col => 
+          col.name === "Egresos" ? { ...col, type: "number", totalizar: true } : 
+          col.name === "Descripción" ? { ...col, visible: true } : col
+        );
+      } else if (nombreTabla === 'Deudas' || nombreTabla === '💳 Deudas') {
+        columnasAAgregar = [
+          ...obtenerColumnasFinancieras().filter(col => 
+            col.name === "Persona" || col.name === "Deudas" || col.name === "Fecha Movimiento" || 
+            col.name === "Descripción" || col.name === "Total Deudas" ||
+            col.name === "Porcentaje Deudas"
+          ),
+          { name: "Concepto", type: "select", visible: true, descripcion: "Concepto de la deuda" },
+          { name: "Categoría", type: "tags", visible: true, descripcion: "Categoría de la deuda" }
+        ];
+        // Cambiar Deudas a tipo number para poder agregar valores numéricos
+        columnasAAgregar = columnasAAgregar.map(col => 
+          col.name === "Deudas" ? { ...col, type: "number", totalizar: true } : 
+          col.name === "Descripción" ? { ...col, visible: true } : col
+        );
+      }
+      
+      if (columnasAAgregar.length > 0) {
+        const nuevasPropiedades = columnasAAgregar.map(col => ({
+          name: col.name,
+          type: col.type,
+          visible: col.visible !== undefined ? col.visible : true,
+          totalizar: col.totalizar || false,
+          formula: col.formula || undefined
+        }));
+        
+        setPropiedades(nuevasPropiedades);
+        
+        // Si no hay filas, crear una fila por defecto
+        if (filas.length === 0) {
+          const nuevaFila = {
+            id: Date.now(),
+            Name: "Nueva tarea",
+            image: null,
+            imageFilename: null,
+            properties: {},
+          };
+          
+          // Inicializar propiedades con valores por defecto
+          nuevasPropiedades.forEach((prop) => {
+            let defaultValue = prop.type === "checkbox" ? false : 
+                              prop.type === "tags" ? [] : 
+                              prop.type === "formula" ? "" : 
+                              prop.type === "number" ? 0 : 
+                              prop.type === "date" ? new Date().toISOString().split('T')[0] : "";
+            
+            nuevaFila.properties[prop.name] = {
+              type: prop.type,
+              value: defaultValue,
+              color: prop.type === "select" ? "#3b82f6" : undefined,
+              formula: prop.formula || undefined,
+            };
+          });
+          
+          setFilas([nuevaFila]);
+          
+          // Guardar usando setTimeout para evitar problemas con el useEffect
+          setTimeout(() => {
+            updateAttributes({ 
+              propiedades: nuevasPropiedades,
+              filas: [nuevaFila]
+            });
+          }, 0);
+        } else {
+          // Solo guardar propiedades si ya hay filas
+          setTimeout(() => {
+            updateAttributes({ propiedades: nuevasPropiedades });
+          }, 0);
+        }
+      }
+    }
+  }, [comportamiento, propiedades.length, nombreTabla, filas.length]); // Solo cuando cambian estos valores
   
   // Cache para datos de tablas vinculadas
   const cacheDatosTablas = useRef({});
@@ -670,6 +809,17 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
           }
         };
 
+        // Sincronizar Name: si se actualiza la propiedad "Name", actualizar también Name en nivel superior
+        if (key === "Name" || key.toLowerCase() === "name") {
+          if (valor && typeof valor === 'string' && valor.length > 0) {
+            updatedFila.Name = valor;
+          } else if (Array.isArray(valor) && valor.length > 0) {
+            updatedFila.Name = valor[0]?.label || valor[0]?.value || valor[0] || "Nueva tarea";
+          } else {
+            updatedFila.Name = "Nueva tarea";
+          }
+        }
+        
         // Si la columna actualizada es "Concepto" y es de tipo select, actualizar el "Name"
         if (key === "Concepto" && prop?.type === "select") {
           if (valor && typeof valor === 'string' && valor.length > 0) {
@@ -680,6 +830,16 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
             updatedFila.Name = "Nueva tarea";
           }
         }
+        
+        // Si se actualiza Name en nivel superior, sincronizar con properties.Name
+        if (updatedFila.Name && (!updatedFila.properties.Name || updatedFila.properties.Name.value !== updatedFila.Name)) {
+          updatedFila.properties.Name = {
+            type: 'text',
+            ...updatedFila.properties.Name,
+            value: updatedFila.Name
+          };
+        }
+        
         return updatedFila;
       }
       return fila;
@@ -759,7 +919,11 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
     };
 
     propiedades.forEach((prop) => {
-      let defaultValue = prop.type === "checkbox" ? false : prop.type === "tags" ? [] : prop.type === "formula" ? "" : "";
+      let defaultValue = prop.type === "checkbox" ? false : 
+                        prop.type === "tags" ? [] : 
+                        prop.type === "formula" ? "" : 
+                        prop.type === "number" || prop.type === "percent" ? 0 :
+                        prop.type === "date" ? new Date().toISOString().split('T')[0] : "";
       let defaultColor = undefined;
       
       // Valores por defecto para Priority
@@ -776,11 +940,15 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
         type: prop.type,
         value: defaultValue,
         color: prop.type === "select" ? "#3b82f6" : defaultColor,
-        formula: prop.type === "formula" ? "" : undefined,
+        formula: prop.type === "formula" ? (prop.formula || "") : undefined,
       };
     });
 
-    setFilas([...filas, nuevaFila]);
+    const nuevasFilas = [...filas, nuevaFila];
+    setFilas(nuevasFilas);
+    
+    // Guardar inmediatamente para que se persista en el JSON de la página
+    guardarFilas(nuevasFilas);
   };
 
   // Obtener el nivel de anidamiento actual
@@ -828,10 +996,60 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
     }, 0);
   };
 
+  // Función para guardar valor numérico desde el modal
+  const handleGuardarValorNumerico = () => {
+    if (!numericEditing) return;
+    
+    // Convertir el valor a número (manejar comas como separador decimal)
+    const valorString = numericEditing.value.replace(',', '.');
+    const valorNumerico = parseFloat(valorString) || 0;
+    
+    // Calcular las nuevas filas con el valor actualizado
+    const nuevasFilas = filas.map((fila, idx) => {
+      if (idx === numericEditing.filaIndex) {
+        const prop = propiedades.find(p => p.name === numericEditing.propName);
+        const tipo = prop?.type || "number";
+        
+        // Asegurar que la propiedad existe
+        const propiedadActual = fila.properties?.[numericEditing.propName] || {};
+        
+        return {
+          ...fila,
+          properties: {
+            ...fila.properties,
+            [numericEditing.propName]: {
+              type: tipo,
+              ...propiedadActual,
+              value: valorNumerico
+            }
+          }
+        };
+      }
+      return fila;
+    });
+    
+    // Actualizar el estado
+    setFilas(nuevasFilas);
+    
+    // Guardar inmediatamente usando updateAttributes (esto guarda en el JSON de la página)
+    // updateAttributes actualiza el nodo en Tiptap, que luego se serializa cuando se guarda la página
+    updateAttributes({ filas: nuevasFilas });
+    
+    // Disparar evento para actualizar gráficas
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('tablaActualizada', {
+        detail: { tableId }
+      }));
+    }, 100);
+    
+    setShowNumericModal(false);
+    setNumericEditing(null);
+  };
+
   const guardarFilas = (filasAGuardar) => {
     // Asegurar que el último contenido de la descripción esté guardado
     let filasParaGuardar = [...filasAGuardar];
-    if (filaSeleccionada !== null && ultimoContenidoDescripcionRef.current !== null) {
+    if (filaSeleccionada !== null && ultimoContenidoDescripcionRef.current !== null && filasParaGuardar[filaSeleccionada]) {
       filasParaGuardar[filaSeleccionada].descripcion = ultimoContenidoDescripcionRef.current;
     }
     
@@ -840,7 +1058,7 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
       setFilas(filasParaGuardar);
     }, 0);
     
-    // Actualizar los atributos del nodo con las nuevas filas
+    // Actualizar los atributos del nodo con las nuevas filas (esto guarda en el JSON de la página)
     updateAttributes({ filas: filasParaGuardar });
     
     // Mostrar mensaje de confirmación
@@ -994,9 +1212,9 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
     return [
       // Campos financieros principales
       { name: "Persona", type: "tags", visible: true, descripcion: "Persona relacionada con el movimiento financiero" },
-      { name: "Ingresos", type: "text", visible: true, descripcion: "Monto de ingresos" },
-      { name: "Egresos", type: "text", visible: true, descripcion: "Monto de egresos" },
-      { name: "Deudas", type: "text", visible: true, descripcion: "Monto de deudas" },
+      { name: "Ingresos", type: "number", visible: true, totalizar: true, descripcion: "Monto de ingresos" },
+      { name: "Egresos", type: "number", visible: true, totalizar: true, descripcion: "Monto de egresos" },
+      { name: "Deudas", type: "number", visible: true, totalizar: true, descripcion: "Monto de deudas" },
       { name: "Fecha Movimiento", type: "date", visible: true, descripcion: "Fecha del movimiento financiero" },
       { name: "Categoría", type: "tags", visible: false, descripcion: "Categoría del movimiento financiero" },
       { name: "Descripción", type: "text", visible: true, descripcion: "Descripción del movimiento (opcional)" },
@@ -1180,8 +1398,9 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
           { name: "Concepto", type: "select", visible: true, descripcion: "Concepto del ingreso" },
           { name: "Categoría", type: "tags", visible: true, descripcion: "Categoría del ingreso" }
         ];
-        // Asegurar que Descripción esté visible
+        // Asegurar que Descripción esté visible y que Ingresos sea número con totalizar
         columnasAAgregar = columnasAAgregar.map(col => 
+          col.name === "Ingresos" ? { ...col, type: "number", totalizar: true } :
           col.name === "Descripción" ? { ...col, visible: true } : col
         );
         nuevoComportamiento = 'financiero';
@@ -1196,8 +1415,9 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
           { name: "Concepto", type: "select", visible: true, descripcion: "Concepto del egreso" },
           { name: "Categoría", type: "tags", visible: true, descripcion: "Categoría del egreso" }
         ];
-        // Asegurar que Descripción esté visible
+        // Asegurar que Descripción esté visible y que Egresos sea número con totalizar
         columnasAAgregar = columnasAAgregar.map(col => 
+          col.name === "Egresos" ? { ...col, type: "number", totalizar: true } :
           col.name === "Descripción" ? { ...col, visible: true } : col
         );
         nuevoComportamiento = 'financiero';
@@ -2272,13 +2492,35 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
   };
 
   const filasFiltradas = filas.filter(
-    (f) =>
-      f.Name.toLowerCase().includes(filtro.toLowerCase()) ||
-      Object.values(f.properties || {}).some(
-        (p) =>
-          (typeof p.value === "string" && p.value.toLowerCase().includes(filtro.toLowerCase())) ||
-          (Array.isArray(p.value) && p.value.join(",").toLowerCase().includes(filtro.toLowerCase()))
-      )
+    (f) => {
+      // Si no hay filtro, mostrar todas las filas
+      if (!filtro || filtro.trim() === "") {
+        return true;
+      }
+      
+      const filtroLower = filtro.toLowerCase();
+      
+      // Verificar que Name existe y es string antes de usar toLowerCase
+      const nameValue = f.Name || f.properties?.Name?.value || "";
+      const nameMatch = typeof nameValue === "string" && nameValue.toLowerCase().includes(filtroLower);
+      
+      const propertiesMatch = Object.values(f.properties || {}).some(
+        (p) => {
+          const value = p?.value;
+          if (!value) return false;
+          
+          if (typeof value === "string") {
+            return value.toLowerCase().includes(filtroLower);
+          }
+          if (Array.isArray(value)) {
+            return value.join(",").toLowerCase().includes(filtroLower);
+          }
+          return false;
+        }
+      );
+      
+      return nameMatch || propertiesMatch;
+    }
   );
 
   const filasOrdenadas = [...filasFiltradas].sort((a, b) => {
@@ -3942,16 +4184,38 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
             filas={filasFiltradas}
             propiedades={propiedadesVisibles}
             onUpdateFila={(index, updatedFila) => {
-              const nuevasFilas = [...filas];
-              nuevasFilas[index] = updatedFila;
-              setFilas(nuevasFilas);
-              guardarFilas(nuevasFilas);
+              // Sincronizar Name entre nivel superior y properties.Name
+              if (updatedFila.properties?.Name?.value && updatedFila.properties.Name.value !== updatedFila.Name) {
+                updatedFila.Name = updatedFila.properties.Name.value;
+              } else if (updatedFila.Name && (!updatedFila.properties?.Name || updatedFila.properties.Name.value !== updatedFila.Name)) {
+                if (!updatedFila.properties) updatedFila.properties = {};
+                updatedFila.properties.Name = {
+                  type: 'text',
+                  ...updatedFila.properties.Name,
+                  value: updatedFila.Name
+                };
+              }
+              
+              // Encontrar el índice real en el array original (no filtrado)
+              const filaOriginal = filasFiltradas[index];
+              const realIndex = filas.findIndex(f => f.id === filaOriginal.id);
+              
+              if (realIndex !== -1) {
+                const nuevasFilas = [...filas];
+                nuevasFilas[realIndex] = updatedFila;
+                setFilas(nuevasFilas);
+                guardarFilas(nuevasFilas);
+              }
             }}
             onSelectFila={(index) => {
               const fila = filasFiltradas[index];
+              if (!fila) return;
+              
+              // Encontrar el índice real en el array original
+              const realIndex = filas.findIndex(f => f.id === fila.id);
               // Usar setTimeout para asegurar que los setState se ejecuten fuera del ciclo de renderizado
               setTimeout(() => {
-                setFilaSeleccionada(fila);
+                setFilaSeleccionada(realIndex !== -1 ? realIndex : index);
                 setShowDrawer(true);
               }, 0);
             }}
@@ -4157,14 +4421,89 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                       />
                           </div>
                     ) : prop.type === "number" || prop.type === "percent" ? (
-                      <input
-                        type="number"
+                      (() => {
+                        // Detectar si es una columna financiera numérica (Ingresos, Egresos, Deudas)
+                        const columnasFinancierasNumericas = ['Ingresos', 'Egresos', 'Deudas'];
+                        const esColumnaFinancieraNumerica = columnasFinancierasNumericas.includes(prop.name) && comportamiento === 'financiero';
+                        
+                        if (esColumnaFinancieraNumerica) {
+                          // Si es la tabla de Deudas y la columna es Deudas, mostrar botón de abono
+                          const esTablaDeudas = nombreTabla === 'Deudas' || nombreTabla === '💳 Deudas';
+                          const esColumnaDeudas = prop.name === 'Deudas';
+                          
+                          return (
+                            <div className="flex items-center gap-1 justify-end">
+                              <div
+                                className="group relative flex-1 border-none outline-none bg-transparent cursor-pointer hover:bg-gray-100 rounded px-1 py-0.5 transition-colors text-right"
+                                style={{
+                                  color: 'rgb(55, 53, 47)',
+                                  padding: '1px 4px',
+                                  fontSize: '0.8125rem',
+                                  minHeight: '20px'
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setNumericEditing({
+                                    filaIndex: filaIndexOriginal,
+                                    propName: prop.name,
+                                    value: fila.properties?.[prop.name]?.value || ""
+                                  });
+                                  setShowNumericModal(true);
+                                }}
+                              >
+                                {(fila.properties?.[prop.name]?.value !== undefined && fila.properties?.[prop.name]?.value !== null && fila.properties?.[prop.name]?.value !== '') || fila.properties?.[prop.name]?.value === 0 ? (
+                                  new Intl.NumberFormat('es-ES', { 
+                                    style: 'currency', 
+                                    currency: 'USD',
+                                    minimumFractionDigits: 0,
+                                    maximumFractionDigits: 2
+                                  }).format(parseFloat(fila.properties?.[prop.name]?.value || 0))
+                                ) : (
+                                  <span className="text-gray-400 italic">Clic para editar...</span>
+                                )}
+                              </div>
+                              {esTablaDeudas && esColumnaDeudas && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const valorDeuda = parseFloat(fila.properties?.[prop.name]?.value || 0) || 0;
+                                    const hoy = new Date();
+                                    const año = hoy.getFullYear();
+                                    const mes = String(hoy.getMonth() + 1).padStart(2, '0');
+                                    const dia = String(hoy.getDate()).padStart(2, '0');
+                                    setAbonoEditing({
+                                      filaIndex: filaIndexOriginal,
+                                      filaId: fila.id || filaIndexOriginal,
+                                      deudaActual: valorDeuda,
+                                      nombreDeuda: fila.Name || 'Deuda sin nombre',
+                                      value: "",
+                                      fecha: `${año}-${mes}-${dia}`,
+                                      descripcion: ""
+                                    });
+                                    setShowAbonoModal(true);
+                                  }}
+                                  className="px-2 py-0.5 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors flex-shrink-0"
+                                  title="Abonar a esta deuda"
+                                >
+                                  💰 Abonar
+                                </button>
+                              )}
+                            </div>
+                          );
+                        }
+                        
+                        // Para otras columnas numéricas, usar input directo
+                        return (
+                          <input
+                            type="number"
                             className="group relative w-full text-right"
-                        value={fila.properties?.[prop.name]?.value || 0}
-                        onChange={(e) => actualizarValor(fi, prop.name, Number(e.target.value))}
+                            value={fila.properties?.[prop.name]?.value || 0}
+                            onChange={(e) => actualizarValor(fi, prop.name, Number(e.target.value))}
                             onClick={(e) => e.stopPropagation()}
                             style={{ textAlign: 'right' }}
-                      />
+                          />
+                        );
+                      })()
                     ) : prop.type === "select" ? (
                       <div 
                         className="w-full cursor-pointer" 
@@ -4740,22 +5079,24 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
               } : {}}
             >
 
-      {filaSeleccionada !== null && (
+      {filaSeleccionada !== null && filas[filaSeleccionada] && (
         <>
           {/* Título editable en la parte superior */}
           <div className="mb-6" onClick={(e) => e.stopPropagation()}>
             <input
               type="text"
               className="w-full text-2xl font-semibold border-none outline-none focus:bg-gray-50 px-2 py-1 rounded transition-colors"
-              value={filas[filaSeleccionada].Name || ""}
+              value={filas[filaSeleccionada]?.Name || ""}
               placeholder="Sin título"
               onClick={(e) => e.stopPropagation()}
               onFocus={(e) => e.stopPropagation()}
               onChange={(e) => {
                 e.stopPropagation();
                 const nuevas = [...filas];
-                nuevas[filaSeleccionada].Name = e.target.value;
-                setFilas(nuevas);
+                if (nuevas[filaSeleccionada]) {
+                  nuevas[filaSeleccionada].Name = e.target.value;
+                  setFilas(nuevas);
+                }
               }}
             />
           </div>
@@ -4763,11 +5104,11 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
           <div className="mb-4">
             <label className="block text-xs text-gray-600 mb-1">Imagen</label>
             <div className="flex items-center gap-3">
-              {filas[filaSeleccionada].imageFilename || filas[filaSeleccionada].image ? (
+              {filas[filaSeleccionada]?.imageFilename || filas[filaSeleccionada]?.image ? (
                 <div className="relative">
-                  {filas[filaSeleccionada].imageFilename?.startsWith('icon-') ? (
+                  {filas[filaSeleccionada]?.imageFilename?.startsWith('icon-') ? (
                     <div className="w-16 h-16 rounded flex items-center justify-center text-3xl border border-gray-200 bg-white">
-                      {filas[filaSeleccionada].image}
+                      {filas[filaSeleccionada]?.image}
                     </div>
                   ) : (
                     <ImagenDesdeFilename 
@@ -4802,7 +5143,7 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                 }}
                 className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm"
               >
-                {filas[filaSeleccionada].image ? 'Cambiar imagen' : 'Agregar imagen/icono'}
+                {filas[filaSeleccionada]?.image ? 'Cambiar imagen' : 'Agregar imagen/icono'}
               </button>
             </div>
           </div>
@@ -5131,19 +5472,21 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
               </div>
             </div>
             <div className="p-6">
-              {filaSeleccionada !== null && (
+              {filaSeleccionada !== null && filas[filaSeleccionada] && (
                 <>
                   {/* Título editable en la parte superior */}
                   <div className="mb-6">
                     <input
                       type="text"
                       className="w-full text-2xl font-semibold border-none outline-none focus:bg-gray-50 px-2 py-1 rounded transition-colors"
-                      value={filas[filaSeleccionada].Name || ""}
+                      value={filas[filaSeleccionada]?.Name || ""}
                       placeholder="Sin título"
                       onChange={(e) => {
                         const nuevas = [...filas];
-                        nuevas[filaSeleccionada].Name = e.target.value;
-                        setFilas(nuevas);
+                        if (nuevas[filaSeleccionada]) {
+                          nuevas[filaSeleccionada].Name = e.target.value;
+                          setFilas(nuevas);
+                        }
                       }}
                     />
                   </div>
@@ -5151,11 +5494,11 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                   <div className="mb-4">
                     <label className="block text-xs text-gray-600 mb-1">Imagen</label>
                     <div className="flex items-center gap-3">
-                      {filas[filaSeleccionada].imageFilename || filas[filaSeleccionada].image ? (
+                      {filas[filaSeleccionada]?.imageFilename || filas[filaSeleccionada]?.image ? (
                         <div className="relative">
-                          {filas[filaSeleccionada].imageFilename?.startsWith('icon-') ? (
+                          {filas[filaSeleccionada]?.imageFilename?.startsWith('icon-') ? (
                             <div className="w-16 h-16 rounded flex items-center justify-center text-3xl border border-gray-200 bg-white">
-                              {filas[filaSeleccionada].image}
+                              {filas[filaSeleccionada]?.image}
                             </div>
                           ) : (
                             <ImagenDesdeFilename 
@@ -5190,26 +5533,222 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                         }}
                         className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm"
                       >
-                        {filas[filaSeleccionada].image ? 'Cambiar imagen' : 'Agregar imagen/icono'}
+                        {filas[filaSeleccionada]?.image ? 'Cambiar imagen' : 'Agregar imagen/icono'}
                       </button>
                     </div>
                   </div>
 
-                  {/* Propiedades - copiar todo el bloque de propiedades aquí */}
-                  {/* ... resto del contenido del drawer ... */}
+                  {/* Propiedades */}
+                  <div className="space-y-2">
+                    {propiedades.map((prop, pi) => {
+                      const formula = filas[filaSeleccionada]?.properties?.[prop.name]?.formula || prop.formula || "";
+                      const formulaPreview = formula.length > 30 ? formula.substring(0, 30) + "..." : formula;
+                      
+                      return (
+                      <div key={pi} className="border-b border-gray-100 pb-2 last:border-b-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {/* Nombre y badges */}
+                          <div className="flex items-center gap-1.5 flex-shrink-0 w-[120px]">
+                            <label className="text-sm font-medium text-gray-900">
+                              {prop.name}
+                            </label>
+                            {prop.type === "formula" && (
+                              <span className="text-[10px] text-blue-600 bg-blue-50 px-1 py-0.5 rounded flex-shrink-0">Σ</span>
+                            )}
+                            {prop.totalizar && (
+                              <span className="text-[10px] text-green-600 bg-green-50 px-1 py-0.5 rounded flex-shrink-0">Σ</span>
+                            )}
+                            {prop.visible === false && (
+                              <span className="text-[10px] text-gray-500 bg-gray-100 px-1 py-0.5 rounded flex-shrink-0">👁️</span>
+                            )}
+                          </div>
+                          
+                          {/* Input/Control al lado derecho */}
+                          <div className="flex-1 min-w-0" style={{ maxWidth: prop.type === "number" || prop.type === "percent" ? "100px" : prop.type === "checkbox" ? "auto" : "180px" }}>
+                            {prop.type === "formula" ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPropiedadFormulaEditando(prop.name);
+                                  setEsNuevoCampo(false);
+                                  setShowFormulaModal(true);
+                                }}
+                                className="w-full text-left border border-gray-300 bg-white hover:bg-gray-50 rounded px-2 py-1 text-xs font-mono text-gray-700 transition-colors truncate"
+                                title={formula || "Clic para editar fórmula"}
+                              >
+                                {formulaPreview || "Clic para editar fórmula..."}
+                              </button>
+                            ) : prop.type === "tags" ? (
+                              <TagInputNotionLike
+                                value={filas[filaSeleccionada]?.properties?.[prop.name]?.value || []}
+                                onChange={(val) => actualizarValor(filaSeleccionada, prop.name, val)}
+                              />
+                            ) : prop.type === "number" || prop.type === "percent" ? (
+                              <input
+                                type="number"
+                                className="border border-gray-300 w-full px-2 py-1 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent"
+                                value={filas[filaSeleccionada]?.properties?.[prop.name]?.value || 0}
+                                onChange={(e) => actualizarValor(filaSeleccionada, prop.name, Number(e.target.value))}
+                              />
+                            ) : prop.type === "checkbox" ? (
+                              <div className="flex items-center">
+                                <input
+                                  type="checkbox"
+                                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                  checked={filas[filaSeleccionada]?.properties?.[prop.name]?.value || false}
+                                  onChange={(e) => actualizarValor(filaSeleccionada, prop.name, e.target.checked)}
+                                />
+                              </div>
+                            ) : prop.type === "select" ? (
+                              <div className="flex items-center gap-1.5">
+                                <input
+                                  type="text"
+                                  className="flex-1 border border-gray-300 px-2 py-1 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent min-w-0"
+                                  value={filas[filaSeleccionada]?.properties?.[prop.name]?.value || ""}
+                                  onChange={(e) => actualizarValor(filaSeleccionada, prop.name, e.target.value)}
+                                  placeholder="Valor"
+                                />
+                                <input
+                                  type="color"
+                                  className="w-7 h-7 rounded border border-gray-300 cursor-pointer flex-shrink-0"
+                                  value={filas[filaSeleccionada]?.properties?.[prop.name]?.color || "#3b82f6"}
+                                  onChange={(e) => {
+                                    const nuevas = [...filas];
+                                    nuevas[filaSeleccionada].properties[prop.name].color = e.target.value;
+                                    setFilas(nuevas);
+                                  }}
+                                />
+                              </div>
+                            ) : (
+                              <input
+                                type="text"
+                                className="border border-gray-300 w-full px-2 py-1 rounded text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent"
+                                value={filas[filaSeleccionada]?.properties?.[prop.name]?.value || ""}
+                                onChange={(e) => actualizarValor(filaSeleccionada, prop.name, e.target.value)}
+                                placeholder="Escribe aquí..."
+                              />
+                            )}
+                          </div>
+                          
+                          {/* Controles de totalizar y visible */}
+                          <div className="flex items-center gap-3 flex-shrink-0">
+                            {(prop.type === "number" || prop.type === "percent") && (
+                              <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer hover:text-gray-800">
+                                <input
+                                  type="checkbox"
+                                  checked={prop.totalizar || false}
+                                  onChange={(e) => {
+                                    const nuevas = [...propiedades];
+                                    nuevas[pi].totalizar = e.target.checked;
+                                    setPropiedades(nuevas);
+                                  }}
+                                  className="w-3.5 h-3.5"
+                                />
+                                <span>Totalizar</span>
+                              </label>
+                            )}
+                            <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer hover:text-gray-800">
+                              <input
+                                type="checkbox"
+                                checked={prop.visible !== false}
+                                onChange={(e) => {
+                                  const nuevas = [...propiedades];
+                                  nuevas[pi].visible = e.target.checked;
+                                  setPropiedades(nuevas);
+                                }}
+                                className="w-3.5 h-3.5"
+                              />
+                              <span>Visible</span>
+                            </label>
+                          </div>
+                        </div>
+                        
+                        {/* Resultado de fórmula (solo para fórmulas) */}
+                        {prop.type === "formula" && (
+                          <div className="text-[10px] text-gray-500 mt-1 ml-[130px]">
+                            Resultado: <strong className="text-gray-700">{obtenerValorCelda(filas[filaSeleccionada], prop) || "Sin resultado"}</strong>
+                          </div>
+                        )}
+                      </div>
+                    )})}
+                  </div>
+                  
+                  {/* Sección para agregar nueva propiedad */}
+                  <div className="mt-6 border-t border-gray-200 pt-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="font-semibold text-sm text-gray-900">➕ Agregar propiedad</h3>
+                      <button
+                        onClick={agregarPropiedad}
+                        disabled={!nuevoCampo.name}
+                        className="px-4 py-1.5 bg-green-600 text-white rounded text-sm hover:bg-green-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed font-medium"
+                      >
+                        Agregar
+                      </button>
+                    </div>
+                    <div className="space-y-2.5">
+                      <div>
+                        <input
+                          type="text"
+                          placeholder="Nombre de la propiedad"
+                          className="border border-gray-300 w-full px-2.5 py-1.5 rounded text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                          value={nuevoCampo.name}
+                          onChange={(e) => setNuevoCampo({ ...nuevoCampo, name: e.target.value })}
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <select
+                          value={nuevoCampo.type}
+                          onChange={(e) => setNuevoCampo({ ...nuevoCampo, type: e.target.value })}
+                          className="flex-1 border border-gray-300 px-2.5 py-1.5 rounded text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        >
+                          {tipos.map((tipo) => (
+                            <option key={tipo.value} value={tipo.value}>
+                              {tipo.label}
+                            </option>
+                          ))}
+                        </select>
+                        <label className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded text-xs text-gray-700 cursor-pointer hover:bg-gray-50 transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={nuevoCampo.visible !== false}
+                            onChange={(e) => setNuevoCampo({ ...nuevoCampo, visible: e.target.checked })}
+                            className="w-3.5 h-3.5"
+                          />
+                          <span>Visible</span>
+                        </label>
+                      </div>
+                      
+                      {/* Botón para abrir modal de fórmulas sugeridas si el tipo es "formula" */}
+                      {nuevoCampo.type === "formula" && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPropiedadFormulaEditando(null);
+                            setEsNuevoCampo(true);
+                            setShowFormulaModal(true);
+                          }}
+                          className="w-full bg-blue-50 border border-blue-300 text-blue-700 px-3 py-1.5 rounded text-xs hover:bg-blue-100 transition-colors flex items-center justify-center gap-1.5 font-medium"
+                        >
+                          💡 Ver fórmulas sugeridas
+                        </button>
+                      )}
+                    </div>
+                  </div>
                   
                   <EditorDescripcion
                     content={filas[filaSeleccionada]?.descripcion || ""}
                     onChange={(nuevoContenido) => {
                       const nuevas = [...filas];
-                      nuevas[filaSeleccionada].descripcion = nuevoContenido;
-                      setFilas(nuevas);
-                      if (saveTimeoutRef.current) {
-                        clearTimeout(saveTimeoutRef.current);
+                      if (nuevas[filaSeleccionada]) {
+                        nuevas[filaSeleccionada].descripcion = nuevoContenido;
+                        setFilas(nuevas);
+                        if (saveTimeoutRef.current) {
+                          clearTimeout(saveTimeoutRef.current);
+                        }
+                        saveTimeoutRef.current = setTimeout(() => {
+                          updateAttributes({ filas: nuevas });
+                        }, 500);
                       }
-                      saveTimeoutRef.current = setTimeout(() => {
-                        updateAttributes({ filas: nuevas });
-                      }, 500);
                     }}
                   />
                 </>
@@ -6435,9 +6974,7 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault();
-                    actualizarValor(numericEditing.filaIndex, numericEditing.propName, numericEditing.value);
-                    setShowNumericModal(false);
-                    setNumericEditing(null);
+                    handleGuardarValorNumerico();
                   }
                 }}
               />
@@ -6453,11 +6990,7 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                 Cancelar
               </button>
               <button
-                onClick={() => {
-                  actualizarValor(numericEditing.filaIndex, numericEditing.propName, numericEditing.value);
-                  setShowNumericModal(false);
-                  setNumericEditing(null);
-                }}
+                onClick={handleGuardarValorNumerico}
                 className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
               >
                 ➕ Agregar

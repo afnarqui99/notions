@@ -8,13 +8,65 @@ export default function TimelineView({ filas, propiedades, onSelectFila }) {
     );
   }, [propiedades]);
 
+  // Función auxiliar para extraer valor de una propiedad
+  const extractPropertyValue = (propData) => {
+    if (!propData) return null;
+    
+    // Si es un objeto con value, usar value
+    if (propData && typeof propData === 'object' && 'value' in propData) {
+      const value = propData.value;
+      if (Array.isArray(value)) {
+        return value.map(v => {
+          if (typeof v === 'object' && v !== null && ('label' in v || 'value' in v)) {
+            return v.label || v.value || String(v);
+          }
+          return String(v);
+        }).join(', ');
+      }
+      // Si el value es un objeto, extraer label o value o convertir a string
+      if (typeof value === 'object' && value !== null && value !== undefined) {
+        return value.label || value.value || String(value);
+      }
+      // Si es un valor primitivo, devolverlo
+      return value;
+    }
+    
+    // Si es directamente un array
+    if (Array.isArray(propData)) {
+      return propData.map(v => {
+        if (typeof v === 'object' && v !== null && ('label' in v || 'value' in v)) {
+          return v.label || v.value || String(v);
+        }
+        return String(v);
+      }).join(', ');
+    }
+    
+    // Si es un objeto sin value, intentar extraer label o value
+    if (typeof propData === 'object' && propData !== null) {
+      return propData.label || propData.value || String(propData);
+    }
+    
+    // Si es un valor primitivo, devolverlo
+    return propData;
+  };
+
   // Obtener nombre de la fila
   const getFilaName = (fila) => {
+    // Primero intentar Name en nivel superior
+    if (fila.Name) return String(fila.Name);
+    
     const nameProp = propiedades.find(p => 
       p.type === 'text' && p.visible && p.name.toLowerCase().includes('name')
     ) || propiedades.find(p => p.type === 'text' && p.visible);
     
-    return nameProp ? (fila.properties?.[nameProp.name] || 'Sin nombre') : 'Sin nombre';
+    if (nameProp) {
+      const propValue = fila.properties?.[nameProp.name];
+      if (propValue) {
+        const value = extractPropertyValue(propValue);
+        return value ? String(value) : 'Sin nombre';
+      }
+    }
+    return 'Sin nombre';
   };
 
   // Agrupar filas por fecha
@@ -26,11 +78,24 @@ export default function TimelineView({ filas, propiedades, onSelectFila }) {
       
       // Buscar la primera propiedad de fecha con valor
       for (const dateProp of dateProperties) {
-        const value = fila.properties?.[dateProp.name];
-        if (value) {
-          fecha = new Date(value);
-          if (!isNaN(fecha.getTime())) {
-            break;
+        const propData = fila.properties?.[dateProp.name];
+        if (propData) {
+          // Extraer el valor real si es un objeto con value
+          let dateValue = propData;
+          if (propData && typeof propData === 'object' && 'value' in propData) {
+            dateValue = propData.value;
+          }
+          
+          // Si dateValue es un objeto, intentar extraer label o value
+          if (typeof dateValue === 'object' && dateValue !== null && dateValue !== undefined) {
+            dateValue = dateValue.value || dateValue.label || dateValue;
+          }
+          
+          if (dateValue) {
+            fecha = new Date(dateValue);
+            if (!isNaN(fecha.getTime())) {
+              break;
+            }
           }
         }
       }
@@ -89,14 +154,45 @@ export default function TimelineView({ filas, propiedades, onSelectFila }) {
                     </div>
                     {/* Mostrar otras propiedades */}
                     {propiedades
-                      .filter(p => p.visible && !dateProperties.includes(p))
+                      .filter(p => p.visible && !dateProperties.includes(p) && p.name !== 'Name')
                       .slice(0, 3)
                       .map(prop => {
-                        const value = fila.properties?.[prop.name];
-                        if (!value) return null;
+                        const propData = fila.properties?.[prop.name];
+                        if (!propData) return null;
+                        
+                        // Extraer el valor usando la función auxiliar
+                        const value = extractPropertyValue(propData);
+                        if (!value && value !== 0 && value !== false) return null;
+                        
+                        // Formatear según el tipo - asegurar que siempre sea un string
+                        let displayValue = '';
+                        
+                        if (prop.type === 'date' && value) {
+                          try {
+                            const date = new Date(value);
+                            if (!isNaN(date.getTime())) {
+                              displayValue = date.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
+                            } else {
+                              displayValue = String(value);
+                            }
+                          } catch {
+                            displayValue = String(value);
+                          }
+                        } else if (prop.type === 'checkbox') {
+                          displayValue = value ? '✓' : '';
+                        } else {
+                          // Asegurar que siempre sea un string
+                          displayValue = String(value || '');
+                        }
+                        
+                        if (!displayValue && prop.type !== 'checkbox') return null;
+                        
                         return (
-                          <div key={prop.name} className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                            {prop.name}: {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                          <div key={prop.name} className="text-xs text-gray-600 dark:text-gray-400 mt-1 flex items-center gap-1">
+                            <span className="font-medium">{prop.name}:</span>
+                            <span className={prop.type === 'checkbox' ? 'text-green-600' : ''}>
+                              {displayValue}
+                            </span>
                           </div>
                         );
                       })}
