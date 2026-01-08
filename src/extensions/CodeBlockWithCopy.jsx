@@ -648,27 +648,14 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
       return;
     }
 
-    // Validación rápida: verificar que el término existe en el texto usando indexOf
-    // Esto es más rápido que regex y nos da confianza de que el término existe
-    const quickCheck = text.indexOf(cleanTerm);
-    if (quickCheck === -1) {
-      // Intentar búsqueda case-insensitive
-      const lowerText = text.toLowerCase();
-      const lowerTerm = cleanTerm.toLowerCase();
-      if (lowerText.indexOf(lowerTerm) === -1) {
-        console.log('Término no encontrado en el texto:', { 
-          term: cleanTerm,
-          textLength: text.length,
-          textSample: text.substring(0, 300),
-          isFullscreen,
-          hasRef: !!fullscreenRef.current,
-          refValue: fullscreenRef.current?.value?.substring(0, 100)
-        });
-        setSearchResults([]);
-        setCurrentResultIndex(-1);
-        return;
-      }
-    }
+    // Log para debugging - mostrar qué estamos buscando y en qué texto
+    console.log('Iniciando búsqueda:', {
+      term: cleanTerm,
+      textLength: text.length,
+      textPreview: text.substring(0, 200),
+      isFullscreen,
+      hasRef: !!fullscreenRef.current
+    });
 
     // Escapar caracteres especiales para la búsqueda regex
     // IMPORTANTE: No escapar números ni letras, solo caracteres especiales de regex
@@ -720,21 +707,30 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
     if (results.length === 0) {
       // Si no hay resultados, buscar manualmente para ver qué pasa
       const manualIndex = text.indexOf(cleanTerm);
-      console.log('Búsqueda sin resultados:', { 
+      const lowerText = text.toLowerCase();
+      const lowerTerm = cleanTerm.toLowerCase();
+      const lowerIndex = lowerText.indexOf(lowerTerm);
+      
+      console.log('🔍 Búsqueda sin resultados:', { 
         term: cleanTerm,
         escapedTerm,
         textLength: text.length,
         manualIndex,
+        lowerIndex,
         textContainsTerm: manualIndex !== -1,
-        textSample: text.substring(0, 500),
+        textContainsTermLower: lowerIndex !== -1,
+        textSample: text.substring(0, 1000), // Mostrar más texto para debugging
         isFullscreen,
-        hasRef: !!fullscreenRef.current
+        hasRef: !!fullscreenRef.current,
+        refValueLength: fullscreenRef.current?.value?.length,
+        refValueSample: fullscreenRef.current?.value?.substring(0, 200)
       });
     } else {
-      console.log('Búsqueda realizada:', { 
+      console.log('✅ Búsqueda exitosa:', { 
         term: cleanTerm, 
         textLength: text.length, 
-        resultsCount: results.length, 
+        resultsCount: results.length,
+        allResults: results.map(r => ({ index: r.index, text: r.text })),
         firstResult: results[0],
         textSample: text.substring(Math.max(0, results[0]?.index - 20 || 0), Math.min(text.length, (results[0]?.index || 0) + 50))
       });
@@ -831,31 +827,35 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
     const term = e.target.value;
     setSearchTerm(term);
     
-    // Usar requestAnimationFrame para asegurar que el DOM esté actualizado
-    requestAnimationFrame(() => {
-      // Obtener el contenido actual - SIEMPRE usar el más reciente del textarea
-      let content;
-      if (isFullscreen) {
-        // En fullscreen, SIEMPRE usar el textarea directamente (más confiable)
-        if (fullscreenRef.current) {
-          content = fullscreenRef.current.value;
-        } else {
-          // Fallback solo si no hay ref
-          content = fullscreenContent || getCodeText();
-        }
+    // Si el término está vacío, limpiar resultados inmediatamente
+    if (!term.trim()) {
+      setSearchResults([]);
+      setCurrentResultIndex(-1);
+      return;
+    }
+    
+    // Obtener el contenido actual - SIEMPRE usar el más reciente del textarea
+    // No usar requestAnimationFrame porque el valor del textarea está disponible inmediatamente
+    let content;
+    if (isFullscreen) {
+      // En fullscreen, SIEMPRE usar el textarea directamente (más confiable)
+      if (fullscreenRef.current) {
+        content = fullscreenRef.current.value;
       } else {
-        content = getCodeText();
+        // Fallback solo si no hay ref
+        content = fullscreenContent || getCodeText();
       }
-      
-      // Realizar la búsqueda con el contenido más reciente
-      if (content && term.trim()) {
-        performSearch(content, term);
-      } else if (!term.trim()) {
-        // Si el término está vacío, limpiar resultados
-        setSearchResults([]);
-        setCurrentResultIndex(-1);
-      }
-    });
+    } else {
+      content = getCodeText();
+    }
+    
+    // Realizar la búsqueda con el contenido más reciente
+    // Ejecutar directamente ya que el valor del textarea está disponible inmediatamente
+    if (content) {
+      performSearch(content, term);
+    } else {
+      console.warn('No se pudo obtener contenido para buscar:', { isFullscreen, hasRef: !!fullscreenRef.current });
+    }
   };
 
   // Limpiar búsqueda
