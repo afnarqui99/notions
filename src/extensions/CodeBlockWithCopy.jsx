@@ -19,6 +19,7 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
   const wrapperRef = useRef(null);
   const fullscreenRef = useRef(null);
   const searchInputRef = useRef(null);
+  const searchTimeoutRef = useRef(null);
 
   // Actualizar el contenido del modal cuando se abre (solo la primera vez)
   useEffect(() => {
@@ -379,9 +380,25 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
   }, [showSearch, searchTerm, isFullscreen, searchResults, currentResultIndex, fullscreenContent]);
 
 
+  // Limpiar timeout cuando el componente se desmonte o cuando se cierre la búsqueda
+  useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+        searchTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
   // Inicializar búsqueda cuando se abre el panel de búsqueda
   useEffect(() => {
     if (showSearch && searchTerm) {
+      // Limpiar timeout anterior si existe
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+        searchTimeoutRef.current = null;
+      }
+      
       // Usar un pequeño delay para asegurar que el DOM esté listo
       setTimeout(() => {
         const content = isFullscreen && fullscreenRef.current 
@@ -605,7 +622,7 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
     }
   };
 
-  // Función para buscar en el contenido
+  // Función para buscar en el contenido (optimizada para textos largos)
   const performSearch = (content, term) => {
     if (!term || !term.trim()) {
       setSearchResults([]);
@@ -627,13 +644,6 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
     
     // Asegurarse de que tenemos texto
     if (!text || typeof text !== 'string' || text.trim() === '') {
-      console.warn('No se pudo obtener el texto para buscar', { 
-        text: text ? text.substring(0, 100) : 'null/undefined', 
-        content: content ? content.substring(0, 100) : 'null/undefined', 
-        term,
-        isFullscreen,
-        hasFullscreenRef: !!fullscreenRef.current
-      });
       setSearchResults([]);
       setCurrentResultIndex(-1);
       return;
@@ -648,91 +658,100 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
       return;
     }
 
-    // Log para debugging - mostrar qué estamos buscando y en qué texto
-    console.log('Iniciando búsqueda:', {
-      term: cleanTerm,
-      textLength: text.length,
-      textPreview: text.substring(0, 200),
-      isFullscreen,
-      hasRef: !!fullscreenRef.current
-    });
-
-    // Escapar caracteres especiales para la búsqueda regex
-    // IMPORTANTE: No escapar números ni letras, solo caracteres especiales de regex
-    const escapedTerm = cleanTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    
-    // Crear regex con flag global e insensitive
-    let searchRegex;
-    try {
-      searchRegex = new RegExp(escapedTerm, 'gi');
-    } catch (error) {
-      console.error('Error al crear regex:', error, { term: cleanTerm, escapedTerm });
-      setSearchResults([]);
-      setCurrentResultIndex(-1);
-      return;
-    }
-    
+    const startTime = performance.now();
     const results = [];
-    let match;
-    let lastIndex = -1;
-    let iterations = 0;
-    const maxIterations = 10000; // Prevenir bucles infinitos
-
-    // Reiniciar lastIndex para buscar desde el inicio
-    searchRegex.lastIndex = 0;
-
-    while ((match = searchRegex.exec(text)) !== null && iterations < maxIterations) {
-      iterations++;
-      
-      // Evitar bucles infinitos si el regex no avanza
-      if (match.index === lastIndex && match[0].length === 0) {
-        break;
-      }
-      
-      // Verificar que la coincidencia es válida
-      if (match.index >= 0 && match[0].length > 0) {
-        lastIndex = match.index;
-        
-        results.push({
-          index: match.index,
-          length: match[0].length,
-          text: match[0]
-        });
-      } else {
-        break;
-      }
-    }
-
-    // Logging mejorado para debugging
-    if (results.length === 0) {
-      // Si no hay resultados, buscar manualmente para ver qué pasa
-      const manualIndex = text.indexOf(cleanTerm);
+    const termLength = cleanTerm.length;
+    const textLength = text.length;
+    
+    // Para textos muy largos (>100KB), usar indexOf que es más eficiente que regex
+    // Para textos más pequeños, usar regex para búsqueda case-insensitive
+    const useIndexOf = textLength > 100000 || cleanTerm.length > 20;
+    
+    if (useIndexOf) {
+      // Método optimizado para textos largos: usar indexOf con búsqueda case-insensitive manual
       const lowerText = text.toLowerCase();
       const lowerTerm = cleanTerm.toLowerCase();
-      const lowerIndex = lowerText.indexOf(lowerTerm);
+      let searchIndex = 0;
       
+      while (searchIndex < textLength) {
+        const foundIndex = lowerText.indexOf(lowerTerm, searchIndex);
+        if (foundIndex === -1) {
+          break;
+        }
+        
+        // Obtener el texto real en esa posición para preservar el case original
+        const actualText = text.substring(foundIndex, foundIndex + termLength);
+        
+        results.push({
+          index: foundIndex,
+          length: termLength,
+          text: actualText
+        });
+        
+        // Continuar buscando desde la siguiente posición
+        searchIndex = foundIndex + 1;
+      }
+    } else {
+      // Método con regex para textos más pequeños (más preciso con case-insensitive)
+      try {
+        // Escapar caracteres especiales para la búsqueda regex
+        const escapedTerm = cleanTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const searchRegex = new RegExp(escapedTerm, 'gi');
+        
+        let match;
+        let lastIndex = -1;
+        let iterations = 0;
+        const maxIterations = 50000; // Aumentado para textos grandes
+
+        searchRegex.lastIndex = 0;
+
+        while ((match = searchRegex.exec(text)) !== null && iterations < maxIterations) {
+          iterations++;
+          
+          // Evitar bucles infinitos si el regex no avanza
+          if (match.index === lastIndex && match[0].length === 0) {
+            break;
+          }
+          
+          if (match.index >= 0 && match[0].length > 0) {
+            lastIndex = match.index;
+            
+            results.push({
+              index: match.index,
+              length: match[0].length,
+              text: match[0]
+            });
+          } else {
+            break;
+          }
+        }
+      } catch (error) {
+        console.error('Error al crear regex:', error, { term: cleanTerm });
+        setSearchResults([]);
+        setCurrentResultIndex(-1);
+        return;
+      }
+    }
+    
+    const endTime = performance.now();
+    const searchTime = endTime - startTime;
+
+    // Logging optimizado (solo para debugging cuando es necesario)
+    if (results.length === 0) {
       console.log('🔍 Búsqueda sin resultados:', { 
         term: cleanTerm,
-        escapedTerm,
         textLength: text.length,
-        manualIndex,
-        lowerIndex,
-        textContainsTerm: manualIndex !== -1,
-        textContainsTermLower: lowerIndex !== -1,
-        textSample: text.substring(0, 1000), // Mostrar más texto para debugging
-        isFullscreen,
-        hasRef: !!fullscreenRef.current,
-        refValueLength: fullscreenRef.current?.value?.length,
-        refValueSample: fullscreenRef.current?.value?.substring(0, 200)
+        searchTime: `${searchTime.toFixed(2)}ms`,
+        method: useIndexOf ? 'indexOf' : 'regex'
       });
     } else {
       console.log('✅ Búsqueda exitosa:', { 
         term: cleanTerm, 
         textLength: text.length, 
         resultsCount: results.length,
-        allResults: results.map(r => ({ index: r.index, text: r.text })),
-        firstResult: results[0],
-        textSample: text.substring(Math.max(0, results[0]?.index - 20 || 0), Math.min(text.length, (results[0]?.index || 0) + 50))
+        searchTime: `${searchTime.toFixed(2)}ms`,
+        method: useIndexOf ? 'indexOf' : 'regex',
+        firstResult: results[0]
       });
     }
     
@@ -822,40 +841,52 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
     scrollToResult(prevIndex);
   };
 
-  // Manejar cambio en el término de búsqueda
+  // Manejar cambio en el término de búsqueda (con debounce para textos largos)
   const handleSearchChange = (e) => {
     const term = e.target.value;
     setSearchTerm(term);
     
     // Si el término está vacío, limpiar resultados inmediatamente
     if (!term.trim()) {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+        searchTimeoutRef.current = null;
+      }
       setSearchResults([]);
       setCurrentResultIndex(-1);
       return;
     }
     
-    // Obtener el contenido actual - SIEMPRE usar el más reciente del textarea
-    // No usar requestAnimationFrame porque el valor del textarea está disponible inmediatamente
+    // Limpiar timeout anterior si existe
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    
+    // Obtener el contenido actual
     let content;
     if (isFullscreen) {
-      // En fullscreen, SIEMPRE usar el textarea directamente (más confiable)
       if (fullscreenRef.current) {
         content = fullscreenRef.current.value;
       } else {
-        // Fallback solo si no hay ref
         content = fullscreenContent || getCodeText();
       }
     } else {
       content = getCodeText();
     }
     
-    // Realizar la búsqueda con el contenido más reciente
-    // Ejecutar directamente ya que el valor del textarea está disponible inmediatamente
-    if (content) {
-      performSearch(content, term);
-    } else {
-      console.warn('No se pudo obtener contenido para buscar:', { isFullscreen, hasRef: !!fullscreenRef.current });
+    if (!content) {
+      return;
     }
+    
+    // Para textos largos, usar debounce para mejorar el rendimiento
+    // Para textos pequeños, buscar inmediatamente
+    const contentLength = content.length;
+    const debounceDelay = contentLength > 50000 ? 300 : 100; // 300ms para textos >50KB, 100ms para otros
+    
+    searchTimeoutRef.current = setTimeout(() => {
+      performSearch(content, term);
+      searchTimeoutRef.current = null;
+    }, debounceDelay);
   };
 
   // Limpiar búsqueda
