@@ -117,6 +117,59 @@ export const SlashCommand = Extension.create({
             },
           },
           {
+            label: "Kanban Board",
+            description: "Tabla Kanban con columnas To Do, In Progress, Done - Drag & drop entre columnas",
+            icon: "📋",
+            keywords: ["board", "kanban", "tablero", "proyectos", "tareas", "drag", "drop"],
+            command: ({ editor, range }) => {
+              editor.chain().focus().deleteRange(range).run();
+              
+              // Crear una tabla con estructura Kanban
+              // La tabla tendrá columnas predefinidas para Kanban
+              const filaId = Date.now();
+              editor.chain().focus().insertContent({
+                type: 'tablaNotion',
+                attrs: {
+                  nombreTabla: 'Kanban Board',
+                  comportamiento: 'kanban',
+                  propiedades: [
+                    { name: 'Name', type: 'text', visible: true },
+                    { name: 'Estado', type: 'select', visible: true, options: ['To Do', 'In Progress', 'Done'] },
+                    { name: 'Prioridad', type: 'tags', visible: true, options: ['Alta', 'Media', 'Baja'] },
+                    { name: 'Asignado', type: 'tags', visible: true },
+                    { name: 'Fecha', type: 'date', visible: true },
+                    { name: 'Descripción', type: 'text', visible: true }
+                  ],
+                  filas: [
+                    {
+                      id: filaId,
+                      Name: 'Ejemplo de tarea', // Name en nivel superior para compatibilidad
+                      properties: {
+                        Name: { value: 'Ejemplo de tarea', type: 'text' },
+                        Estado: { value: 'To Do', type: 'select' },
+                        Prioridad: { value: ['Media'], type: 'tags' },
+                        Asignado: { value: [], type: 'tags' },
+                        Fecha: { value: null, type: 'date' },
+                        Descripción: { value: '', type: 'text' }
+                      }
+                    }
+                  ]
+                }
+              }).run();
+            },
+          },
+          {
+            label: "Nota Rápida",
+            description: "Abrir modal de notas rápidas para escribir y guardar notas",
+            icon: "📝",
+            keywords: ["nota", "quicknote", "rapida", "notas", "note"],
+            command: ({ editor, range }) => {
+              editor.chain().focus().deleteRange(range).run();
+              // Disparar evento para abrir el modal de notas rápidas
+              window.dispatchEvent(new CustomEvent('open-quick-note'));
+            },
+          },
+          {
   label: "Tabla",
   description: "Insertar una tabla dinámica con columnas configurables",
   icon: "📋",
