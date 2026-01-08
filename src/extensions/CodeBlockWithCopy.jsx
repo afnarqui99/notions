@@ -648,6 +648,28 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
       return;
     }
 
+    // Validación rápida: verificar que el término existe en el texto usando indexOf
+    // Esto es más rápido que regex y nos da confianza de que el término existe
+    const quickCheck = text.indexOf(cleanTerm);
+    if (quickCheck === -1) {
+      // Intentar búsqueda case-insensitive
+      const lowerText = text.toLowerCase();
+      const lowerTerm = cleanTerm.toLowerCase();
+      if (lowerText.indexOf(lowerTerm) === -1) {
+        console.log('Término no encontrado en el texto:', { 
+          term: cleanTerm,
+          textLength: text.length,
+          textSample: text.substring(0, 300),
+          isFullscreen,
+          hasRef: !!fullscreenRef.current,
+          refValue: fullscreenRef.current?.value?.substring(0, 100)
+        });
+        setSearchResults([]);
+        setCurrentResultIndex(-1);
+        return;
+      }
+    }
+
     // Escapar caracteres especiales para la búsqueda regex
     // IMPORTANTE: No escapar números ni letras, solo caracteres especiales de regex
     const escapedTerm = cleanTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -809,24 +831,31 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
     const term = e.target.value;
     setSearchTerm(term);
     
-    // Obtener el contenido actual - SIEMPRE usar el más reciente del textarea
-    let content;
-    if (isFullscreen) {
-      // En fullscreen, SIEMPRE usar el textarea directamente (más confiable)
-      if (fullscreenRef.current) {
-        content = fullscreenRef.current.value;
+    // Usar requestAnimationFrame para asegurar que el DOM esté actualizado
+    requestAnimationFrame(() => {
+      // Obtener el contenido actual - SIEMPRE usar el más reciente del textarea
+      let content;
+      if (isFullscreen) {
+        // En fullscreen, SIEMPRE usar el textarea directamente (más confiable)
+        if (fullscreenRef.current) {
+          content = fullscreenRef.current.value;
+        } else {
+          // Fallback solo si no hay ref
+          content = fullscreenContent || getCodeText();
+        }
       } else {
-        // Fallback solo si no hay ref
-        content = fullscreenContent || getCodeText();
+        content = getCodeText();
       }
-    } else {
-      content = getCodeText();
-    }
-    
-    // Realizar la búsqueda inmediatamente con el contenido más reciente
-    if (content) {
-      performSearch(content, term);
-    }
+      
+      // Realizar la búsqueda con el contenido más reciente
+      if (content && term.trim()) {
+        performSearch(content, term);
+      } else if (!term.trim()) {
+        // Si el término está vacío, limpiar resultados
+        setSearchResults([]);
+        setCurrentResultIndex(-1);
+      }
+    });
   };
 
   // Limpiar búsqueda
