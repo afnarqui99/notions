@@ -1,9 +1,11 @@
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, startTransition } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Heading from "@tiptap/extension-heading";
 import { CodeBlockWithCopyExtension } from "../extensions/CodeBlockWithCopyExtension";
 import { SQLScriptNodeExtension } from "../extensions/SQLScriptNodeExtension";
+import { MarkdownNodeExtension } from "../extensions/MarkdownNodeExtension";
+import { PreventUpdateLoopExtension } from "../extensions/PreventUpdateLoopExtension";
 import Underline from "@tiptap/extension-underline";
 import TextStyle from "@tiptap/extension-text-style";
 import Table from "@tiptap/extension-table";
@@ -95,6 +97,7 @@ export default function LocalEditor({ onShowConfig }) {
   const [titulo, setTitulo] = useState("");
   const editorRef = useRef(null);
   const intervaloRef = useRef(null);
+  const lastHandleRef = useRef(!!LocalStorageService.baseDirectoryHandle);
   const [paginas, setPaginas] = useState([]);
   const [paginaSeleccionada, setPaginaSeleccionada] = useState(null);
   const [tituloPaginaActual, setTituloPaginaActual] = useState("");
@@ -137,6 +140,9 @@ export default function LocalEditor({ onShowConfig }) {
   const [showPageSQLScripts, setShowPageSQLScripts] = useState(false);
   const [pageSQLScriptsCount, setPageSQLScriptsCount] = useState(0);
   const ultimoContenidoGuardadoRef = useRef(null);
+  const checkingSQLScriptsRef = useRef(new Set()); // Para evitar verificaciones duplicadas
+  const checkPageSQLScriptsRef = useRef(null); // Ref para checkPageSQLScripts
+  const guardarContenidoRef = useRef(null); // Ref para guardarContenido
   const [favoritos, setFavoritos] = useState(() => {
     try {
       const saved = localStorage.getItem('notion-favoritos');
@@ -447,6 +453,12 @@ export default function LocalEditor({ onShowConfig }) {
     }
   }, [paginaSeleccionada, tituloPaginaActual]);
 
+  // Mantener el ref actualizado con la función guardarContenido
+  // Esto es seguro porque solo actualiza un ref, no causa re-renders
+  useEffect(() => {
+    guardarContenidoRef.current = guardarContenido;
+  }, [guardarContenido]);
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ 
@@ -455,6 +467,7 @@ export default function LocalEditor({ onShowConfig }) {
       }),
       CodeBlockWithCopyExtension,
       SQLScriptNodeExtension,
+      MarkdownNodeExtension,
       Toggle,
       TablaNotionNode,
       GaleriaImagenesNode,
@@ -491,24 +504,36 @@ export default function LocalEditor({ onShowConfig }) {
       }),
       Placeholder.configure({ placeholder: "Escribe '/' para comandos..." }),
       SlashCommand,
+      PreventUpdateLoopExtension,
     ],
     content: "",
   });
 
+  // Ref para evitar cargas simultáneas
+  const cargandoPaginasRef = useRef(false);
+  const rebuildIndexTimeoutRef = useRef(null);
+  const autoguardandoRef = useRef(false);
+
   // Cargar lista de páginas
   useEffect(() => {
     const cargarPaginas = async () => {
-      // Verificar configuración y handle
-      const config = LocalStorageService.config;
-      const hasHandle = !!LocalStorageService.baseDirectoryHandle;
-      
-      if (config.useLocalStorage && !hasHandle) {
-        // No intentar cargar desde localStorage si hay configuración de almacenamiento local
-        setPaginas([]);
+      // Evitar cargas simultáneas
+      if (cargandoPaginasRef.current) {
         return;
       }
-      
+      cargandoPaginasRef.current = true;
+
       try {
+        // Verificar configuración y handle
+        const config = LocalStorageService.config;
+        const hasHandle = !!LocalStorageService.baseDirectoryHandle;
+        
+        if (config.useLocalStorage && !hasHandle) {
+          // No intentar cargar desde localStorage si hay configuración de almacenamiento local
+          setPaginas([]);
+          return;
+        }
+        
         const files = await LocalStorageService.listFiles('data');
         
         if (files.length === 0 && config.useLocalStorage && !hasHandle) {
@@ -518,7 +543,14 @@ export default function LocalEditor({ onShowConfig }) {
         
         const paginasData = await Promise.all(
           files
-            .filter(f => f.endsWith('.json') && !f.startsWith('quick-note-')) // Excluir notas rápidas
+            .filter(f => {
+              // Excluir notas rápidas
+              if (f.startsWith('quick-note-')) return false;
+              // Excluir archivos de configuración/metadatos
+              if (f === 'calendar-events.json' || f === '_pages-index.json') return false;
+              // Solo archivos JSON
+              return f.endsWith('.json');
+            })
             .map(async (file) => {
               try {
                 const data = await LocalStorageService.readJSONFile(file, 'data');
@@ -526,10 +558,14 @@ export default function LocalEditor({ onShowConfig }) {
                 if (data && data.id && data.id.startsWith('quick-note-')) {
                   return null; // Excluir notas rápidas
                 }
+                // Excluir archivos de configuración por estructura (no tienen título ni son páginas)
+                if (data && !data.titulo && (data.events || data.pages || data.version)) {
+                  return null; // Excluir archivos de configuración
+                }
                 // Validar que la página tenga un título válido (no vacío ni "Sin título")
                 const titulo = data?.titulo || '';
                 if (!titulo || titulo.trim() === '' || titulo.trim() === 'Sin título') {
-                  console.warn(`Página sin título válido ignorada: ${file}`, data);
+                  // No mostrar warning para archivos de configuración conocidos
                   return null; // Excluir páginas sin título válido
                 }
                 return { 
@@ -547,10 +583,15 @@ export default function LocalEditor({ onShowConfig }) {
         // Filtrar valores nulos (notas rápidas excluidas, páginas sin título, errores)
         const paginasValidas = paginasData.filter(p => p !== null && p !== undefined);
 
+        // Limpiar timeout anterior si existe
+        if (rebuildIndexTimeoutRef.current) {
+          clearTimeout(rebuildIndexTimeoutRef.current);
+        }
+
         // Reconstruir índice solo si no existe o si el número de páginas cambió significativamente
         // Esto evita reconstrucciones innecesarias
         // Usar setTimeout para evitar actualizaciones durante el renderizado
-        setTimeout(async () => {
+        rebuildIndexTimeoutRef.current = setTimeout(async () => {
           try {
             const currentIndex = await PageIndexService.getIndex();
             const indexPageCount = currentIndex.pages?.length || 0;
@@ -564,7 +605,8 @@ export default function LocalEditor({ onShowConfig }) {
             // Si hay error obteniendo el índice, reconstruirlo
             await PageIndexService.rebuildIndex();
           }
-        }, 0);
+          rebuildIndexTimeoutRef.current = null;
+        }, 100); // Aumentar a 100ms para dar tiempo al renderizado
 
         // Ordenar por fecha de creación descendente, pero mantener orden estable
         // Usar ID como segundo criterio para orden estable
@@ -579,7 +621,9 @@ export default function LocalEditor({ onShowConfig }) {
         });
 
         // Solo actualizar si realmente cambió el número de páginas o los IDs
-        setPaginas(prevPaginas => {
+        // Usar startTransition para marcar como actualización de baja prioridad
+        startTransition(() => {
+          setPaginas(prevPaginas => {
           // Si no hay páginas previas, actualizar directamente
           if (prevPaginas.length === 0 && paginasValidas.length > 0) {
             return paginasValidas;
@@ -609,9 +653,14 @@ export default function LocalEditor({ onShowConfig }) {
           // Si son los mismos IDs, mantener el estado anterior para evitar re-renders innecesarios
           // Esto previene que el sidebar se mueva constantemente
           return prevPaginas;
+          });
         });
       } catch (error) {
         // Error cargando páginas
+        console.error('Error cargando páginas:', error);
+      } finally {
+        // Liberar el flag de carga
+        cargandoPaginasRef.current = false;
       }
     };
 
@@ -619,15 +668,27 @@ export default function LocalEditor({ onShowConfig }) {
     
     // Escuchar evento de reordenamiento para recargar páginas
     const handleReordenar = () => {
-      cargarPaginas();
+      if (!cargandoPaginasRef.current) {
+        cargarPaginas();
+      }
     };
     window.addEventListener('paginasReordenadas', handleReordenar);
     
     // Recargar cada 30 segundos para detectar cambios (reducido de 5 a 30 para evitar movimiento constante)
-    const interval = setInterval(cargarPaginas, 30000);
+    const interval = setInterval(() => {
+      if (!cargandoPaginasRef.current) {
+        cargarPaginas();
+      }
+    }, 30000);
+    
     return () => {
       clearInterval(interval);
       window.removeEventListener('paginasReordenadas', handleReordenar);
+      // Limpiar timeout de rebuildIndex si existe
+      if (rebuildIndexTimeoutRef.current) {
+        clearTimeout(rebuildIndexTimeoutRef.current);
+        rebuildIndexTimeoutRef.current = null;
+      }
     };
   }, [handleVersion]); // Recargar cuando cambia handleVersion
 
@@ -643,9 +704,12 @@ export default function LocalEditor({ onShowConfig }) {
     // También verificar periódicamente (cada 2 segundos) por si cambió
     const interval = setInterval(() => {
       const hasHandle = !!LocalStorageService.baseDirectoryHandle;
-      if (hasHandle) {
-        // Si hay handle y no lo teníamos antes, forzar recarga
+      if (hasHandle && !lastHandleRef.current) {
+        // Solo actualizar si cambió de false a true
+        lastHandleRef.current = true;
         setHandleVersion(prev => prev + 1);
+      } else if (!hasHandle && lastHandleRef.current) {
+        lastHandleRef.current = false;
       }
     }, 2000);
     
@@ -655,9 +719,46 @@ export default function LocalEditor({ onShowConfig }) {
     };
   }, []);
 
+  // Ref para evitar cargas duplicadas de la misma página
+  const cargandoPaginaRef = useRef(null);
+  const cargandoContenidoRef = useRef(false); // Flag para evitar actualizaciones durante carga
+  const handleUpdateRef = useRef(null); // Ref para el handler de update del editor
+  const insertandoContenidoRef = useRef(false); // Flag para evitar actualizaciones durante inserción programática
+  const updateTimeoutRef = useRef(null); // Ref para el timeout del debounce de update
+  
+  // Escuchar eventos de inserción programática desde comandos slash
+  useEffect(() => {
+    const handleInserting = () => {
+      insertandoContenidoRef.current = true;
+    };
+    
+    const handleFinishedInserting = () => {
+      // Esperar un poco más antes de permitir actualizaciones
+      setTimeout(() => {
+        insertandoContenidoRef.current = false;
+      }, 200);
+    };
+    
+    window.addEventListener('inserting-programmatic-content', handleInserting);
+    window.addEventListener('finished-inserting-programmatic-content', handleFinishedInserting);
+    
+    return () => {
+      window.removeEventListener('inserting-programmatic-content', handleInserting);
+      window.removeEventListener('finished-inserting-programmatic-content', handleFinishedInserting);
+    };
+  }, []);
+  
   // Cargar contenido de página seleccionada
   useEffect(() => {
     if (!editor || !paginaSeleccionada) return;
+    
+    // Evitar cargar la misma página múltiples veces
+    if (cargandoPaginaRef.current === paginaSeleccionada) {
+      return;
+    }
+    
+    cargandoPaginaRef.current = paginaSeleccionada;
+    cargandoContenidoRef.current = true; // Marcar que estamos cargando
     
     // Actualizar contexto de página actual
     PageContext.setCurrentPageId(paginaSeleccionada);
@@ -669,93 +770,183 @@ export default function LocalEditor({ onShowConfig }) {
         // Verificar que no sea una nota rápida
         if (data && (data.id?.startsWith('quick-note-') || paginaSeleccionada.startsWith('quick-note-'))) {
           console.warn('Intento de cargar una nota rápida como página');
+          cargandoPaginaRef.current = null;
+          cargandoContenidoRef.current = false;
           return; // No cargar notas rápidas como páginas
         }
         
         if (data && data.contenido) {
-          setTitulo(data.titulo || "");
-          setTituloPaginaActual(data.titulo || "");
-          
-          // Cargar tags de la página
-          setPageTags(data.tags || []);
+          // Agrupar todas las actualizaciones de estado en un startTransition para evitar múltiples re-renders
+          startTransition(() => {
+            setTitulo(data.titulo || "");
+            setTituloPaginaActual(data.titulo || "");
+            setPageTags(data.tags || []);
+          });
           
           // Convertir referencias de archivo a URLs blob antes de cargar
           const contenidoConBlobs = await convertirReferenciasABlobs(data.contenido);
-          editor.commands.setContent(contenidoConBlobs);
           
-          // Guardar el contenido procesado como referencia
-          ultimoContenidoRef.current = JSON.stringify(contenidoConBlobs);
+          // Desactivar temporalmente el listener de update durante la carga
+          const contenidoSerializado = JSON.stringify(contenidoConBlobs);
+          ultimoContenidoRef.current = contenidoSerializado;
+          
+          // Deshabilitar el editor temporalmente para evitar eventos durante setContent
+          const wasEditable = editor.isEditable;
+          editor.setEditable(false);
+          editor.commands.setContent(contenidoConBlobs, false);
+          editor.setEditable(wasEditable);
+          
+          // Esperar múltiples frames para que el contenido se establezca completamente
+          await new Promise(resolve => requestAnimationFrame(resolve));
+          await new Promise(resolve => requestAnimationFrame(resolve));
+          await new Promise(resolve => setTimeout(resolve, 100));
         } else {
           // Si no hay datos, inicializar valores por defecto
+          startTransition(() => {
+            setTitulo("");
+            setTituloPaginaActual("");
+            setPageTags([]);
+          });
+          
+          const contenidoVacio = { type: "doc", content: [{ type: "paragraph" }] };
+          ultimoContenidoRef.current = JSON.stringify(contenidoVacio);
+          
+          const wasEditable = editor.isEditable;
+          editor.setEditable(false);
+          editor.commands.setContent(contenidoVacio, false);
+          editor.setEditable(wasEditable);
+          
+          await new Promise(resolve => requestAnimationFrame(resolve));
+          await new Promise(resolve => requestAnimationFrame(resolve));
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        
+        // Marcar que terminamos de cargar ANTES de las actualizaciones de estado
+        cargandoContenidoRef.current = false;
+        
+        // Usar setTimeout para diferir las actualizaciones de estado y la verificación de scripts
+        setTimeout(() => {
+          setHayCambiosSinGuardar(false);
+          // Verificar scripts SQL asociados a esta página (solo una vez, después de que todo esté estable)
+          // Usar el ref en lugar de la función directa para evitar dependencias
+          if (checkPageSQLScriptsRef.current) {
+            checkPageSQLScriptsRef.current(paginaSeleccionada);
+          }
+        }, 150);
+        
+        // Limpiar el ref después de cargar
+        cargandoPaginaRef.current = null;
+      } catch (error) {
+        // En caso de error, inicializar valores por defecto
+        startTransition(() => {
           setTitulo("");
           setTituloPaginaActual("");
           setPageTags([]);
-          editor.commands.setContent({ type: "doc", content: [{ type: "paragraph" }] });
-          ultimoContenidoRef.current = JSON.stringify({ type: "doc", content: [{ type: "paragraph" }] });
-        }
-        setHayCambiosSinGuardar(false);
+        });
         
-        // Verificar scripts SQL asociados a esta página
-        checkPageSQLScripts(paginaSeleccionada);
-      } catch (error) {
-        // En caso de error, inicializar valores por defecto
-        setTitulo("");
-        setTituloPaginaActual("");
-        setPageTags([]);
-        editor.commands.setContent({ type: "doc", content: [{ type: "paragraph" }] });
-        ultimoContenidoRef.current = JSON.stringify({ type: "doc", content: [{ type: "paragraph" }] });
-        setPageSQLScriptsCount(0);
+        const contenidoVacio = { type: "doc", content: [{ type: "paragraph" }] };
+        ultimoContenidoRef.current = JSON.stringify(contenidoVacio);
+        
+        const wasEditable = editor.isEditable;
+        editor.setEditable(false);
+        editor.commands.setContent(contenidoVacio, false);
+        editor.setEditable(wasEditable);
+        
+        setTimeout(() => {
+          setPageSQLScriptsCount(0);
+        }, 100);
+        
+        cargandoPaginaRef.current = null;
+        cargandoContenidoRef.current = false;
       }
     };
 
     cargarContenido();
 
     // Detectar cambios en el editor
+    // Actualizar el ref con el handler
+    handleUpdateRef.current = () => {
+      // Ignorar actualizaciones durante la carga inicial o inserción programática
+      if (cargandoContenidoRef.current || insertandoContenidoRef.current) {
+        return;
+      }
+      
+      // Limpiar timeout anterior si existe
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+      }
+      
+      // Usar un debounce más agresivo para evitar bucles infinitos
+      updateTimeoutRef.current = setTimeout(() => {
+        if (cargandoContenidoRef.current || insertandoContenidoRef.current) {
+          return;
+        }
+        
+        const contenidoActual = JSON.stringify(editor.getJSON());
+        
+        // Solo actualizar si el contenido realmente cambió de manera significativa
+        if (ultimoContenidoRef.current === null) {
+          ultimoContenidoRef.current = contenidoActual;
+          setHayCambiosSinGuardar(false);
+        } else if (contenidoActual !== ultimoContenidoRef.current) {
+          // Verificar que el cambio sea significativo (más de solo espacios o formato)
+          const contenidoAnterior = ultimoContenidoRef.current;
+          const contenidoAnteriorLimpio = contenidoAnterior.replace(/\s+/g, ' ').trim();
+          const contenidoActualLimpio = contenidoActual.replace(/\s+/g, ' ').trim();
+          
+          // Solo actualizar si hay un cambio real en el contenido
+          if (contenidoAnteriorLimpio !== contenidoActualLimpio) {
+            setHayCambiosSinGuardar(true);
+          }
+        }
+        
+        updateTimeoutRef.current = null;
+      }, 300); // Debounce de 300ms para evitar actualizaciones muy rápidas
+    };
+
     const handleUpdate = () => {
-      const contenidoActual = JSON.stringify(editor.getJSON());
-      if (ultimoContenidoRef.current === null) {
-        ultimoContenidoRef.current = contenidoActual;
-        setHayCambiosSinGuardar(false);
-      } else if (contenidoActual !== ultimoContenidoRef.current) {
-        setHayCambiosSinGuardar(true);
+      if (handleUpdateRef.current) {
+        handleUpdateRef.current();
       }
     };
 
     editor.on('update', handleUpdate);
 
-    // Autoguardado cada 30 segundos
-    intervaloRef.current = setInterval(() => {
-      if (!editor) return;
-      const json = editor.getJSON();
-      const contenidoActual = JSON.stringify(json);
-      
-      // Solo guardar si hay cambios
-      if (ultimoContenidoRef.current !== contenidoActual) {
-        guardarContenido(json, true).then((guardado) => {
-          if (guardado) {
-            ultimoContenidoRef.current = contenidoActual;
-            setHayCambiosSinGuardar(false);
-          }
-        });
-      }
-    }, 30000);
+    // Actualizar ref con la función actual (para el beforeunload)
+    guardarContenidoRef.current = guardarContenido;
 
     return () => {
       editor.off('update', handleUpdate);
-      if (intervaloRef.current) {
-        clearInterval(intervaloRef.current);
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+        updateTimeoutRef.current = null;
       }
     };
-  }, [editor, paginaSeleccionada, guardarContenido]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor, paginaSeleccionada]); // No incluir guardarContenido para evitar bucles infinitos
+
+  // Refs para beforeunload (evitar dependencias que cambien)
+  const hayCambiosSinGuardarRef = useRef(false);
+  const guardandoRef = useRef(false);
+  
+  // Mantener refs actualizados
+  useEffect(() => {
+    hayCambiosSinGuardarRef.current = hayCambiosSinGuardar;
+  }, [hayCambiosSinGuardar]);
+  
+  useEffect(() => {
+    guardandoRef.current = guardando;
+  }, [guardando]);
 
   // Prevenir cierre de página si hay cambios sin guardar
   useEffect(() => {
     const handleBeforeUnload = async (e) => {
-      if (hayCambiosSinGuardar && !guardando) {
+      // Usar refs para evitar dependencias
+      if (hayCambiosSinGuardarRef.current && !guardandoRef.current) {
         // Intentar guardar antes de cerrar
-        if (editor && paginaSeleccionada) {
+        if (editor && paginaSeleccionada && guardarContenidoRef.current) {
           const json = editor.getJSON();
-          await guardarContenido(json, false); // No mostrar toast al cerrar
+          await guardarContenidoRef.current(json, false); // No mostrar toast al cerrar
         }
         
         // Mostrar advertencia del navegador
@@ -769,11 +960,61 @@ export default function LocalEditor({ onShowConfig }) {
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [hayCambiosSinGuardar, guardando, editor, paginaSeleccionada, guardarContenido]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Sin dependencias - usamos refs
+
+  // Ref para el handler de guardar con teclado
+  const handleGuardarRef = useRef(null);
+  
+  // Mantener el ref actualizado sin dependencias que cambien
+  useEffect(() => {
+    handleGuardarRef.current = async () => {
+      // Usar refs para acceder a valores actuales sin dependencias
+      if (!editor || !paginaSeleccionada) return;
+      
+      // Verificar estado actual usando una función
+      const currentGuardando = guardando;
+      const currentHayCambios = hayCambiosSinGuardar;
+      
+      if (currentGuardando || autoguardandoRef.current || !currentHayCambios) {
+        return;
+      }
+      
+      const json = editor.getJSON();
+      setGuardando(true);
+      try {
+        if (guardarContenidoRef.current) {
+          const guardado = await guardarContenidoRef.current(json, true);
+          if (guardado) {
+            setToast({
+              message: 'Cambios guardados',
+              type: 'success'
+            });
+          }
+        }
+      } catch (error) {
+        setToast({
+          message: 'Error al guardar',
+          type: 'error'
+        });
+      } finally {
+        setGuardando(false);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Sin dependencias - usamos refs y valores actuales
 
   // Atajos de teclado globales
   useEffect(() => {
-    const handleKeyDown = (e) => {
+    const handleKeyDown = async (e) => {
+      // Ctrl+S (Windows/Linux) o Cmd+S (Mac) - Guardar
+      if ((e.ctrlKey || e.metaKey) && e.key === 's' && !e.shiftKey) {
+        e.preventDefault();
+        if (handleGuardarRef.current) {
+          await handleGuardarRef.current();
+        }
+        return;
+      }
       // Ctrl+K (Windows/Linux) o Cmd+K (Mac) - Búsqueda global
       if ((e.ctrlKey || e.metaKey) && e.key === 'k' && !e.shiftKey) {
         e.preventDefault();
@@ -892,13 +1133,16 @@ export default function LocalEditor({ onShowConfig }) {
   useEffect(() => {
     const handleOpenPageSQLScripts = (event) => {
       const { pageId } = event.detail;
-      if (pageId) {
-        setPaginaSeleccionada(pageId);
+      if (pageId && pageId !== paginaSeleccionada) {
+        // Solo actualizar si es una página diferente para evitar bucles
         seleccionarPagina(pageId);
         // Esperar un momento para que la página se cargue y luego abrir el modal
         setTimeout(() => {
           setShowPageSQLScripts(true);
         }, 300);
+      } else if (pageId === paginaSeleccionada) {
+        // Si ya es la página actual, solo abrir el modal
+        setShowPageSQLScripts(true);
       }
     };
 
@@ -906,7 +1150,8 @@ export default function LocalEditor({ onShowConfig }) {
     return () => {
       window.removeEventListener('open-page-sql-scripts', handleOpenPageSQLScripts);
     };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // No incluir paginaSeleccionada para evitar bucles
 
   // Manejar inserción de plantilla desde slash command
   const handleTemplateInsert = (template) => {
@@ -991,11 +1236,19 @@ export default function LocalEditor({ onShowConfig }) {
   };
 
   // Verificar scripts SQL asociados a una página
-  const checkPageSQLScripts = async (pageId) => {
+  const checkPageSQLScripts = useCallback(async (pageId) => {
     if (!pageId) {
       setPageSQLScriptsCount(0);
       return;
     }
+    
+    // Evitar verificaciones duplicadas simultáneas para la misma página
+    if (checkingSQLScriptsRef.current.has(pageId)) {
+      return;
+    }
+    
+    checkingSQLScriptsRef.current.add(pageId);
+    
     try {
       const result = await SQLFileService.getFilesByPage(pageId);
       const count = result.files?.length || 0;
@@ -1004,18 +1257,25 @@ export default function LocalEditor({ onShowConfig }) {
     } catch (error) {
       console.error('Error verificando scripts SQL:', error);
       setPageSQLScriptsCount(0);
+    } finally {
+      // Remover después de un pequeño delay para evitar llamadas muy rápidas
+      setTimeout(() => {
+        checkingSQLScriptsRef.current.delete(pageId);
+      }, 100);
     }
-  };
+  }, []); // No tiene dependencias, solo usa refs y setState
 
-  const seleccionarPagina = async (paginaId) => {
+  const seleccionarPagina = useCallback(async (paginaId) => {
     if (!paginaId || !editor) return;
     setPaginaSeleccionada(paginaId);
     PageContext.setCurrentPageId(paginaId);
     setSelectorAbierto(false);
     
-    // Verificar si hay scripts SQL asociados a esta página
-    checkPageSQLScripts(paginaId);
-  };
+    // Verificar si hay scripts SQL asociados a esta página usando el ref
+    if (checkPageSQLScriptsRef.current) {
+      checkPageSQLScriptsRef.current(paginaId);
+    }
+  }, [editor]); // Solo depende de editor
 
   // Función para obtener el título completo de una página (con emoji si existe)
   const obtenerTituloCompletoPagina = (pagina) => {
@@ -1179,6 +1439,19 @@ export default function LocalEditor({ onShowConfig }) {
     setShowEmojiPicker(false);
   };
 
+  // Ref para seleccionarPagina para evitar dependencias
+  const seleccionarPaginaRef = useRef(null);
+  
+  // Mantener el ref actualizado con seleccionarPagina
+  useEffect(() => {
+    seleccionarPaginaRef.current = seleccionarPagina;
+  }, [seleccionarPagina]);
+  
+  // Mantener el ref de checkPageSQLScripts actualizado
+  useEffect(() => {
+    checkPageSQLScriptsRef.current = checkPageSQLScripts;
+  }, [checkPageSQLScripts]);
+  
   // Configurar manejo de clics en enlaces internos
   useEffect(() => {
     if (!editor) return;
@@ -1195,7 +1468,9 @@ export default function LocalEditor({ onShowConfig }) {
           event.preventDefault();
           event.stopPropagation();
           const paginaId = href.replace('page:', '');
-          seleccionarPagina(paginaId);
+          if (seleccionarPaginaRef.current) {
+            seleccionarPaginaRef.current(paginaId);
+          }
         }
       }
     };
@@ -1204,7 +1479,8 @@ export default function LocalEditor({ onShowConfig }) {
     return () => {
       editorElement.removeEventListener('click', handleClick);
     };
-  }, [editor, seleccionarPagina]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor]); // No incluir seleccionarPagina para evitar bucles
 
   // Extraer URLs de imágenes y archivos del contenido
   const extraerArchivosDelContenido = (contenido) => {
@@ -2302,7 +2578,71 @@ export default function LocalEditor({ onShowConfig }) {
         />
       )}
 
-      {/* Indicador de guardando */}
+      {/* Botón de guardar flotante - Siempre visible en la parte inferior derecha */}
+      {paginaSeleccionada && (
+        <div className="fixed bottom-4 right-4 z-50">
+          <button
+            onClick={async () => {
+              if (!editor || guardando || autoguardandoRef.current || !hayCambiosSinGuardar) return;
+              
+              const json = editor.getJSON();
+              setGuardando(true);
+              try {
+                const guardado = await guardarContenido(json, true);
+                if (guardado) {
+                  setToast({
+                    message: 'Cambios guardados',
+                    type: 'success'
+                  });
+                }
+              } catch (error) {
+                setToast({
+                  message: 'Error al guardar',
+                  type: 'error'
+                });
+              } finally {
+                setGuardando(false);
+              }
+            }}
+            disabled={guardando || autoguardandoRef.current || !hayCambiosSinGuardar}
+            className={`
+              px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 text-sm font-medium transition-all
+              ${guardando || autoguardandoRef.current
+                ? 'bg-gray-400 text-white cursor-not-allowed'
+                : hayCambiosSinGuardar
+                ? 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-xl'
+                : 'bg-green-500 text-white cursor-default'
+              }
+            `}
+            title={
+              guardando || autoguardandoRef.current
+                ? 'Guardando...'
+                : hayCambiosSinGuardar
+                ? 'Guardar cambios (Ctrl+S)'
+                : 'Todo guardado'
+            }
+          >
+            {guardando || autoguardandoRef.current ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                <span>Guardando...</span>
+              </>
+            ) : hayCambiosSinGuardar ? (
+              <>
+                <Save className="w-4 h-4" />
+                <span>Guardar</span>
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4" />
+                <span>Guardado</span>
+              </>
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* Indicador de guardando (mantener para compatibilidad) */}
       {guardando && (
         <div className="fixed bottom-4 left-4 z-50 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 text-sm">
           <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>

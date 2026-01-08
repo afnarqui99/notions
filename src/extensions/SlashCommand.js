@@ -101,8 +101,18 @@ export const SlashCommand = Extension.create({
           // Salir del bloque actual si es necesario
           exitBlock();
           
+          // Marcar que estamos insertando contenido programáticamente
+          window.dispatchEvent(new CustomEvent('inserting-programmatic-content', { 
+            detail: { type: props.label || 'command' } 
+          }));
+          
           // Ejecutar el comando original
           props.command({ editor, range });
+          
+          // Marcar que terminamos de insertar después de un breve delay
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('finished-inserting-programmatic-content'));
+          }, 150);
         },
         items: () => [
           {
@@ -743,6 +753,22 @@ export const SlashCommand = Extension.create({
                 .deleteRange(range)
                 .setNode('codeBlock', { language: 'json' })
                 .run(),
+          },
+          {
+            icon: '📝',
+            label: 'Markdown',
+            description: 'Editor de Markdown con vista previa y exportación a PDF',
+            keywords: ['markdown', 'md', 'preview', 'pdf', 'exportar'],
+            command: ({ editor, range }) => {
+              editor.chain().focus().deleteRange(range).run();
+              editor.chain().focus().insertContent({
+                type: 'markdown',
+                attrs: {
+                  content: '# Título\n\nEscribe tu markdown aquí...',
+                  viewMode: 'split',
+                },
+              }).run();
+            },
           },
           {
             icon: '🖼️',
