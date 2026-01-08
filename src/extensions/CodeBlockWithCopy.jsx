@@ -1,6 +1,6 @@
 import { NodeViewWrapper, NodeViewContent } from '@tiptap/react';
 import { useState, useRef, useEffect } from 'react';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, Code2 } from 'lucide-react';
 
 export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
   const [copied, setCopied] = useState(false);
@@ -125,6 +125,60 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
     }
   };
 
+  const handleFormat = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (!editor || language !== 'json') return;
+
+    const currentText = getCodeText();
+    if (!currentText || !currentText.trim()) return;
+
+    // Función para formatear JSON
+    let formatted;
+    try {
+      const parsed = JSON.parse(currentText);
+      formatted = JSON.stringify(parsed, null, 2);
+    } catch (error) {
+      // Si no es JSON válido, mostrar un mensaje o no hacer nada
+      alert('El contenido no es un JSON válido');
+      return;
+    }
+
+    // Si el formato no cambió, no hacer nada
+    if (formatted === currentText || formatted === currentText.trim()) {
+      return;
+    }
+
+    // Encontrar la posición del nodo en el editor
+    const { state } = editor;
+    const { doc } = state;
+    
+    // Buscar el nodo codeBlock actual
+    let targetPos = null;
+    doc.descendants((node, pos) => {
+      if (node.type.name === 'codeBlock' && 
+          node.attrs.language === 'json' &&
+          node.textContent === currentText) {
+        targetPos = pos;
+        return false;
+      }
+    });
+
+    if (targetPos !== null) {
+      // Actualizar el contenido del nodo
+      const tr = state.tr;
+      const node = doc.nodeAt(targetPos);
+      if (node) {
+        const from = targetPos + 1;
+        const to = from + node.content.size;
+        tr.replaceWith(from, to, state.schema.text(formatted));
+        tr.setMeta('jsonFormatter', true);
+        editor.view.dispatch(tr);
+      }
+    }
+  };
+
   // Actualizar referencia cuando el componente se monta
   useEffect(() => {
     // Buscar el elemento code dentro del NodeViewContent
@@ -170,32 +224,47 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
           }}
         />
         {shouldShowButton && (
-          <button
-            onClick={handleCopy}
-            onMouseDown={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-            }}
-            className="absolute top-2 right-2 p-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors flex items-center gap-1 text-xs z-[110]"
-            style={{ 
-              position: 'absolute',
-              zIndex: isInModal ? 10002 : 110 // Mayor z-index cuando está en el Portal
-            }}
-            title="Copiar código"
-            type="button"
-          >
-            {copied ? (
-              <>
-                <Check className="w-3 h-3" />
-                <span>Copiado</span>
-              </>
-            ) : (
-              <>
-                <Copy className="w-3 h-3" />
-                <span>Copiar</span>
-              </>
+          <div className="absolute top-2 right-2 flex gap-2" style={{ 
+            zIndex: isInModal ? 10002 : 110 // Mayor z-index cuando está en el Portal
+          }}>
+            {language === 'json' && (
+              <button
+                onClick={handleFormat}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                className="p-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors flex items-center gap-1 text-xs"
+                title="Formatear JSON"
+                type="button"
+              >
+                <Code2 className="w-3 h-3" />
+                <span>Formatear</span>
+              </button>
             )}
-          </button>
+            <button
+              onClick={handleCopy}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+              className="p-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors flex items-center gap-1 text-xs"
+              title="Copiar código"
+              type="button"
+            >
+              {copied ? (
+                <>
+                  <Check className="w-3 h-3" />
+                  <span>Copiado</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3 h-3" />
+                  <span>Copiar</span>
+                </>
+              )}
+            </button>
+          </div>
         )}
       </div>
     </NodeViewWrapper>
