@@ -1,0 +1,107 @@
+<div>
+  <h2>Ejemplo 5: Formularios con Template-driven Forms</h2>
+  
+  <div style="background: #e8f5e9; padding: 15px; border-radius: 5px; margin: 15px 0;">
+    <h3>Formulario de Registro</h3>
+    
+    <form (ngSubmit)="onSubmit()" #miFormulario="ngForm" *ngIf="!enviado">
+      <div style="margin-bottom: 15px;">
+        <label style="display: block; margin-bottom: 5px;"><strong>Nombre:</strong></label>
+        <input 
+          type="text" 
+          [(ngModel)]="formulario.nombre" 
+          name="nombre"
+          required
+          style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+      </div>
+
+      <div style="margin-bottom: 15px;">
+        <label style="display: block; margin-bottom: 5px;"><strong>Email:</strong></label>
+        <input 
+          type="email" 
+          [(ngModel)]="formulario.email" 
+          name="email"
+          required
+          style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+      </div>
+
+      <div style="margin-bottom: 15px;">
+        <label style="display: block; margin-bottom: 5px;"><strong>Edad:</strong></label>
+        <input 
+          type="number" 
+          [(ngModel)]="formulario.edad" 
+          name="edad"
+          min="18"
+          max="100"
+          style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+      </div>
+
+      <div style="margin-bottom: 15px;">
+        <label style="display: block; margin-bottom: 5px;"><strong>Género:</strong></label>
+        <select 
+          [(ngModel)]="formulario.genero" 
+          name="genero"
+          style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+          <option value="">Selecciona...</option>
+          <option value="masculino">Masculino</option>
+          <option value="femenino">Femenino</option>
+          <option value="otro">Otro</option>
+        </select>
+      </div>
+
+      <div style="margin-bottom: 15px;">
+        <label style="display: flex; align-items: center; gap: 8px;">
+          <input 
+            type="checkbox" 
+            [(ngModel)]="formulario.aceptaTerminos" 
+            name="aceptaTerminos"
+            required>
+          <span>Acepto los términos y condiciones</span>
+        </label>
+      </div>
+
+      <div style="display: flex; gap: 10px;">
+        <button 
+          type="submit" 
+          class="btn btn-success"
+          [disabled]="!miFormulario.valid">
+          Enviar Formulario
+        </button>
+        <button 
+          type="button" 
+          class="btn btn-primary"
+          (click)="resetear()">
+          Limpiar
+        </button>
+      </div>
+
+      <div style="margin-top: 15px; padding: 10px; background: #f5f5f5; border-radius: 4px;">
+        <strong>Estado del formulario:</strong><br>
+        Válido: {{ miFormulario.valid ? '✅' : '❌' }}<br>
+        Enviado: {{ miFormulario.submitted ? '✅' : '❌' }}
+      </div>
+    </form>
+
+    <div *ngIf="enviado" style="background: #c8e6c9; padding: 20px; border-radius: 5px;">
+      <h3>✅ Formulario Enviado Correctamente</h3>
+      <div style="margin-top: 15px;">
+        <p><strong>Datos enviados:</strong></p>
+        <pre style="background: white; padding: 10px; border-radius: 4px; overflow-x: auto;">{{ datosEnviados | json }}</pre>
+      </div>
+      <button class="btn btn-primary" (click)="resetear()" style="margin-top: 15px;">Enviar Otro Formulario</button>
+    </div>
+  </div>
+
+  <div style="background: #f3e5f5; padding: 15px; border-radius: 5px; margin: 15px 0;">
+    <h3>Conceptos Aprendidos:</h3>
+    <ul>
+      <li><strong>Template-driven Forms:</strong> Formularios basados en plantillas</li>
+      <li><strong>ngForm:</strong> Directiva que crea un FormGroup</li>
+      <li><strong>ngSubmit:</strong> Evento que se dispara al enviar el formulario</li>
+      <li><strong>Validación:</strong> Atributos HTML5 como required, min, max</li>
+      <li><strong>Estado del formulario:</strong> .valid, .submitted, .pristine, .dirty</li>
+      <li><strong>JSON Pipe:</strong> | json para mostrar objetos formateados</li>
+    </ul>
+  </div>
+</div>
+

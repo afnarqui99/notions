@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>1. CSS Básico - Estilos Básicos</title>
+    <style>
+        /* Estilos básicos */
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        h1 {
+            color: #333;
+            border-bottom: 2px solid #333;
+            padding-bottom: 10px;
+        }
+        
+        h2 {
+            color: #666;
+            margin-top: 30px;
+        }
+        
+        /* Colores */
+        .color-ejemplo {
+            padding: 10px;
+            margin: 10px 0;
+        }
+        
+        .color-nombre {
+            background-color: blue;
+            color: white;
+        }
+        
+        .color-hex {
+            background-color: #ff0000;
+            color: white;
+        }
+        
+        .color-rgb {
+            background-color: rgb(0, 255, 0);
+        }
+        
+        .color-rgba {
+            background-color: rgba(0, 0, 255, 0.5);
+        }
+        
+        /* Tamaños y unidades */
+        .unidad-px {
+            width: 200px;
+            height: 50px;
+            background-color: #ccc;
+        }
+        
+        .unidad-em {
+            font-size: 1.5em; /* 1.5 veces el tamaño base */
+        }
+        
+        .unidad-rem {
+            font-size: 1.2rem; /* Relativo al tamaño del root */
+        }
+        
+        .unidad-porcentaje {
+            width: 50%;
+            background-color: #ddd;
+            padding: 10px;
+        }
+        
+        /* Tipografía */
+        .fuente-serif {
+            font-family: "Times New Roman", serif;
+        }
+        
+        .fuente-sans-serif {
+            font-family: Arial, sans-serif;
+        }
+        
+        .fuente-monospace {
+            font-family: "Courier New", monospace;
+        }
+        
+        .tamano-grande {
+            font-size: 24px;
+        }
+        
+        .tamano-pequeno {
+            font-size: 12px;
+        }
+        
+        .peso-normal {
+            font-weight: normal;
+        }
+        
+        .peso-bold {
+            font-weight: bold;
+        }
+        
+        .estilo-normal {
+            font-style: normal;
+        }
+        
+        .estilo-italic {
+            font-style: italic;
+        }
+        
+        /* Texto */
+        .texto-centrado {
+            text-align: center;
+        }
+        
+        .texto-derecha {
+            text-align: right;
+        }
+        
+        .texto-justificado {
+            text-align: justify;
+        }
+        
+        .texto-subrayado {
+            text-decoration: underline;
+        }
+        
+        .texto-tachado {
+            text-decoration: line-through;
+        }
+        
+        .texto-sin-decoracion {
+            text-decoration: none;
+        }
+        
+        .texto-mayusculas {
+            text-transform: uppercase;
+        }
+        
+        .texto-minusculas {
+            text-transform: lowercase;
+        }
+        
+        .texto-capitalizado {
+            text-transform: capitalize;
+        }
+        
+        /* Espaciado */
+        .margen {
+            margin: 20px;
+            background-color: #e0e0e0;
+            padding: 10px;
+        }
+        
+        .padding {
+            padding: 20px;
+            background-color: #d0d0d0;
+        }
+        
+        /* Bordes */
+        .borde-solido {
+            border: 2px solid #000;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        
+        .borde-punteado {
+            border: 2px dotted #000;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        
+        .borde-redondeado {
+            border: 2px solid #000;
+            border-radius: 10px;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        
+        /* Fondos */
+        .fondo-color {
+            background-color: #ffeb3b;
+            padding: 10px;
+        }
+        
+        .fondo-imagen {
+            background-image: url('https://via.placeholder.com/200x100');
+            background-size: cover;
+            height: 100px;
+            color: white;
+            padding: 10px;
+        }
+        
+        /* Display */
+        .display-block {
+            display: block;
+            background-color: #ccc;
+            padding: 10px;
+            margin: 5px 0;
+        }
+        
+        .display-inline {
+            display: inline;
+            background-color: #ccc;
+            padding: 10px;
+        }
+        
+        .display-inline-block {
+            display: inline-block;
+            background-color: #ccc;
+            padding: 10px;
+            width: 200px;
+        }
+    </style>
+</head>
+<body>
+    <h1>CSS Básico - Estilos Básicos</h1>
+    
+    <h2>Colores</h2>
+    <div class="color-ejemplo color-nombre">Color por nombre: blue</div>
+    <div class="color-ejemplo color-hex">Color hexadecimal: #ff0000</div>
+    <div class="color-ejemplo color-rgb">Color RGB: rgb(0, 255, 0)</div>
+    <div class="color-ejemplo color-rgba">Color RGBA con transparencia: rgba(0, 0, 255, 0.5)</div>
+    
+    <h2>Tamaños y Unidades</h2>
+    <div class="unidad-px">Ancho fijo: 200px</div>
+    <p class="unidad-em">Tamaño relativo: 1.5em</p>
+    <p class="unidad-rem">Tamaño rem: 1.2rem</p>
+    <div class="unidad-porcentaje">Ancho porcentual: 50%</div>
+    
+    <h2>Tipografía</h2>
+    <p class="fuente-serif">Fuente serif (Times New Roman)</p>
+    <p class="fuente-sans-serif">Fuente sans-serif (Arial)</p>
+    <p class="fuente-monospace">Fuente monospace (Courier New)</p>
+    <p class="tamano-grande">Tamaño grande: 24px</p>
+    <p class="tamano-pequeno">Tamaño pequeño: 12px</p>
+    <p class="peso-normal">Peso normal</p>
+    <p class="peso-bold">Peso bold (negrita)</p>
+    <p class="estilo-normal">Estilo normal</p>
+    <p class="estilo-italic">Estilo italic (cursiva)</p>
+    
+    <h2>Texto</h2>
+    <p class="texto-centrado">Texto centrado</p>
+    <p class="texto-derecha">Texto alineado a la derecha</p>
+    <p class="texto-justificado">Texto justificado. Este texto se distribuye uniformemente entre los márgenes izquierdo y derecho, creando un borde recto en ambos lados del párrafo.</p>
+    <p class="texto-subrayado">Texto subrayado</p>
+    <p class="texto-tachado">Texto tachado</p>
+    <p class="texto-sin-decoracion">Texto sin decoración</p>
+    <p class="texto-mayusculas">texto en mayúsculas</p>
+    <p class="texto-minusculas">TEXTO EN MINÚSCULAS</p>
+    <p class="texto-capitalizado">texto capitalizado</p>
+    
+    <h2>Espaciado</h2>
+    <div class="margen">Elemento con margen de 20px</div>
+    <div class="padding">Elemento con padding de 20px</div>
+    
+    <h2>Bordes</h2>
+    <div class="borde-solido">Borde sólido</div>
+    <div class="borde-punteado">Borde punteado</div>
+    <div class="borde-redondeado">Borde redondeado</div>
+    
+    <h2>Fondos</h2>
+    <div class="fondo-color">Fondo con color</div>
+    <div class="fondo-imagen">Fondo con imagen</div>
+    
+    <h2>Display</h2>
+    <div class="display-block">Display: block (ocupa todo el ancho)</div>
+    <span class="display-inline">Display: inline (solo el contenido)</span>
+    <span class="display-inline">Otro inline</span>
+    <div class="display-inline-block">Display: inline-block (ancho personalizable)</div>
+    <div class="display-inline-block">Otro inline-block</div>
+</body>
+</html>
+

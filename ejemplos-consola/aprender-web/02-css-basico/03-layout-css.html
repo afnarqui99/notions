@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3. CSS - Layout y Posicionamiento</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+        
+        /* Flexbox */
+        .flex-container {
+            display: flex;
+            background-color: #f0f0f0;
+            padding: 10px;
+            margin: 10px 0;
+            gap: 10px;
+        }
+        
+        .flex-item {
+            background-color: #4CAF50;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .flex-justify-start {
+            justify-content: flex-start;
+        }
+        
+        .flex-justify-center {
+            justify-content: center;
+        }
+        
+        .flex-justify-end {
+            justify-content: flex-end;
+        }
+        
+        .flex-justify-space-between {
+            justify-content: space-between;
+        }
+        
+        .flex-align-center {
+            align-items: center;
+            height: 100px;
+        }
+        
+        .flex-wrap {
+            flex-wrap: wrap;
+        }
+        
+        .flex-grow {
+            flex-grow: 1;
+        }
+        
+        /* Grid */
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            background-color: #f0f0f0;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        
+        .grid-item {
+            background-color: #2196F3;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .grid-span-2 {
+            grid-column: span 2;
+        }
+        
+        .grid-span-3 {
+            grid-column: span 3;
+        }
+        
+        /* Posicionamiento */
+        .static {
+            position: static;
+            background-color: #ffeb3b;
+            padding: 10px;
+        }
+        
+        .relative {
+            position: relative;
+            background-color: #ff9800;
+            padding: 10px;
+            top: 20px;
+            left: 20px;
+        }
+        
+        .absolute {
+            position: absolute;
+            background-color: #f44336;
+            color: white;
+            padding: 10px;
+            top: 10px;
+            right: 10px;
+        }
+        
+        .fixed {
+            position: fixed;
+            background-color: #9c27b0;
+            color: white;
+            padding: 10px;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+        
+        .sticky {
+            position: sticky;
+            background-color: #00bcd4;
+            color: white;
+            padding: 10px;
+            top: 0;
+            z-index: 100;
+        }
+        
+        /* Float */
+        .float-left {
+            float: left;
+            width: 200px;
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px;
+            margin-right: 10px;
+        }
+        
+        .float-right {
+            float: right;
+            width: 200px;
+            background-color: #2196F3;
+            color: white;
+            padding: 10px;
+            margin-left: 10px;
+        }
+        
+        .clearfix::after {
+            content: "";
+            display: table;
+            clear: both;
+        }
+        
+        /* Overflow */
+        .overflow-hidden {
+            width: 200px;
+            height: 100px;
+            overflow: hidden;
+            background-color: #e0e0e0;
+            border: 1px solid #000;
+        }
+        
+        .overflow-scroll {
+            width: 200px;
+            height: 100px;
+            overflow: scroll;
+            background-color: #e0e0e0;
+            border: 1px solid #000;
+        }
+        
+        /* Z-index */
+        .z-index-container {
+            position: relative;
+            height: 200px;
+            background-color: #f0f0f0;
+            margin: 20px 0;
+        }
+        
+        .z-1 {
+            position: absolute;
+            background-color: rgba(255, 0, 0, 0.5);
+            width: 100px;
+            height: 100px;
+            z-index: 1;
+            top: 10px;
+            left: 10px;
+        }
+        
+        .z-2 {
+            position: absolute;
+            background-color: rgba(0, 255, 0, 0.5);
+            width: 100px;
+            height: 100px;
+            z-index: 2;
+            top: 30px;
+            left: 30px;
+        }
+        
+        .z-3 {
+            position: absolute;
+            background-color: rgba(0, 0, 255, 0.5);
+            width: 100px;
+            height: 100px;
+            z-index: 3;
+            top: 50px;
+            left: 50px;
+        }
+    </style>
+</head>
+<body>
+    <h1>CSS - Layout y Posicionamiento</h1>
+    
+    <h2>Flexbox</h2>
+    <h3>Justify Content</h3>
+    <div class="flex-container flex-justify-start">
+        <div class="flex-item">Item 1</div>
+        <div class="flex-item">Item 2</div>
+        <div class="flex-item">Item 3</div>
+    </div>
+    
+    <div class="flex-container flex-justify-center">
+        <div class="flex-item">Item 1</div>
+        <div class="flex-item">Item 2</div>
+        <div class="flex-item">Item 3</div>
+    </div>
+    
+    <div class="flex-container flex-justify-end">
+        <div class="flex-item">Item 1</div>
+        <div class="flex-item">Item 2</div>
+        <div class="flex-item">Item 3</div>
+    </div>
+    
+    <div class="flex-container flex-justify-space-between">
+        <div class="flex-item">Item 1</div>
+        <div class="flex-item">Item 2</div>
+        <div class="flex-item">Item 3</div>
+    </div>
+    
+    <h3>Align Items</h3>
+    <div class="flex-container flex-align-center">
+        <div class="flex-item">Item 1</div>
+        <div class="flex-item">Item 2</div>
+        <div class="flex-item">Item 3</div>
+    </div>
+    
+    <h3>Flex Wrap</h3>
+    <div class="flex-container flex-wrap">
+        <div class="flex-item">Item 1</div>
+        <div class="flex-item">Item 2</div>
+        <div class="flex-item">Item 3</div>
+        <div class="flex-item">Item 4</div>
+        <div class="flex-item">Item 5</div>
+        <div class="flex-item">Item 6</div>
+    </div>
+    
+    <h3>Flex Grow</h3>
+    <div class="flex-container">
+        <div class="flex-item flex-grow">Item 1 (crece)</div>
+        <div class="flex-item">Item 2</div>
+        <div class="flex-item flex-grow">Item 3 (crece)</div>
+    </div>
+    
+    <h2>Grid</h2>
+    <div class="grid-container">
+        <div class="grid-item">1</div>
+        <div class="grid-item">2</div>
+        <div class="grid-item">3</div>
+        <div class="grid-item grid-span-2">4 (span 2)</div>
+        <div class="grid-item">5</div>
+        <div class="grid-item grid-span-3">6 (span 3)</div>
+    </div>
+    
+    <h2>Posicionamiento</h2>
+    <div class="static">Position: static (por defecto)</div>
+    <div class="relative">Position: relative (desplazado 20px desde su posición)</div>
+    <div style="position: relative; height: 100px; background-color: #e0e0e0; margin: 20px 0;">
+        Contenedor relativo
+        <div class="absolute">Position: absolute (relativo al contenedor padre)</div>
+    </div>
+    <div class="fixed">Position: fixed (siempre visible, esquina inferior derecha)</div>
+    
+    <h2>Sticky</h2>
+    <div style="height: 200px; overflow-y: scroll; border: 1px solid #000; padding: 10px;">
+        <div class="sticky">Position: sticky (se pega al hacer scroll)</div>
+        <p>Contenido de ejemplo...</p>
+        <p>Haz scroll para ver el efecto sticky.</p>
+        <p>Más contenido...</p>
+        <p>Más contenido...</p>
+        <p>Más contenido...</p>
+        <p>Más contenido...</p>
+        <p>Más contenido...</p>
+    </div>
+    
+    <h2>Float</h2>
+    <div class="clearfix">
+        <div class="float-left">Float left</div>
+        <div class="float-right">Float right</div>
+        <p>Este texto fluye alrededor de los elementos flotantes. Los elementos flotantes se posicionan a la izquierda o derecha y el contenido fluye alrededor de ellos.</p>
+    </div>
+    
+    <h2>Overflow</h2>
+    <h3>Hidden</h3>
+    <div class="overflow-hidden">
+        Este contenido es muy largo y será ocultado porque el overflow está configurado como hidden. No podrás ver todo el texto.
+    </div>
+    
+    <h3>Scroll</h3>
+    <div class="overflow-scroll">
+        Este contenido es muy largo y tendrá una barra de desplazamiento porque el overflow está configurado como scroll. Puedes hacer scroll para ver todo el contenido.
+    </div>
+    
+    <h2>Z-Index</h2>
+    <div class="z-index-container">
+        <div class="z-1">Z-index: 1 (atrás)</div>
+        <div class="z-2">Z-index: 2 (medio)</div>
+        <div class="z-3">Z-index: 3 (adelante)</div>
+    </div>
+</body>
+</html>
+

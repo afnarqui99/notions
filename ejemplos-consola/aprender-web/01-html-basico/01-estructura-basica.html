@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>1. Estructura Básica HTML</title>
+</head>
+<body>
+    <h1>Estructura Básica de HTML</h1>
+    
+    <h2>Encabezados</h2>
+    <h1>Encabezado 1 (H1)</h1>
+    <h2>Encabezado 2 (H2)</h2>
+    <h3>Encabezado 3 (H3)</h3>
+    <h4>Encabezado 4 (H4)</h4>
+    <h5>Encabezado 5 (H5)</h5>
+    <h6>Encabezado 6 (H6)</h6>
+    
+    <h2>Párrafos</h2>
+    <p>Este es un párrafo de texto normal.</p>
+    <p>Este es otro párrafo. Los párrafos se separan automáticamente.</p>
+    
+    <h2>Texto con Formato</h2>
+    <p>Texto en <strong>negrita</strong> y texto en <em>cursiva</em>.</p>
+    <p>Texto <u>subrayado</u> y texto <mark>resaltado</mark>.</p>
+    <p>Texto <small>pequeño</small> y texto <del>tachado</del>.</p>
+    
+    <h2>Enlaces</h2>
+    <p>Este es un <a href="https://www.example.com">enlace externo</a>.</p>
+    <p>Este es un <a href="#seccion">enlace interno</a> a otra sección.</p>
+    
+    <h2>Listas</h2>
+    <h3>Lista no ordenada (ul)</h3>
+    <ul>
+        <li>Elemento 1</li>
+        <li>Elemento 2</li>
+        <li>Elemento 3</li>
+    </ul>
+    
+    <h3>Lista ordenada (ol)</h3>
+    <ol>
+        <li>Primer elemento</li>
+        <li>Segundo elemento</li>
+        <li>Tercer elemento</li>
+    </ol>
+    
+    <h2>Imágenes</h2>
+    <p>Ejemplo de imagen (usa una URL o ruta local):</p>
+    <img src="https://via.placeholder.com/300x200" alt="Imagen de ejemplo" width="300">
+    
+    <h2 id="seccion">Sección con ID (para enlaces internos)</h2>
+    <p>Esta sección tiene un ID que permite enlazarla desde otras partes de la página.</p>
+    
+    <h2>Línea horizontal</h2>
+    <hr>
+    <p>El elemento &lt;hr&gt; crea una línea horizontal separadora.</p>
+    
+    <h2>Citas</h2>
+    <blockquote>
+        "Esta es una cita en bloque. Se usa para citas largas o referencias."
+    </blockquote>
+    <p>Y esta es una <q>cita corta en línea</q>.</p>
+    
+    <h2>Código</h2>
+    <p>Texto en línea: <code>console.log("Hola");</code></p>
+    <pre><code>// Bloque de código
+function saludar() {
+    console.log("Hola Mundo");
+}</code></pre>
+    
+    <h2>Tablas</h2>
+    <table border="1">
+        <thead>
+            <tr>
+                <th>Nombre</th>
+                <th>Edad</th>
+                <th>Ciudad</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Juan</td>
+                <td>30</td>
+                <td>Madrid</td>
+            </tr>
+            <tr>
+                <td>Ana</td>
+                <td>25</td>
+                <td>Barcelona</td>
+            </tr>
+        </tbody>
+    </table>
+    
+    <h2>Formularios</h2>
+    <form>
+        <label for="nombre">Nombre:</label>
+        <input type="text" id="nombre" name="nombre" placeholder="Escribe tu nombre">
+        <br><br>
+        
+        <label for="email">Email:</label>
+        <input type="email" id="email" name="email" placeholder="tu@email.com">
+        <br><br>
+        
+        <label for="edad">Edad:</label>
+        <input type="number" id="edad" name="edad" min="0" max="120">
+        <br><br>
+        
+        <label for="color">Color favorito:</label>
+        <input type="color" id="color" name="color">
+        <br><br>
+        
+        <label for="pais">País:</label>
+        <select id="pais" name="pais">
+            <option value="">Selecciona...</option>
+            <option value="es">España</option>
+            <option value="mx">México</option>
+            <option value="ar">Argentina</option>
+        </select>
+        <br><br>
+        
+        <label>
+            <input type="checkbox" name="acepta" value="si">
+            Acepto los términos y condiciones
+        </label>
+        <br><br>
+        
+        <label>Género:</label>
+        <label><input type="radio" name="genero" value="masculino"> Masculino</label>
+        <label><input type="radio" name="genero" value="femenino"> Femenino</label>
+        <br><br>
+        
+        <label for="mensaje">Mensaje:</label>
+        <textarea id="mensaje" name="mensaje" rows="4" cols="50" placeholder="Escribe tu mensaje aquí"></textarea>
+        <br><br>
+        
+        <button type="submit">Enviar</button>
+        <button type="reset">Limpiar</button>
+    </form>
+    
+    <h2>Elementos semánticos</h2>
+    <header>
+        <h3>Header - Encabezado de sección</h3>
+    </header>
+    <nav>
+        <h3>Nav - Navegación</h3>
+        <ul>
+            <li><a href="#inicio">Inicio</a></li>
+            <li><a href="#sobre">Sobre</a></li>
+            <li><a href="#contacto">Contacto</a></li>
+        </ul>
+    </nav>
+    <main>
+        <h3>Main - Contenido principal</h3>
+        <article>
+            <h4>Article - Artículo independiente</h4>
+            <p>Contenido del artículo...</p>
+        </article>
+        <section>
+            <h4>Section - Sección de contenido</h4>
+            <p>Contenido de la sección...</p>
+        </section>
+    </main>
+    <aside>
+        <h3>Aside - Contenido lateral</h3>
+        <p>Información complementaria...</p>
+    </aside>
+    <footer>
+        <h3>Footer - Pie de página</h3>
+        <p>&copy; 2025 - Todos los derechos reservados</p>
+    </footer>
+</body>
+</html>
+

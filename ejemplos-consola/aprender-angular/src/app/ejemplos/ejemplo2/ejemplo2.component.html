@@ -1,0 +1,74 @@
+<div>
+  <h2>Ejemplo 2: Data Binding</h2>
+  
+  <div style="background: #e8f5e9; padding: 15px; border-radius: 5px; margin: 15px 0;">
+    <h3>1. Property Binding [ ]</h3>
+    <p>Vincula propiedades del DOM a propiedades del componente:</p>
+    <img [src]="imagenUrl" [alt]="'Imagen de ejemplo'" style="max-width: 100%; border-radius: 5px; margin-top: 10px;">
+    <br>
+    <button 
+      class="btn btn-primary" 
+      [disabled]="estaDeshabilitado"
+      (click)="cambiarEstado()"
+      style="margin-top: 10px;">
+      {{ estaDeshabilitado ? 'Habilitar' : 'Deshabilitar' }} Botón
+    </button>
+  </div>
+
+  <div style="background: #fff3e0; padding: 15px; border-radius: 5px; margin: 15px 0;">
+    <h3>2. Two-way Binding [(ngModel)]</h3>
+    <p>Vincula datos bidireccionalmente (requiere FormsModule):</p>
+    <div style="margin-top: 10px;">
+      <label style="display: block; margin-bottom: 5px;"><strong>Nombre:</strong></label>
+      <input 
+        type="text" 
+        [(ngModel)]="nombre" 
+        placeholder="Escribe tu nombre"
+        style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+    </div>
+    <div style="margin-top: 10px;">
+      <label style="display: block; margin-bottom: 5px;"><strong>Email:</strong></label>
+      <input 
+        type="email" 
+        [(ngModel)]="email" 
+        placeholder="tu@email.com"
+        style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+    </div>
+    <div style="margin-top: 10px;">
+      <label style="display: block; margin-bottom: 5px;"><strong>Mensaje:</strong></label>
+      <textarea 
+        [(ngModel)]="mensaje" 
+        placeholder="Escribe un mensaje"
+        style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; min-height: 80px;"></textarea>
+    </div>
+    <button class="btn btn-success" (click)="mostrarDatos()" style="margin-top: 10px;">Mostrar Datos</button>
+    <div style="margin-top: 10px; padding: 10px; background: #f5f5f5; border-radius: 4px;">
+      <strong>Vista previa:</strong><br>
+      Nombre: {{ nombre || '(vacío)' }}<br>
+      Email: {{ email || '(vacío)' }}<br>
+      Mensaje: {{ mensaje || '(vacío)' }}
+    </div>
+  </div>
+
+  <div style="background: #f3e5f5; padding: 15px; border-radius: 5px; margin: 15px 0;">
+    <h3>3. Expresiones y Getters</h3>
+    <p>Puedes usar expresiones y métodos en las plantillas:</p>
+    <div style="margin-top: 10px;">
+      <label>Precio: ${{ precio }}</label><br>
+      <label>Cantidad: {{ cantidad }}</label><br>
+      <strong>Total: ${{ total }}</strong>
+    </div>
+  </div>
+
+  <div style="background: #e3f2fd; padding: 15px; border-radius: 5px; margin: 15px 0;">
+    <h3>Conceptos Aprendidos:</h3>
+    <ul>
+      <li><strong>Property Binding [prop]:</strong> Vincula propiedades del DOM</li>
+      <li><strong>Two-way Binding [(ngModel)]:</strong> Vinculación bidireccional</li>
+      <li><strong>String Interpolation:</strong> {{ }} para mostrar valores</li>
+      <li><strong>Expresiones:</strong> Puedes usar expresiones JavaScript en plantillas</li>
+      <li><strong>Getters:</strong> Propiedades calculadas</li>
+    </ul>
+  </div>
+</div>
+

@@ -1,14 +1,17 @@
 import { useState, useEffect } from 'react';
-import { Settings, FolderOpen, Save, AlertCircle, CheckCircle, X, Upload } from 'lucide-react';
+import { Settings, FolderOpen, Save, AlertCircle, CheckCircle, X, Upload, BookOpen } from 'lucide-react';
 import LocalStorageService from '../services/LocalStorageService';
 import DirectorySelectorModal from './DirectorySelectorModal';
 import ImportPagesModal from './ImportPagesModal';
 import Modal from './Modal';
+import cursosService from '../services/CursosService';
 
 export default function ConfigModal({ isOpen, onClose }) {
   const [useLocalStorage, setUseLocalStorage] = useState(false);
   const [selectedPath, setSelectedPath] = useState('');
+  const [cursosExternosPath, setCursosExternosPath] = useState('');
   const [showDirectoryModal, setShowDirectoryModal] = useState(false);
+  const [showCursosDirectoryModal, setShowCursosDirectoryModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [showMessageModal, setShowMessageModal] = useState(false);
@@ -18,6 +21,7 @@ export default function ConfigModal({ isOpen, onClose }) {
       const config = LocalStorageService.config;
       setUseLocalStorage(config.useLocalStorage || false);
       setSelectedPath(config.basePath || config.lastSelectedPath || '');
+      setCursosExternosPath(config.cursosExternosPath || cursosService.getCursosExternosPath() || '');
     }
   }, [isOpen]);
 
@@ -36,12 +40,47 @@ export default function ConfigModal({ isOpen, onClose }) {
     }));
   };
 
+  const handleSelectCursosDirectory = async () => {
+    if (window.electronAPI && window.electronAPI.selectCursosDirectory) {
+      try {
+        const selectedPath = await window.electronAPI.selectCursosDirectory();
+        if (selectedPath) {
+          setCursosExternosPath(selectedPath);
+          cursosService.setCursosExternosPath(selectedPath);
+          setMessage({ 
+            type: 'success', 
+            text: `Carpeta de cursos externos seleccionada: ${selectedPath}` 
+          });
+          setShowMessageModal(true);
+        }
+      } catch (error) {
+        setMessage({ 
+          type: 'error', 
+          text: `Error al seleccionar carpeta: ${error.message}` 
+        });
+        setShowMessageModal(true);
+      }
+    } else {
+      setMessage({ 
+        type: 'error', 
+        text: 'Esta función solo está disponible en la versión Electron' 
+      });
+      setShowMessageModal(true);
+    }
+  };
+
   const handleSaveConfig = () => {
     LocalStorageService.saveConfig({
       useLocalStorage,
       basePath: selectedPath,
-      lastSelectedPath: selectedPath
+      lastSelectedPath: selectedPath,
+      cursosExternosPath: cursosExternosPath
     });
+
+    // También guardar en cursosService
+    if (cursosExternosPath) {
+      cursosService.setCursosExternosPath(cursosExternosPath);
+    }
 
     setMessage({ 
       type: 'success', 
@@ -150,6 +189,76 @@ export default function ConfigModal({ isOpen, onClose }) {
                     </p>
                   </div>
                 )}
+              </div>
+            </div>
+
+            {/* Cursos Educativos */}
+            <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-6">
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <BookOpen className="w-5 h-5 text-purple-600" />
+                Cursos Educativos
+              </h3>
+
+              <div className="space-y-4">
+                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
+                  <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
+                    <strong>📦 Cursos Incluidos:</strong> Todos los cursos vienen incluidos con la aplicación.
+                  </p>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">
+                    Python, JavaScript, HTML/CSS, SQL, Angular, .NET, Java, DevOps, Inglés y más
+                  </p>
+                  <p className="text-xs text-green-600 dark:text-green-400 mt-2">
+                    ✅ No necesitas configurar nada para usar los cursos incluidos
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    🔧 Carpeta de Cursos Externos (Opcional):
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={cursosExternosPath}
+                      readOnly
+                      placeholder="No configurado - Los cursos externos no estarán disponibles"
+                      className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm"
+                    />
+                    <button
+                      onClick={handleSelectCursosDirectory}
+                      disabled={!window.electronAPI}
+                      className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-colors flex items-center gap-2"
+                      title={!window.electronAPI ? 'Solo disponible en Electron' : 'Seleccionar carpeta de cursos externos'}
+                    >
+                      <FolderOpen className="w-4 h-4" />
+                      Seleccionar
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                    <strong>💡 Ventaja:</strong> Agrega nuevos cursos personalizados o actualiza los existentes sin reinstalar la aplicación.
+                    La aplicación buscará primero en esta carpeta, luego en los cursos incluidos.
+                  </p>
+                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
+                    🔧 Los cursos externos tienen prioridad sobre los incluidos (útil para actualizaciones)
+                  </p>
+                  {cursosExternosPath && (
+                    <button
+                      onClick={() => {
+                        setCursosExternosPath('');
+                        cursosService.setCursosExternosPath('');
+                      }}
+                      className="mt-2 text-xs text-red-600 dark:text-red-400 hover:underline"
+                    >
+                      Limpiar configuración
+                    </button>
+                  )}
+                </div>
+
+                <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4">
+                  <p className="text-xs text-gray-700 dark:text-gray-300">
+                    <strong>💡 Tip:</strong> Puedes copiar los cursos desde <code className="bg-green-100 dark:bg-green-900 px-1 rounded">ejemplos-consola/</code> a tu carpeta externa para tenerlos disponibles sin reinstalar la aplicación.
+                  </p>
+                </div>
               </div>
             </div>
 

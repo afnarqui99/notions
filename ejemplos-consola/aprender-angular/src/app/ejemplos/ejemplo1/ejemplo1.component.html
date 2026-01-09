@@ -1,0 +1,28 @@
+<div>
+  <h2>Ejemplo 1: Componentes Básicos</h2>
+  <p>Este es un componente Angular básico que muestra:</p>
+  
+  <div style="background: #e3f2fd; padding: 15px; border-radius: 5px; margin: 15px 0;">
+    <h3>Interpolación de Strings</h3>
+    <p><strong>Mensaje:</strong> {{ mensaje }}</p>
+  </div>
+
+  <div style="background: #f3e5f5; padding: 15px; border-radius: 5px; margin: 15px 0;">
+    <h3>Eventos y Métodos</h3>
+    <p><strong>Contador:</strong> {{ contador }}</p>
+    <button class="btn btn-primary" (click)="incrementar()">Incrementar</button>
+    <button class="btn btn-primary" (click)="decrementar()" style="margin-left: 10px;">Decrementar</button>
+  </div>
+
+  <div style="background: #fff3e0; padding: 15px; border-radius: 5px; margin: 15px 0;">
+    <h3>Conceptos Aprendidos:</h3>
+    <ul>
+      <li><strong>@Component:</strong> Decorador que define un componente</li>
+      <li><strong>selector:</strong> Nombre del componente en HTML</li>
+      <li><strong>templateUrl:</strong> Archivo HTML del componente</li>
+      <li><strong>Interpolación:</strong> {{ }} para mostrar datos</li>
+      <li><strong>Event Binding:</strong> (click) para eventos</li>
+    </ul>
+  </div>
+</div>
+

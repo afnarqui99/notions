@@ -1,0 +1,52 @@
+<div>
+  <h2>Ejemplo 4: Servicios e Inyección de Dependencias</h2>
+  
+  <div style="background: #e8f5e9; padding: 15px; border-radius: 5px; margin: 15px 0;">
+    <h3>¿Qué es un Servicio?</h3>
+    <p>Un servicio en Angular es una clase que contiene lógica reutilizable y datos compartidos entre componentes.</p>
+    <p><strong>Mensaje del servicio:</strong> {{ mensaje }}</p>
+  </div>
+
+  <div style="background: #fff3e0; padding: 15px; border-radius: 5px; margin: 15px 0;">
+    <h3>Usuarios desde el Servicio</h3>
+    <button class="btn btn-success" (click)="agregarUsuario()">Agregar Usuario</button>
+    <ul style="list-style-position: inside; margin-top: 10px;">
+      <li *ngFor="let usuario of usuarios">
+        ID: {{ usuario.id }} - Nombre: {{ usuario.nombre }}
+      </li>
+    </ul>
+  </div>
+
+  <div style="background: #f3e5f5; padding: 15px; border-radius: 5px; margin: 15px 0;">
+    <h3>Conceptos Aprendidos:</h3>
+    <ul>
+      <li><strong>@Injectable:</strong> Decorador que marca una clase como servicio</li>
+      <li><strong>Constructor Injection:</strong> Inyectar servicios en el constructor</li>
+      <li><strong>ngOnInit:</strong> Lifecycle hook que se ejecuta después de la inicialización</li>
+      <li><strong>Servicios:</strong> Comparten datos y lógica entre componentes</li>
+      <li><strong>Dependency Injection:</strong> Angular inyecta automáticamente las dependencias</li>
+    </ul>
+  </div>
+
+  <div style="background: #e3f2fd; padding: 15px; border-radius: 5px; margin: 15px 0;">
+    <h3>Código del Servicio (data.service.ts):</h3>
+    <pre style="background: #f5f5f5; padding: 10px; border-radius: 4px; overflow-x: auto;"><code>@Injectable({
+  providedIn: 'root'
+})
+export class DataService {
+  private usuarios = [
+    { id: 1, nombre: 'Juan' },
+    { id: 2, nombre: 'Ana' }
+  ];
+
+  obtenerUsuarios() {
+    return this.usuarios;
+  }
+
+  agregarUsuario(usuario: any) {
+    this.usuarios.push(usuario);
+  }
+}</code></pre>
+  </div>
+</div>
+

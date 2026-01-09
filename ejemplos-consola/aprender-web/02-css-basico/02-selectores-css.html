@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2. CSS - Selectores</title>
+    <style>
+        /* Selector de elemento */
+        p {
+            color: #333;
+        }
+        
+        /* Selector de clase */
+        .destacado {
+            background-color: yellow;
+            padding: 5px;
+        }
+        
+        /* Selector de ID */
+        #unico {
+            color: red;
+            font-weight: bold;
+        }
+        
+        /* Selector descendente */
+        div p {
+            color: blue;
+        }
+        
+        /* Selector hijo directo */
+        ul > li {
+            list-style-type: square;
+        }
+        
+        /* Selector de hermano adyacente */
+        h2 + p {
+            font-size: 18px;
+            color: green;
+        }
+        
+        /* Selector de hermanos generales */
+        h3 ~ p {
+            font-style: italic;
+        }
+        
+        /* Selector de atributo */
+        input[type="text"] {
+            border: 2px solid blue;
+            padding: 5px;
+        }
+        
+        input[type="email"] {
+            border: 2px solid green;
+            padding: 5px;
+        }
+        
+        /* Selector de atributo con valor específico */
+        a[href="https://example.com"] {
+            color: purple;
+        }
+        
+        /* Selector de atributo que contiene */
+        a[href*="google"] {
+            font-weight: bold;
+        }
+        
+        /* Selector de atributo que comienza con */
+        a[href^="https"] {
+            text-decoration: underline;
+        }
+        
+        /* Selector de atributo que termina con */
+        img[src$=".jpg"] {
+            border: 3px solid orange;
+        }
+        
+        /* Selector de pseudo-clase */
+        a:hover {
+            color: red;
+            font-size: 1.2em;
+        }
+        
+        a:visited {
+            color: gray;
+        }
+        
+        input:focus {
+            background-color: yellow;
+        }
+        
+        p:first-child {
+            font-weight: bold;
+        }
+        
+        p:last-child {
+            color: blue;
+        }
+        
+        li:nth-child(odd) {
+            background-color: #f0f0f0;
+        }
+        
+        li:nth-child(even) {
+            background-color: #e0e0e0;
+        }
+        
+        /* Selector de pseudo-elemento */
+        p::first-line {
+            font-weight: bold;
+            color: blue;
+        }
+        
+        p::first-letter {
+            font-size: 2em;
+            color: red;
+        }
+        
+        p::before {
+            content: "→ ";
+            color: green;
+        }
+        
+        p::after {
+            content: " ←";
+            color: green;
+        }
+        
+        /* Selector múltiple */
+        h1, h2, h3 {
+            font-family: Arial, sans-serif;
+        }
+        
+        /* Selector universal */
+        * {
+            box-sizing: border-box;
+        }
+        
+        /* Selector de negación */
+        p:not(.destacado) {
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <h1>Selectores CSS</h1>
+    
+    <h2>Selector de Elemento</h2>
+    <p>Todos los párrafos tienen este estilo por defecto.</p>
+    
+    <h2>Selector de Clase</h2>
+    <p class="destacado">Este párrafo tiene la clase "destacado".</p>
+    <p>Este párrafo no tiene la clase.</p>
+    
+    <h2>Selector de ID</h2>
+    <p id="unico">Este párrafo tiene el ID "unico".</p>
+    
+    <h2>Selector Descendente</h2>
+    <div>
+        <p>Este párrafo está dentro de un div (azul).</p>
+    </div>
+    <p>Este párrafo está fuera del div (negro).</p>
+    
+    <h2>Selector Hijo Directo</h2>
+    <ul>
+        <li>Elemento 1 (lista cuadrada)</li>
+        <li>Elemento 2 (lista cuadrada)</li>
+        <li>
+            <ul>
+                <li>Sub-elemento (no afectado)</li>
+            </ul>
+        </li>
+    </ul>
+    
+    <h2>Selector de Hermano Adyacente</h2>
+    <h2>Título H2</h2>
+    <p>Este párrafo está justo después de un H2 (verde y grande).</p>
+    <p>Este párrafo no está justo después (normal).</p>
+    
+    <h2>Selector de Hermanos Generales</h2>
+    <h3>Título H3</h3>
+    <p>Este párrafo está después de H3 (cursiva).</p>
+    <p>Este también (cursiva).</p>
+    <div>Un div en medio</div>
+    <p>Este también (cursiva).</p>
+    
+    <h2>Selectores de Atributo</h2>
+    <input type="text" placeholder="Input tipo text (borde azul)">
+    <input type="email" placeholder="Input tipo email (borde verde)">
+    <br><br>
+    <a href="https://example.com">Enlace a example.com (morado)</a><br>
+    <a href="https://google.com">Enlace a google.com (negrita y subrayado)</a><br>
+    <a href="http://otro.com">Enlace http (solo subrayado)</a>
+    
+    <h2>Pseudo-clases</h2>
+    <p>Pasa el mouse sobre este <a href="#">enlace</a> para ver el efecto hover.</p>
+    <input type="text" placeholder="Haz clic aquí para ver el focus">
+    <ul>
+        <li>Primer elemento (fondo gris claro)</li>
+        <li>Segundo elemento (fondo gris oscuro)</li>
+        <li>Tercer elemento (fondo gris claro)</li>
+        <li>Cuarto elemento (fondo gris oscuro)</li>
+    </ul>
+    
+    <h2>Pseudo-elementos</h2>
+    <p>Este párrafo tiene estilos en la primera línea y primera letra, además de contenido antes y después.</p>
+    <p>Otro párrafo para ver el efecto.</p>
+    
+    <h2>Selector Múltiple</h2>
+    <h1>H1 con estilo</h1>
+    <h2>H2 con estilo</h2>
+    <h3>H3 con estilo</h3>
+    
+    <h2>Selector de Negación</h2>
+    <p class="destacado">Este párrafo tiene clase destacado (opacidad normal).</p>
+    <p>Este párrafo no tiene la clase (opacidad 0.8).</p>
+</body>
+</html>
+

@@ -116,6 +116,8 @@ La configuración del build se encuentra en `package.json` bajo la sección `"bu
 - Los datos de los usuarios se guardan localmente en la carpeta que elijan durante la configuración
 - Cada vez que generes un nuevo ejecutable, reemplaza el anterior si vas a distribuir una nueva versión
 - El número de versión se puede cambiar en `package.json` en el campo `"version"`
+- **TODOS los cursos educativos están incluidos en el instalador** - Los usuarios tienen acceso inmediato a todos los cursos
+- **Cursos externos opcionales:** Los usuarios pueden configurar una carpeta externa para agregar nuevos cursos o actualizar existentes SIN reinstalar la aplicación
 
 ## Actualizar la Versión
 
