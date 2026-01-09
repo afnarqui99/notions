@@ -1,7 +1,10 @@
 import { Extension } from '@tiptap/core';
 import Suggestion from '@tiptap/suggestion';
+import React from 'react';
+import { createRoot } from 'react-dom/client';
 import LocalStorageService from '../services/LocalStorageService';
 import templateService from '../services/TemplateService';
+import SlashCommandModal from '../components/SlashCommandModal';
 
 export const SlashCommand = Extension.create({
   name: 'slash-command',
@@ -830,88 +833,90 @@ export const SlashCommand = Extension.create({
           },
         ],
         render: () => {
-          let popup;
+          let modalContainer = null;
+          let root = null;
 
           return {
             onStart: (props) => {
               if (!props.editor?.isEditable) return;
 
-              popup = document.createElement('div');
-              popup.className =
-                'absolute z-50 bg-white border border-gray-300 rounded shadow text-sm';
-              popup.style.minWidth = '250px';
-              popup.style.maxHeight = '300px';
-              popup.style.overflowY = 'auto';
-              popup.style.overflowX = 'hidden';
+              // Crear contenedor para el modal
+              modalContainer = document.createElement('div');
+              modalContainer.id = 'slash-command-modal-container';
+              document.body.appendChild(modalContainer);
 
-              props.items.forEach((item) => {
-                const button = document.createElement('button');
-                button.className =
-                  'block w-full px-3 py-2 text-left hover:bg-gray-100';
-                button.innerHTML = `
-                  <div class="flex gap-2 items-start">
-                    <span class="text-lg">${item.icon}</span>
-                    <div>
-                      <div class="font-semibold">${item.label}</div>
-                      ${
-                        item.description
-                          ? `<div class="text-xs text-gray-500">${item.description}</div>`
-                          : ''
-                      }
-                    </div>
-                  </div>
-                `;
+              // Crear root de React
+              root = createRoot(modalContainer);
 
-                button.onclick = async (event) => {
-                  event.stopPropagation();
-                  const { editor, range } = props;
-                  editor.chain().focus().deleteRange(range).run();
-                  await item.command({ editor, range });
-                };
-
-                popup.appendChild(button);
-              });
-
-              document.body.appendChild(popup);
-              updatePopupPosition(popup, props.clientRect);
+              // Renderizar el modal
+              root.render(
+                React.createElement(SlashCommandModal, {
+                  isOpen: true,
+                  onClose: () => {
+                    if (root) {
+                      root.unmount();
+                      root = null;
+                    }
+                    if (modalContainer && modalContainer.parentNode) {
+                      modalContainer.parentNode.removeChild(modalContainer);
+                    }
+                    modalContainer = null;
+                  },
+                  items: props.items || [],
+                  query: props.query || '',
+                  onSelectCommand: async (item) => {
+                    const { editor, range } = props;
+                    editor.chain().focus().deleteRange(range).run();
+                    await item.command({ editor, range });
+                  },
+                })
+              );
             },
             onUpdate: (props) => {
-              if (!popup) return;
-              popup.innerHTML = '';
-              props.items.forEach((item) => {
-                const button = document.createElement('button');
-                button.className =
-                  'block w-full px-3 py-2 text-left hover:bg-gray-100';
-                button.innerHTML = `
-                  <div class="flex gap-2 items-start">
-                    <span class="text-lg">${item.icon}</span>
-                    <div>
-                      <div class="font-semibold">${item.label}</div>
-                      ${
-                        item.description
-                          ? `<div class="text-xs text-gray-500">${item.description}</div>`
-                          : ''
-                      }
-                    </div>
-                  </div>
-                `;
+              if (!root || !modalContainer) return;
 
-                button.onclick = async (event) => {
-                  event.stopPropagation();
-                  const { editor, range } = props;
-                  editor.chain().focus().deleteRange(range).run();
-                  await item.command({ editor, range });
-                };
-
-                popup.appendChild(button);
-              });
-              updatePopupPosition(popup, props.clientRect);
+              // Actualizar el modal con nuevos items y query
+              root.render(
+                React.createElement(SlashCommandModal, {
+                  isOpen: true,
+                  onClose: () => {
+                    if (root) {
+                      root.unmount();
+                      root = null;
+                    }
+                    if (modalContainer && modalContainer.parentNode) {
+                      modalContainer.parentNode.removeChild(modalContainer);
+                    }
+                    modalContainer = null;
+                  },
+                  items: props.items || [],
+                  query: props.query || '',
+                  onSelectCommand: async (item) => {
+                    const { editor, range } = props;
+                    editor.chain().focus().deleteRange(range).run();
+                    await item.command({ editor, range });
+                  },
+                })
+              );
             },
             onExit: () => {
-              if (popup) {
-                document.body.removeChild(popup);
-                popup = null;
+              // Asegurar que solo limpiamos si el modal aún existe
+              if (root) {
+                try {
+                  root.unmount();
+                } catch (e) {
+                  // Ignorar errores si ya se desmontó
+                }
+                root = null;
               }
+              if (modalContainer && modalContainer.parentNode) {
+                try {
+                  modalContainer.parentNode.removeChild(modalContainer);
+                } catch (e) {
+                  // Ignorar errores si ya se removió
+                }
+              }
+              modalContainer = null;
             },
           };
         },

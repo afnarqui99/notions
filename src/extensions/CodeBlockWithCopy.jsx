@@ -1131,34 +1131,32 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
           <div className="absolute top-2 right-2 flex gap-2" style={{ 
             zIndex: isInModal ? 10002 : 110 // Mayor z-index cuando está en el Portal
           }}>
+            <button
+              onClick={handleFullscreen}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+              className="p-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors flex items-center gap-1 text-xs"
+              title="Pantalla completa"
+              type="button"
+            >
+              <Maximize2 className="w-3 h-3" />
+            </button>
             {language === 'json' && (
-              <>
-                <button
-                  onClick={handleFullscreen}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                  }}
-                  className="p-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors flex items-center gap-1 text-xs"
-                  title="Pantalla completa"
-                  type="button"
-                >
-                  <Maximize2 className="w-3 h-3" />
-                </button>
-                <button
-                  onClick={handleFormat}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                  }}
-                  className="p-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors flex items-center gap-1 text-xs"
-                  title="Formatear JSON"
-                  type="button"
-                >
-                  <Code2 className="w-3 h-3" />
-                  <span>Formatear</span>
-                </button>
-              </>
+              <button
+                onClick={handleFormat}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                className="p-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors flex items-center gap-1 text-xs"
+                title="Formatear JSON"
+                type="button"
+              >
+                <Code2 className="w-3 h-3" />
+                <span>Formatear</span>
+              </button>
             )}
             <button
               onClick={handleCopy}
@@ -1185,7 +1183,7 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
           </div>
         )}
       </div>
-      {isFullscreen && language === 'json' && createPortal(
+      {isFullscreen && createPortal(
         <div 
           className="fixed inset-0 z-[10001] bg-gray-900 flex flex-col"
           onClick={(e) => {
@@ -1197,7 +1195,9 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
           {/* Header con botones */}
           <div className="flex flex-col bg-gray-800 border-b border-gray-700">
             <div className="flex items-center justify-between p-4">
-              <h2 className="text-white text-lg font-semibold">JSON - Pantalla Completa</h2>
+              <h2 className="text-white text-lg font-semibold">
+                {language ? `${language.toUpperCase()} - Pantalla Completa` : 'Código - Pantalla Completa'}
+              </h2>
               <div className="flex gap-2">
                 <button
                   onClick={(e) => {
@@ -1209,21 +1209,23 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
                     }
                   }}
                   className={`px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors flex items-center gap-2 ${showSearch ? 'bg-blue-600' : ''}`}
-                  title="Buscar en JSON"
+                  title="Buscar en código"
                   type="button"
                 >
                   <Search className="w-4 h-4" />
                   <span>Buscar</span>
                 </button>
-                <button
-                  onClick={handleFormat}
-                  className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors flex items-center gap-2"
-                  title="Formatear JSON"
-                  type="button"
-                >
-                  <Code2 className="w-4 h-4" />
-                  <span>Formatear</span>
-                </button>
+                {language === 'json' && (
+                  <button
+                    onClick={handleFormat}
+                    className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors flex items-center gap-2"
+                    title="Formatear JSON"
+                    type="button"
+                  >
+                    <Code2 className="w-4 h-4" />
+                    <span>Formatear</span>
+                  </button>
+                )}
               <button
                 onClick={async (e) => {
                   e.preventDefault();
@@ -1287,7 +1289,7 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
                 type="text"
                 value={searchTerm}
                 onChange={handleSearchChange}
-                placeholder="Buscar en JSON..."
+                placeholder="Buscar en código..."
                 className="flex-1 bg-gray-900 text-gray-100 border border-gray-600 rounded px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 onKeyDown={(e) => {
                   if (e.key === 'Escape') {
@@ -1358,7 +1360,7 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
                 tabSize: 2,
               }}
               spellCheck={false}
-              placeholder="Escribe o pega tu código JSON aquí..."
+                placeholder={`Escribe o pega tu código ${language ? language.toUpperCase() : ''} aquí...`}
             />
           </div>
         </div>,
