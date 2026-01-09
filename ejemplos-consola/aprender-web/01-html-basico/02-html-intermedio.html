@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2. HTML Intermedio</title>
+</head>
+<body>
+    <h1>HTML Intermedio</h1>
+    
+    <h2>Atributos Globales</h2>
+    <p id="parrafo-unico" class="texto-destacado" title="Este es un tooltip">
+        Este párrafo tiene ID, clase y título.
+    </p>
+    <p class="texto-destacado" data-info="informacion-personalizada">
+        Este párrafo tiene atributos personalizados (data-*).
+    </p>
+    <p contenteditable="true" style="color: blue;">
+        Este párrafo es editable. ¡Pruébalo!
+    </p>
+    
+    <h2>Div y Span</h2>
+    <div style="background-color: #f0f0f0; padding: 10px; margin: 10px 0;">
+        <p>Un <strong>div</strong> es un contenedor de bloque.</p>
+        <p>Puede contener múltiples elementos.</p>
+    </div>
+    <p>Un <span style="color: red; font-weight: bold;">span</span> es un contenedor en línea.</p>
+    
+    <h2>Iframes</h2>
+    <iframe 
+        src="https://www.example.com" 
+        width="100%" 
+        height="300" 
+        frameborder="0"
+        title="Ejemplo de iframe">
+        Tu navegador no soporta iframes.
+    </iframe>
+    
+    <h2>Audio y Video</h2>
+    <h3>Audio</h3>
+    <audio controls>
+        <source src="audio.mp3" type="audio/mpeg">
+        Tu navegador no soporta audio.
+    </audio>
+    
+    <h3>Video</h3>
+    <video width="400" controls>
+        <source src="video.mp4" type="video/mp4">
+        Tu navegador no soporta video.
+    </video>
+    
+    <h2>Canvas (para gráficos)</h2>
+    <canvas id="miCanvas" width="200" height="100" style="border: 1px solid #000;"></canvas>
+    <script>
+        const canvas = document.getElementById('miCanvas');
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = 'blue';
+        ctx.fillRect(10, 10, 50, 50);
+        ctx.fillStyle = 'red';
+        ctx.beginPath();
+        ctx.arc(100, 50, 30, 0, 2 * Math.PI);
+        ctx.fill();
+    </script>
+    
+    <h2>SVG (Gráficos vectoriales)</h2>
+    <svg width="200" height="200">
+        <circle cx="50" cy="50" r="40" fill="blue"/>
+        <rect x="100" y="10" width="80" height="80" fill="red"/>
+        <line x1="10" y1="100" x2="190" y2="100" stroke="green" stroke-width="3"/>
+    </svg>
+    
+    <h2>Detalles y Resumen</h2>
+    <details>
+        <summary>Haz clic para ver más información</summary>
+        <p>Este es contenido que se muestra/oculta al hacer clic en el resumen.</p>
+        <p>Útil para crear secciones colapsables sin JavaScript.</p>
+    </details>
+    
+    <h2>Progress y Meter</h2>
+    <h3>Progress (barra de progreso)</h3>
+    <progress value="60" max="100">60%</progress>
+    
+    <h3>Meter (medidor)</h3>
+    <meter value="0.7" min="0" max="1" low="0.3" high="0.8" optimum="0.9">70%</meter>
+    
+    <h2>Elementos de tiempo</h2>
+    <p>Fecha: <time datetime="2025-01-09">9 de Enero, 2025</time></p>
+    <p>Hora: <time datetime="2025-01-09T14:30">14:30</time></p>
+    
+    <h2>Elementos de código</h2>
+    <p>Variable: <var>miVariable</var></p>
+    <p>Salida de programa: <samp>Resultado: 42</samp></p>
+    <p>Tecla del teclado: Presiona <kbd>Ctrl</kbd> + <kbd>C</kbd> para copiar</p>
+    
+    <h2>Abbr (Abreviaciones)</h2>
+    <p>
+        <abbr title="HyperText Markup Language">HTML</abbr> es el lenguaje de marcado.
+        <abbr title="Cascading Style Sheets">CSS</abbr> es para estilos.
+    </p>
+    
+    <h2>Dirección</h2>
+    <address>
+        Escrito por: Juan Pérez<br>
+        Email: <a href="mailto:juan@example.com">juan@example.com</a><br>
+        Dirección: Calle Principal 123, Madrid
+    </address>
+    
+    <h2>Listas de definición</h2>
+    <dl>
+        <dt>HTML</dt>
+        <dd>Lenguaje de marcado para crear páginas web</dd>
+        
+        <dt>CSS</dt>
+        <dd>Lenguaje de estilos para diseñar páginas web</dd>
+        
+        <dt>JavaScript</dt>
+        <dd>Lenguaje de programación para hacer páginas interactivas</dd>
+    </dl>
+    
+    <h2>Elementos de texto especiales</h2>
+    <p>Subíndice: H<sub>2</sub>O (agua)</p>
+    <p>Superíndice: E = mc<sup>2</sup></p>
+    <p>Texto preformateado:</p>
+    <pre>
+    Este texto
+    mantiene los espacios
+    y saltos de línea
+    tal como está escrito.
+    </pre>
+    
+    <h2>Elementos de inserción y eliminación</h2>
+    <p>Texto <ins>insertado</ins> y texto <del>eliminado</del>.</p>
+    
+    <h2>Elementos de marcado</h2>
+    <p>Texto <mark>resaltado</mark> para llamar la atención.</p>
+    
+    <h2>Elementos de cita</h2>
+    <p>Según <cite>El Quijote</cite>:</p>
+    <blockquote cite="https://www.example.com">
+        "En un lugar de la Mancha..."
+    </blockquote>
+</body>
+</html>
+

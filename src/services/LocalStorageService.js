@@ -20,18 +20,24 @@ class LocalStorageService {
       const saved = localStorage.getItem('notion-local-config');
       if (saved) {
         const config = JSON.parse(saved);
+        // Asegurar que cursosExternosPath esté presente
+        if (!config.hasOwnProperty('cursosExternosPath')) {
+          config.cursosExternosPath = null;
+        }
         return config;
       }
       return {
         useLocalStorage: false,
         basePath: null,
-        lastSelectedPath: null
+        lastSelectedPath: null,
+        cursosExternosPath: null
       };
     } catch (error) {
       return {
         useLocalStorage: false,
         basePath: null,
-        lastSelectedPath: null
+        lastSelectedPath: null,
+        cursosExternosPath: null
       };
     }
   }

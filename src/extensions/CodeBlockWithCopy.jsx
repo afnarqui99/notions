@@ -1131,32 +1131,32 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
           <div className="absolute top-2 right-2 flex gap-2" style={{ 
             zIndex: isInModal ? 10002 : 110 // Mayor z-index cuando está en el Portal
           }}>
-            <button
-              onClick={handleFullscreen}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-              }}
-              className="p-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors flex items-center gap-1 text-xs"
-              title="Pantalla completa"
-              type="button"
-            >
-              <Maximize2 className="w-3 h-3" />
-            </button>
+                <button
+                  onClick={handleFullscreen}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                  className="p-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors flex items-center gap-1 text-xs"
+                  title="Pantalla completa"
+                  type="button"
+                >
+                  <Maximize2 className="w-3 h-3" />
+                </button>
             {language === 'json' && (
-              <button
-                onClick={handleFormat}
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                }}
-                className="p-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors flex items-center gap-1 text-xs"
-                title="Formatear JSON"
-                type="button"
-              >
-                <Code2 className="w-3 h-3" />
-                <span>Formatear</span>
-              </button>
+                <button
+                  onClick={handleFormat}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                  className="p-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors flex items-center gap-1 text-xs"
+                  title="Formatear JSON"
+                  type="button"
+                >
+                  <Code2 className="w-3 h-3" />
+                  <span>Formatear</span>
+                </button>
             )}
             <button
               onClick={handleCopy}
@@ -1216,15 +1216,15 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
                   <span>Buscar</span>
                 </button>
                 {language === 'json' && (
-                  <button
-                    onClick={handleFormat}
-                    className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors flex items-center gap-2"
-                    title="Formatear JSON"
-                    type="button"
-                  >
-                    <Code2 className="w-4 h-4" />
-                    <span>Formatear</span>
-                  </button>
+                <button
+                  onClick={handleFormat}
+                  className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors flex items-center gap-2"
+                  title="Formatear JSON"
+                  type="button"
+                >
+                  <Code2 className="w-4 h-4" />
+                  <span>Formatear</span>
+                </button>
                 )}
               <button
                 onClick={async (e) => {

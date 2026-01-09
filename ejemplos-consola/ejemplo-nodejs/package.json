@@ -1,0 +1,13 @@
+{
+  "name": "ejemplo-nodejs",
+  "version": "1.0.0",
+  "description": "Ejemplo simple de Node.js para la consola",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": ["ejemplo", "nodejs"],
+  "author": "",
+  "license": "ISC"
+}
+

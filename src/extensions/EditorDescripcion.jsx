@@ -16,6 +16,7 @@ import { GaleriaImagenesNode } from "./GaleriaImagenesNode";
 import { GaleriaArchivosNode } from "./GaleriaArchivosNode";
 import { ResumenFinancieroNode } from "./ResumenFinancieroNode";
 import { CalendarNode } from "./CalendarNode";
+import { ConsoleNode } from "./ConsoleNode";
 import TableHeader from "@tiptap/extension-table-header";
 import Image from "@tiptap/extension-image";
 import Link from "@tiptap/extension-link";
@@ -43,6 +44,7 @@ export default function EditorDescripcion({ content, onChange, autoFocus = false
       GaleriaArchivosNode,
       ResumenFinancieroNode,
       CalendarNode,
+      ConsoleNode,
       Heading,
       Underline,
       TextStyle,

@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>1. JavaScript - Manipulación del DOM</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .ejemplo {
+            background-color: #f5f5f5;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        
+        button:hover {
+            background-color: #45a049;
+        }
+        
+        .caja {
+            width: 100px;
+            height: 100px;
+            background-color: #2196F3;
+            margin: 10px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            transition: all 0.3s;
+        }
+        
+        .lista-item {
+            padding: 10px;
+            margin: 5px 0;
+            background-color: #e0e0e0;
+            border-radius: 3px;
+        }
+        
+        input {
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <h1>JavaScript - Manipulación del DOM</h1>
+    
+    <div class="ejemplo">
+        <h2>1. Seleccionar Elementos</h2>
+        <p id="parrafo1">Este párrafo tiene ID "parrafo1"</p>
+        <p class="clase-ejemplo">Este párrafo tiene clase "clase-ejemplo"</p>
+        <button onclick="seleccionarElementos()">Seleccionar Elementos</button>
+        <div id="resultado-seleccion"></div>
+    </div>
+    
+    <div class="ejemplo">
+        <h2>2. Modificar Contenido</h2>
+        <p id="texto-modificar">Texto original</p>
+        <button onclick="modificarTexto()">Modificar Texto</button>
+        <button onclick="modificarHTML()">Modificar HTML</button>
+    </div>
+    
+    <div class="ejemplo">
+        <h2>3. Modificar Estilos</h2>
+        <div id="caja-estilo" class="caja">Caja</div>
+        <button onclick="cambiarColor()">Cambiar Color</button>
+        <button onclick="cambiarTamaño()">Cambiar Tamaño</button>
+        <button onclick="resetear()">Resetear</button>
+    </div>
+    
+    <div class="ejemplo">
+        <h2>4. Agregar y Eliminar Elementos</h2>
+        <div id="contenedor-lista"></div>
+        <button onclick="agregarElemento()">Agregar Elemento</button>
+        <button onclick="eliminarElemento()">Eliminar Último</button>
+    </div>
+    
+    <div class="ejemplo">
+        <h2>5. Eventos</h2>
+        <button id="boton-evento">Haz Clic</button>
+        <p id="contador-clics">Clics: 0</p>
+        <input type="text" id="input-evento" placeholder="Escribe algo...">
+        <p id="texto-input"></p>
+    </div>
+    
+    <div class="ejemplo">
+        <h2>6. Formularios</h2>
+        <form id="mi-formulario">
+            <input type="text" id="nombre-form" placeholder="Nombre" required>
+            <input type="email" id="email-form" placeholder="Email" required>
+            <button type="submit">Enviar</button>
+        </form>
+        <div id="resultado-form"></div>
+    </div>
+    
+    <div class="ejemplo">
+        <h2>7. Clases CSS</h2>
+        <p id="texto-clases">Este texto cambiará de clase</p>
+        <button onclick="agregarClase()">Agregar Clase</button>
+        <button onclick="quitarClase()">Quitar Clase</button>
+        <button onclick="toggleClase()">Toggle Clase</button>
+    </div>
+    
+    <div class="ejemplo">
+        <h2>8. Atributos</h2>
+        <img id="imagen-atributo" src="https://via.placeholder.com/200" alt="Imagen de ejemplo">
+        <br>
+        <button onclick="cambiarAtributo()">Cambiar Imagen</button>
+        <button onclick="mostrarAtributos()">Mostrar Atributos</button>
+        <div id="atributos-mostrados"></div>
+    </div>
+    
+    <script>
+        // 1. Seleccionar Elementos
+        function seleccionarElementos() {
+            const porId = document.getElementById('parrafo1');
+            const porClase = document.querySelector('.clase-ejemplo');
+            const porTag = document.querySelectorAll('p');
+            
+            const resultado = document.getElementById('resultado-seleccion');
+            resultado.innerHTML = `
+                <p><strong>Por ID:</strong> ${porId.textContent}</p>
+                <p><strong>Por Clase:</strong> ${porClase.textContent}</p>
+                <p><strong>Total de párrafos:</strong> ${porTag.length}</p>
+            `;
+        }
+        
+        // 2. Modificar Contenido
+        function modificarTexto() {
+            const elemento = document.getElementById('texto-modificar');
+            elemento.textContent = 'Texto modificado con textContent';
+        }
+        
+        function modificarHTML() {
+            const elemento = document.getElementById('texto-modificar');
+            elemento.innerHTML = 'Texto con <strong>HTML</strong> modificado';
+        }
+        
+        // 3. Modificar Estilos
+        function cambiarColor() {
+            const caja = document.getElementById('caja-estilo');
+            const colores = ['#2196F3', '#4CAF50', '#f44336', '#ff9800', '#9c27b0'];
+            const colorAleatorio = colores[Math.floor(Math.random() * colores.length)];
+            caja.style.backgroundColor = colorAleatorio;
+        }
+        
+        function cambiarTamaño() {
+            const caja = document.getElementById('caja-estilo');
+            const tamaño = Math.random() * 100 + 100;
+            caja.style.width = tamaño + 'px';
+            caja.style.height = tamaño + 'px';
+        }
+        
+        function resetear() {
+            const caja = document.getElementById('caja-estilo');
+            caja.style.backgroundColor = '#2196F3';
+            caja.style.width = '100px';
+            caja.style.height = '100px';
+        }
+        
+        // 4. Agregar y Eliminar Elementos
+        let contadorElementos = 0;
+        
+        function agregarElemento() {
+            const contenedor = document.getElementById('contenedor-lista');
+            const nuevoElemento = document.createElement('div');
+            nuevoElemento.className = 'lista-item';
+            nuevoElemento.textContent = `Elemento ${++contadorElementos}`;
+            contenedor.appendChild(nuevoElemento);
+        }
+        
+        function eliminarElemento() {
+            const contenedor = document.getElementById('contenedor-lista');
+            if (contenedor.lastChild) {
+                contenedor.removeChild(contenedor.lastChild);
+                contadorElementos--;
+            }
+        }
+        
+        // 5. Eventos
+        let contadorClics = 0;
+        const botonEvento = document.getElementById('boton-evento');
+        const contadorClicsElement = document.getElementById('contador-clics');
+        
+        botonEvento.addEventListener('click', function() {
+            contadorClics++;
+            contadorClicsElement.textContent = `Clics: ${contadorClics}`;
+        });
+        
+        const inputEvento = document.getElementById('input-evento');
+        const textoInput = document.getElementById('texto-input');
+        
+        inputEvento.addEventListener('input', function(e) {
+            textoInput.textContent = `Escribiste: ${e.target.value}`;
+        });
+        
+        // 6. Formularios
+        const formulario = document.getElementById('mi-formulario');
+        const resultadoForm = document.getElementById('resultado-form');
+        
+        formulario.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const nombre = document.getElementById('nombre-form').value;
+            const email = document.getElementById('email-form').value;
+            resultadoForm.innerHTML = `
+                <p style="color: green; margin-top: 10px;">
+                    <strong>Formulario enviado:</strong><br>
+                    Nombre: ${nombre}<br>
+                    Email: ${email}
+                </p>
+            `;
+            formulario.reset();
+        });
+        
+        // 7. Clases CSS
+        const textoClases = document.getElementById('texto-clases');
+        
+        function agregarClase() {
+            textoClases.classList.add('destacado');
+            textoClases.style.backgroundColor = '#ffeb3b';
+            textoClases.style.padding = '10px';
+        }
+        
+        function quitarClase() {
+            textoClases.classList.remove('destacado');
+            textoClases.style.backgroundColor = '';
+            textoClases.style.padding = '';
+        }
+        
+        function toggleClase() {
+            textoClases.classList.toggle('destacado');
+            if (textoClases.classList.contains('destacado')) {
+                textoClases.style.backgroundColor = '#ffeb3b';
+                textoClases.style.padding = '10px';
+            } else {
+                textoClases.style.backgroundColor = '';
+                textoClases.style.padding = '';
+            }
+        }
+        
+        // 8. Atributos
+        const imagen = document.getElementById('imagen-atributo');
+        let imagenActual = 1;
+        
+        function cambiarAtributo() {
+            imagenActual = imagenActual === 1 ? 2 : 1;
+            imagen.setAttribute('src', `https://via.placeholder.com/200?text=Imagen+${imagenActual}`);
+            imagen.setAttribute('alt', `Imagen ${imagenActual}`);
+        }
+        
+        function mostrarAtributos() {
+            const div = document.getElementById('atributos-mostrados');
+            div.innerHTML = `
+                <p><strong>src:</strong> ${imagen.getAttribute('src')}</p>
+                <p><strong>alt:</strong> ${imagen.getAttribute('alt')}</p>
+                <p><strong>width:</strong> ${imagen.width}px</p>
+                <p><strong>height:</strong> ${imagen.height}px</p>
+            `;
+        }
+    </script>
+</body>
+</html>
+

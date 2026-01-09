@@ -69,12 +69,18 @@
     "files": [
       "dist/**/*",
       "electron/**/*",
-      "package.json"
+      "package.json",
+      "ejemplos-consola/**/*"
     ],
     "extraResources": [
       {
         "from": "build/icon.ico",
         "to": "build/icon.ico"
+      },
+      {
+        "from": "ejemplos-consola",
+        "to": "cursos",
+        "filter": ["**/*"]
       }
     ],
     "win": {

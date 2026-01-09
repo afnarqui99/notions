@@ -16,6 +16,7 @@ import { GaleriaImagenesNode } from "../extensions/GaleriaImagenesNode";
 import { GaleriaArchivosNode } from "../extensions/GaleriaArchivosNode";
 import { ResumenFinancieroNode } from "../extensions/ResumenFinancieroNode";
 import { CalendarNode } from "../extensions/CalendarNode";
+import { ConsoleNode } from "../extensions/ConsoleNode";
 import TableHeader from "@tiptap/extension-table-header";
 import { ImageExtended } from "../extensions/ImageExtended";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -49,6 +50,7 @@ import VersionService from "../services/VersionService";
 import CommentPanel from "./CommentPanel";
 import QuickNote from "./QuickNote";
 import QuickNotesHistory from "./QuickNotesHistory";
+import ConsolePanel from "./ConsolePanel";
 import KeyboardShortcuts from "./KeyboardShortcuts";
 import EmojiPicker from "./EmojiPicker";
 import SQLFileManager from "./SQLFileManager";
@@ -131,6 +133,7 @@ export default function LocalEditor({ onShowConfig }) {
   const [showQuickNote, setShowQuickNote] = useState(false);
   const [showQuickNotesHistory, setShowQuickNotesHistory] = useState(false);
   const [quickNoteToLoad, setQuickNoteToLoad] = useState(null);
+  const [showConsole, setShowConsole] = useState(false);
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [emojiPickerPosition, setEmojiPickerPosition] = useState({ top: 0, left: 0 });
@@ -476,6 +479,7 @@ export default function LocalEditor({ onShowConfig }) {
       GaleriaArchivosNode,
       ResumenFinancieroNode,
       CalendarNode,
+      ConsoleNode,
       Heading.configure({ levels: [1, 2, 3, 4, 5, 6] }),
       Underline,
       TextStyle,
@@ -1115,6 +1119,23 @@ export default function LocalEditor({ onShowConfig }) {
       window.removeEventListener('open-quick-note', handleOpenQuickNote);
     };
   }, [showQuickNote]);
+
+  // Escuchar evento para abrir la consola
+  useEffect(() => {
+    const handleOpenConsole = (e) => {
+      console.log('Evento open-console recibido', e);
+      e.preventDefault();
+      e.stopPropagation();
+      console.log('Abriendo consola...');
+      setShowConsole(true);
+    };
+
+    window.addEventListener('open-console', handleOpenConsole);
+    console.log('Listener de open-console registrado');
+    return () => {
+      window.removeEventListener('open-console', handleOpenConsole);
+    };
+  }, []);
 
   // Escuchar evento para navegar a una página desde SQLScriptNode
   useEffect(() => {
@@ -2077,6 +2098,13 @@ export default function LocalEditor({ onShowConfig }) {
           setQuickNoteToLoad(note);
           setShowQuickNote(true);
         }}
+      />
+
+      {/* Consola de Ejecución */}
+      <ConsolePanel
+        isOpen={showConsole}
+        onClose={() => setShowConsole(false)}
+        editor={editor}
       />
 
       {/* Atajos de Teclado */}

@@ -1,0 +1,83 @@
+<div>
+  <h2>Ejemplo 3: Directivas Estructurales</h2>
+  
+  <div style="background: #e8f5e9; padding: 15px; border-radius: 5px; margin: 15px 0;">
+    <h3>1. *ngIf - Condicional</h3>
+    <button 
+      class="btn btn-primary" 
+      (click)="mostrarMensaje = !mostrarMensaje">
+      {{ mostrarMensaje ? 'Ocultar' : 'Mostrar' }} Mensaje
+    </button>
+    <div *ngIf="mostrarMensaje" style="margin-top: 10px; padding: 10px; background: #c8e6c9; border-radius: 4px;">
+      <p>✅ Este mensaje se muestra/oculta con *ngIf</p>
+    </div>
+  </div>
+
+  <div style="background: #fff3e0; padding: 15px; border-radius: 5px; margin: 15px 0;">
+    <h3>2. *ngFor - Iteración</h3>
+    <p>Lista de items:</p>
+    <ul style="list-style-position: inside; margin: 10px 0;">
+      <li *ngFor="let item of items; let i = index">
+        {{ i + 1 }}. {{ item }}
+        <button 
+          class="btn" 
+          style="background: #f44336; color: white; padding: 2px 8px; margin-left: 10px; font-size: 12px;"
+          (click)="eliminarItem(i)">
+          Eliminar
+        </button>
+      </li>
+    </ul>
+    <button class="btn btn-success" (click)="agregarItem()">Agregar Item</button>
+
+    <p style="margin-top: 20px;">Tabla de personas:</p>
+    <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+      <thead>
+        <tr style="background: #f5f5f5;">
+          <th style="padding: 8px; text-align: left; border: 1px solid #ddd;">Nombre</th>
+          <th style="padding: 8px; text-align: left; border: 1px solid #ddd;">Edad</th>
+          <th style="padding: 8px; text-align: left; border: 1px solid #ddd;">Ciudad</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let persona of personas">
+          <td style="padding: 8px; border: 1px solid #ddd;">{{ persona.nombre }}</td>
+          <td style="padding: 8px; border: 1px solid #ddd;">{{ persona.edad }}</td>
+          <td style="padding: 8px; border: 1px solid #ddd;">{{ persona.ciudad }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div style="background: #f3e5f5; padding: 15px; border-radius: 5px; margin: 15px 0;">
+    <h3>3. *ngSwitch - Switch Case</h3>
+    <div style="margin-bottom: 10px;">
+      <button 
+        class="btn btn-primary" 
+        *ngFor="let dia of ['lunes', 'martes', 'miércoles', 'jueves', 'viernes']"
+        (click)="cambiarDia(dia)"
+        style="margin-right: 5px; margin-bottom: 5px;">
+        {{ dia }}
+      </button>
+    </div>
+    <div [ngSwitch]="diaSemana">
+      <p *ngSwitchCase="'lunes'">📅 Hoy es Lunes - Inicio de semana</p>
+      <p *ngSwitchCase="'martes'">📅 Hoy es Martes</p>
+      <p *ngSwitchCase="'miércoles'">📅 Hoy es Miércoles - Mitad de semana</p>
+      <p *ngSwitchCase="'jueves'">📅 Hoy es Jueves</p>
+      <p *ngSwitchCase="'viernes'">📅 Hoy es Viernes - ¡Fin de semana cerca!</p>
+      <p *ngSwitchDefault>📅 Selecciona un día</p>
+    </div>
+  </div>
+
+  <div style="background: #e3f2fd; padding: 15px; border-radius: 5px; margin: 15px 0;">
+    <h3>Conceptos Aprendidos:</h3>
+    <ul>
+      <li><strong>*ngIf:</strong> Muestra/oculta elementos condicionalmente</li>
+      <li><strong>*ngFor:</strong> Itera sobre arrays y objetos</li>
+      <li><strong>*ngSwitch:</strong> Estructura switch-case para múltiples condiciones</li>
+      <li><strong>let i = index:</strong> Obtener el índice en *ngFor</li>
+      <li><strong>Directivas estructurales:</strong> Modifican la estructura del DOM</li>
+    </ul>
+  </div>
+</div>
+

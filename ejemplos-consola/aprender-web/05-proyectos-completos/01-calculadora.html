@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculadora</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .calculadora { background: white; border-radius: 20px; padding: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+        .pantalla { width: 100%; height: 80px; font-size: 2rem; text-align: right; padding: 10px; border: 2px solid #ddd; border-radius: 10px; margin-bottom: 20px; }
+        .botones { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+        button { padding: 20px; font-size: 1.2rem; border: none; border-radius: 10px; cursor: pointer; background: #f0f0f0; transition: all 0.3s; }
+        button:hover { background: #e0e0e0; transform: scale(1.05); }
+        .operador { background: #667eea; color: white; }
+        .igual { background: #4CAF50; color: white; grid-column: span 2; }
+        .limpiar { background: #f44336; color: white; }
+    </style>
+</head>
+<body>
+    <div class="calculadora">
+        <input type="text" class="pantalla" id="pantalla" readonly value="0">
+        <div class="botones">
+            <button class="limpiar" onclick="limpiar()">C</button>
+            <button onclick="borrar()">⌫</button>
+            <button class="operador" onclick="operar('/')">/</button>
+            <button class="operador" onclick="operar('*')">×</button>
+            <button onclick="agregarNumero('7')">7</button>
+            <button onclick="agregarNumero('8')">8</button>
+            <button onclick="agregarNumero('9')">9</button>
+            <button class="operador" onclick="operar('-')">-</button>
+            <button onclick="agregarNumero('4')">4</button>
+            <button onclick="agregarNumero('5')">5</button>
+            <button onclick="agregarNumero('6')">6</button>
+            <button class="operador" onclick="operar('+')">+</button>
+            <button onclick="agregarNumero('1')">1</button>
+            <button onclick="agregarNumero('2')">2</button>
+            <button onclick="agregarNumero('3')">3</button>
+            <button class="operador" onclick="operar('=')" rowspan="2">=</button>
+            <button onclick="agregarNumero('0')" style="grid-column: span 2;">0</button>
+            <button onclick="agregarNumero('.')">.</button>
+        </div>
+    </div>
+    
+    <script>
+        let pantalla = document.getElementById('pantalla');
+        let operando1 = null;
+        let operando2 = null;
+        let operacion = null;
+        
+        function agregarNumero(num) {
+            if (pantalla.value === '0' || pantalla.value === 'Error') {
+                pantalla.value = num;
+            } else {
+                pantalla.value += num;
+            }
+        }
+        
+        function operar(op) {
+            if (op === '=') {
+                if (operando1 !== null && operacion !== null) {
+                    operando2 = parseFloat(pantalla.value);
+                    calcular();
+                }
+            } else {
+                if (operando1 === null) {
+                    operando1 = parseFloat(pantalla.value);
+                    operacion = op;
+                    pantalla.value = '0';
+                } else {
+                    operando2 = parseFloat(pantalla.value);
+                    calcular();
+                    operacion = op;
+                }
+            }
+        }
+        
+        function calcular() {
+            let resultado;
+            switch(operacion) {
+                case '+': resultado = operando1 + operando2; break;
+                case '-': resultado = operando1 - operando2; break;
+                case '*': resultado = operando1 * operando2; break;
+                case '/': resultado = operando2 !== 0 ? operando1 / operando2 : 'Error'; break;
+            }
+            pantalla.value = resultado;
+            operando1 = resultado;
+            operando2 = null;
+        }
+        
+        function limpiar() {
+            pantalla.value = '0';
+            operando1 = null;
+            operando2 = null;
+            operacion = null;
+        }
+        
+        function borrar() {
+            if (pantalla.value.length > 1) {
+                pantalla.value = pantalla.value.slice(0, -1);
+            } else {
+                pantalla.value = '0';
+            }
+        }
+    </script>
+</body>
+</html>
+

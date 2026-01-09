@@ -1,0 +1,13 @@
+{
+  "name": "aprender-javascript",
+  "version": "1.0.0",
+  "description": "Ejemplos educativos de JavaScript/Node.js",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": ["ejemplo", "javascript", "nodejs", "aprender"],
+  "author": "",
+  "license": "ISC"
+}
+

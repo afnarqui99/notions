@@ -183,6 +183,34 @@ export const SlashCommand = Extension.create({
             },
           },
           {
+            label: "Consola",
+            description: "Abrir consola completa para ejecutar código y proyectos completos",
+            icon: "💻",
+            keywords: ["consola", "console", "terminal", "ejecutar", "codigo", "nodejs", "python", "run", "execute", "modal"],
+            command: ({ editor, range }) => {
+              editor.chain().focus().deleteRange(range).run();
+              // Disparar evento para abrir la consola
+              console.log('Disparando evento open-console');
+              window.dispatchEvent(new CustomEvent('open-console'));
+            },
+          },
+          {
+            label: "Consola en página",
+            description: "Insertar consola como bloque en la página (se guarda en el documento)",
+            icon: "📝",
+            keywords: ["consola-bloque", "console-block", "consola-pagina", "code-run", "ejecutar-bloque"],
+            command: ({ editor, range }) => {
+              editor.chain().focus().deleteRange(range).insertContent({
+                type: 'consoleBlock',
+                attrs: {
+                  code: '',
+                  language: 'nodejs',
+                  output: '',
+                },
+              }).run();
+            },
+          },
+          {
   label: "Tabla",
   description: "Insertar una tabla dinámica con columnas configurables",
   icon: "📋",

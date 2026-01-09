@@ -1,0 +1,48 @@
+<div class="container">
+  <header style="text-align: center; padding: 30px 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 10px; margin-bottom: 30px;">
+    <h1>{{ title }}</h1>
+    <p>Ejemplos progresivos para aprender Angular desde cero</p>
+  </header>
+
+  <nav style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+    <button 
+      class="btn btn-primary" 
+      [class.btn-success]="ejemploActivo === 1"
+      (click)="cambiarEjemplo(1)">
+      Ejemplo 1: Componentes Básicos
+    </button>
+    <button 
+      class="btn btn-primary" 
+      [class.btn-success]="ejemploActivo === 2"
+      (click)="cambiarEjemplo(2)">
+      Ejemplo 2: Data Binding
+    </button>
+    <button 
+      class="btn btn-primary" 
+      [class.btn-success]="ejemploActivo === 3"
+      (click)="cambiarEjemplo(3)">
+      Ejemplo 3: Directivas
+    </button>
+    <button 
+      class="btn btn-primary" 
+      [class.btn-success]="ejemploActivo === 4"
+      (click)="cambiarEjemplo(4)">
+      Ejemplo 4: Servicios
+    </button>
+    <button 
+      class="btn btn-primary" 
+      [class.btn-success]="ejemploActivo === 5"
+      (click)="cambiarEjemplo(5)">
+      Ejemplo 5: Formularios
+    </button>
+  </nav>
+
+  <div class="card">
+    <app-ejemplo1 *ngIf="ejemploActivo === 1"></app-ejemplo1>
+    <app-ejemplo2 *ngIf="ejemploActivo === 2"></app-ejemplo2>
+    <app-ejemplo3 *ngIf="ejemploActivo === 3"></app-ejemplo3>
+    <app-ejemplo4 *ngIf="ejemploActivo === 4"></app-ejemplo4>
+    <app-ejemplo5 *ngIf="ejemploActivo === 5"></app-ejemplo5>
+  </div>
+</div>
+
