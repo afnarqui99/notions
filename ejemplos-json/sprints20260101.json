@@ -1,0 +1,301 @@
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
+import { dayjs } from 'dayjs';
+import { chooseAction } from 'redux/controlsDuck';
+
+export default function useCommonPayment(specificConfig) {
+    const { actionType, data = [], 
+        specificFilters = {},
+        extendFilterLogic = null,
+        getParams = null
+    } = specificConfig;
+
+    const dispatch = useDispatch();
+
+    const { 
+        loading,
+        message,
+        bankAccounts
+    } = useSelector(state => state.controls);
+
+    const [rows, setRows] = useState(null);
+    const [accumulatedRows, setAccumulatedRows] = useState([]); // Para infinite scroll
+    const [isNewSearch, setIsNewSearch] = useState(true); // Flag para detectar nueva búsqueda
+    const [isPreloading, setIsPreloading] = useState(false); // Flag para pre-carga hasta 100
+    const [targetPreloadSize, setTargetPreloadSize] = useState(100); // Meta de pre-carga
+    const [value, setValue] = useState(0);
+    const [date, setDate] = useState(dayjs());
+    
+    // Calcular pageSize dinámico según el viewport
+    // Altura típica de una fila: ~52px (header + row height)
+    // Altura del grid: 700px (definida en WalletPayment.jsx)
+    // Filas visibles aproximadas: Math.floor(700 / 52) ≈ 13-14 filas
+    // Usamos un múltiplo para tener buffer: 25-30 registros por página
+    // Esto asegura que usuarios con pantallas grandes vean suficientes filas
+    const calculateInitialPageSize = () => {
+        if (typeof window !== 'undefined') {
+            const viewportHeight = window.innerHeight;
+            const gridHeight = 700; // Altura del grid definida en WalletPayment.jsx
+            const rowHeight = 52; // Altura aproximada de cada fila
+            const visibleRows = Math.floor(gridHeight / rowHeight);
+            // Usar al menos 25 registros, o 2x las filas visibles si es mayor
+            return Math.max(25, visibleRows * 2);
+        }
+        return 25; // Valor por defecto si no hay window (SSR)
+    };
+    
+    const [paginationModel, setPaginationModel] = useState({ 
+        page: 0, 
+        pageSize: calculateInitialPageSize() 
+    });
+    const [alert, setAlert] = useState(null);
+    const [filters, setFilters] = useState({
+        "bankFilter": {
+            "value": null,
+            "label": "Banco Origen",
+            "options": []
+        },
+        "accountFilter": {
+            "options": [],
+            "label": "Cuenta Origen",
+            "value": null
+        },
+        "stateFilter": {
+            "value": null,
+            "label": "Estado",
+            "options": ["Anulado", "Aprobado", "Rechazado","Girado","Generado"]
+        },
+        ...specificFilters
+    });
+
+    const updateFilter = (filterKey, updates) => {
+        setFilters(prevFilters => ({
+            ...prevFilters,
+            [filterKey]: {
+                ...prevFilters[filterKey],
+                ...updates
+            }
+        }));
+    };
+
+    const handleFilterClick = useCallback(() => {
+        const accountNumber = filters.accountFilter?.value ?? null;
+        const bankName = filters.bankFilter?.value ?? null;
+        const stateValue = filters.stateFilter?.value ?? null;
+
+        // Usar accumulatedRows si está disponible, sino data
+        const dataToFilter = accumulatedRows.length > 0 ? accumulatedRows : data;
+        
+        const filterData = dataToFilter.filter(item => {
+            if (accountNumber && (item.numeroCuentaOrigin !== accountNumber)) {
+                return false;
+            }
+            if ((!accountNumber && bankName) && (item.bancoOrigen !== bankName)) {
+                return false;
+            }
+            if (stateValue && (item.estado !== stateValue)) {
+                return false;
+            }
+            if (extendFilterLogic) {
+                return extendFilterLogic(item, filters);
+            }
+            return true;
+        })
+        setRows(filterData);
+    },[filters, extendFilterLogic, accumulatedRows, data]);
+
+    const resetAllFilterValues = () => {
+        setFilters(prevFilters => {
+           let newFilters = {...prevFilters};
+           for (let key in newFilters) {
+            if(newFilters[key].hasOwnProperty('value')) {
+                newFilters[key].value = null;
+            }
+           }
+           return newFilters;
+        });
+    };
+
+    const a11yProps = (index) => {
+        return {
+            id: `simple-tab-${index}`,	
+            'aria-controls': `simple-tabpanel-${index}`
+        }
+    }
+
+    const onChangeValue = (event, newValue) => {
+        setValue(newValue);
+    };
+
+    const handleCleanClick = () => {
+        resetAllFilterValues();
+        setRows(accumulatedRows.length > 0 ? accumulatedRows : data);
+    };
+
+    const onChangeDate = (newValue) => {
+        setDate(newValue ?? dayjs());
+        resetAllFilterValues();
+    };
+
+    const onCloseAlert = () => setAlert(null);
+
+    const onClickSearch = () => {
+        // Resetear acumulación cuando se hace una nueva búsqueda
+        setAccumulatedRows([]);
+        setIsNewSearch(true);
+        setIsPreloading(true); // Activar pre-carga
+        lastPageLoaded.current = 0; // Resetear el contador de páginas
+        // Mantener el pageSize actual al resetear
+        const currentPageSize = paginationModel.pageSize;
+        setPaginationModel({ page: 0, pageSize: currentPageSize });
+        dispatch(chooseAction(
+            actionType,
+            getParams(date, { page: 0, pageSize: currentPageSize })
+        ));
+        resetAllFilterValues();
+    }
+
+    useEffect(() => {
+        let selectedBank = filters.bankFilter.value;
+        if (selectedBank) {
+            let accounts = Object.keys(bankaccounts[selectedBank]) || [];
+            updateFilter(
+                'accountFilter', {
+                    'options': accounts,
+                    'value': null
+                }
+            );
+        } else {
+            updateFilter('accountFilter', {
+                'options': [],
+                'value': null
+            });
+        }
+    }, [filters.bankFilter.value,bankAccounts]);
+
+    useEffect(() => {
+        if (loading === false && !!rows) {
+            setAlert({
+                children: message.text, saverity: message.saverity
+            });
+        }
+    }, [loading,message, rows]);
+
+    useEffect(() => {
+        if(loading === false && data && data.length > 0) {
+            if (isNewSearch) {
+                // Primera carga o nueva búsqueda: reemplazar datos
+                setAccumulatedRows(data);
+                setRows(data);
+                setIsNewSearch(false);
+                
+                // Iniciar pre-carga en background hasta llegar a 100
+                // Solo si recibimos la cantidad esperada (primera página) y estamos en modo preload
+                if (data.length === paginationModel.pageSize && isPreloading) {
+                    // Cargar siguiente lote en background (página 1)
+                    setTimeout(() => {
+                        dispatch(chooseAction(
+                            actionType,
+                            getParams(date, { page: 1, pageSize: paginationModel.pageSize })
+                        ));
+                    }, 100); // Pequeño delay para no bloquear UI
+                }
+            } else {
+                // Carga incremental: acumular datos
+                setAccumulatedRows(prev => {
+                    // Evitar duplicados usando un identificador único (id o combinación de campos)
+                    const existingIds = new Set(prev.map(row => row.id || `${row.ordenante}-${row.fecha}`));
+                    const newRows = data.filter(row => {
+                        const rowId = row.id || `${row.ordenante}-${row.fecha}`;
+                        return !existingIds.has(rowId);
+                    });
+                    const updated = [...prev, ...newRows];
+                    
+                    // Si estamos pre-cargando y aún no llegamos a 100, cargar siguiente lote
+                    if (isPreloading && updated.length < targetPreloadSize) {
+                        const nextPage = Math.floor(updated.length / paginationModel.pageSize);
+                        // Solo cargar si hay más datos disponibles (verificar que no sea la última página)
+                        setTimeout(() => {
+                            dispatch(chooseAction(
+                                actionType,
+                                getParams(date, { page: nextPage, pageSize: paginationModel.pageSize })
+                            ));
+                        }, 100);
+                    } else if (isPreloading && updated.length >= targetPreloadSize) {
+                        // Ya llegamos a 100, desactivar pre-carga
+                        setIsPreloading(false);
+                    }
+                    
+                    return updated;
+                });
+                setRows(prevRows => {
+                    const existingIds = new Set((prevRows || []).map(row => row.id || `${row.ordenante}-${row.fecha}`));
+                    const newRows = data.filter(row => {
+                        const rowId = row.id || `${row.ordenante}-${row.fecha}`;
+                        return !existingIds.has(rowId);
+                    });
+                    return [...(prevRows || []), ...newRows];
+                });
+            }
+            updateFilter("bankFilter", { "options": Object.keys(bankAccounts) });
+        }
+    }, [loading, data, isNewSearch, isPreloading, targetPreloadSize, actionType, date, getParams, dispatch, bankAccounts]);
+
+
+    useEffect(() => {
+        onClickSearch();
+    }, []);
+
+    // Ref para evitar loops infinitos en el efecto de paginación
+    const lastPageLoaded = useRef(0);
+    
+    // Efecto para cargar más datos cuando cambia la paginación (infinite scroll)
+    // Solo se activa DESPUÉS de tener 100 registros en memoria
+    useEffect(() => {
+        // Solo cargar más si:
+        // 1. No es la primera carga
+        // 2. No está cargando
+        // 3. Ya tenemos al menos 100 registros (pre-carga completada)
+        // 4. El usuario ha scrolleado más allá de los datos cargados
+        if (!isNewSearch && !loading && !isPreloading && accumulatedRows.length >= targetPreloadSize) {
+            if (paginationModel.page > lastPageLoaded.current) {
+                const currentLoaded = accumulatedRows.length;
+                const requestedStart = paginationModel.page * paginationModel.pageSize;
+                
+                // Si el usuario ha scrolleado más allá de los datos cargados, cargar más
+                if (requestedStart >= currentLoaded) {
+                    lastPageLoaded.current = paginationModel.page;
+                    dispatch(chooseAction(
+                        actionType,
+                        getParams(date, paginationModel)
+                    ));
+                }
+            }
+        }
+    }, [paginationModel.page, paginationModel.pageSize, isNewSearch, loading, isPreloading, accumulatedRows.length, targetPreloadSize, actionType, date, getParams, dispatch]);
+
+    return {
+        loading,
+        filters,
+        updateFilter,
+        handlerFilterClick,
+        resetAllFilterValues,
+        rows: rows ?? accumulatedRows,
+        paginationModel,
+        setPaginationModel,
+        handleCleanClick,
+        value,
+        a11yProps,
+        onChangeValue,
+        alert,
+        setAlert,
+        onCloseAlert,
+        date,
+        onChangeDate,
+        onClickSearch
+    }
+
+   
+    
+    
+}
