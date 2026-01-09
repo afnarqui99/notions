@@ -658,31 +658,12 @@ export const SlashCommand = Extension.create({
       attrs: {
         abierto: true,
         titulo: 'Título del bloque',
+        icono: '',
       },
       content: [
         {
           type: 'paragraph',
-          content: [
-            { type: 'text', text: 'Contenido del toggle aquí.' }
-          ]
-        },
-        {
-          type: 'paragraph',
-          content: [
-            {
-              type: 'text',
-              text: '✏️ Editar título',
-              marks: [
-                {
-                  type: 'link',
-                  attrs: {
-                    href: '#',
-                    'data-edit-toggle': 'true'
-                  }
-                }
-              ],
-            },
-          ],
+          content: []
         }
       ]
     };

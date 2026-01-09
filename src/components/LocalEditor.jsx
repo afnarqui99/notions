@@ -134,6 +134,8 @@ export default function LocalEditor({ onShowConfig }) {
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [emojiPickerPosition, setEmojiPickerPosition] = useState({ top: 0, left: 0 });
+  const [emojiPickerToggleId, setEmojiPickerToggleId] = useState(null);
+  const [emojiPickerCurrentEmoji, setEmojiPickerCurrentEmoji] = useState('');
   const emojiPickerRef = useRef(null);
   const [showSQLFileManager, setShowSQLFileManager] = useState(false);
   const [sqlFileToLoad, setSqlFileToLoad] = useState(null);
@@ -1330,9 +1332,12 @@ export default function LocalEditor({ onShowConfig }) {
     const handleOpenEmojiPicker = (event) => {
       if (!editor) return;
       
+      // Si hay un toggleId en el evento, siempre manejarlo (viene del toggle)
+      const hasToggleId = event.detail?.toggleId;
+      
       // Verificar si el evento viene de un editor dentro de un Portal
       // Si es así, ignorar este evento (será manejado por EditorDescripcion.jsx)
-      if (event.detail && event.detail.editor) {
+      if (event.detail && event.detail.editor && !hasToggleId) {
         const eventEditor = event.detail.editor;
         
         // Verificar si hay un modal del Portal abierto
@@ -1358,43 +1363,61 @@ export default function LocalEditor({ onShowConfig }) {
         }
       }
       
-      // Obtener la posición del cursor
-      const { state } = editor;
-      const { $from } = state.selection;
-      const coords = editor.view.coordsAtPos($from.pos);
-      
-      // Calcular posición para mostrar el picker centrado cerca del cursor
-      // El EmojiPicker tiene un ancho de 420px, así que lo centramos respecto al cursor
-      const pickerWidth = 420;
-      const pickerHeight = 400; // Altura aproximada del picker
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
-      
-      // Calcular posición horizontal (centrado respecto al cursor, pero ajustado si se sale del viewport)
-      let leftPosition = coords.left + window.scrollX - (pickerWidth / 2);
-      if (leftPosition < 10) {
-        leftPosition = 10; // Mínimo 10px del borde izquierdo
-      } else if (leftPosition + pickerWidth > viewportWidth - 10) {
-        leftPosition = viewportWidth - pickerWidth - 10; // Ajustar si se sale por la derecha
+      // Si hay posición personalizada en el evento (viene del toggle), usarla directamente
+      const customPosition = event.detail?.position;
+      if (customPosition) {
+        setEmojiPickerPosition({
+          top: customPosition.top,
+          left: customPosition.left
+        });
+      } else {
+        // Obtener la posición del cursor
+        const { state } = editor;
+        const { $from } = state.selection;
+        const coords = editor.view.coordsAtPos($from.pos);
+        
+        // Calcular posición para mostrar el picker centrado cerca del cursor
+        // El EmojiPicker tiene un ancho de 420px, así que lo centramos respecto al cursor
+        const pickerWidth = 420;
+        const pickerHeight = 400; // Altura aproximada del picker
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        
+        // Calcular posición horizontal (centrado respecto al cursor, pero ajustado si se sale del viewport)
+        let leftPosition = coords.left + window.scrollX - (pickerWidth / 2);
+        if (leftPosition < 10) {
+          leftPosition = 10; // Mínimo 10px del borde izquierdo
+        } else if (leftPosition + pickerWidth > viewportWidth - 10) {
+          leftPosition = viewportWidth - pickerWidth - 10; // Ajustar si se sale por la derecha
+        }
+        
+        // Calcular posición vertical (debajo del cursor, pero ajustado si no hay espacio)
+        let topPosition = coords.bottom + window.scrollY + 10;
+        const spaceBelow = viewportHeight - (coords.bottom + window.scrollY);
+        const spaceAbove = coords.top + window.scrollY;
+        
+        if (spaceBelow < pickerHeight && spaceAbove > spaceBelow) {
+          // No hay espacio debajo, ponerlo arriba
+          topPosition = coords.top + window.scrollY - pickerHeight - 10;
+        } else if (topPosition + pickerHeight > viewportHeight - 10) {
+          // Ajustar si se sale por abajo
+          topPosition = viewportHeight - pickerHeight - 10;
+        }
+        
+        setEmojiPickerPosition({
+          top: Math.max(10, topPosition),
+          left: Math.max(10, leftPosition)
+        });
       }
       
-      // Calcular posición vertical (debajo del cursor, pero ajustado si no hay espacio)
-      let topPosition = coords.bottom + window.scrollY + 10;
-      const spaceBelow = viewportHeight - (coords.bottom + window.scrollY);
-      const spaceAbove = coords.top + window.scrollY;
-      
-      if (spaceBelow < pickerHeight && spaceAbove > spaceBelow) {
-        // No hay espacio debajo, ponerlo arriba
-        topPosition = coords.top + window.scrollY - pickerHeight - 10;
-      } else if (topPosition + pickerHeight > viewportHeight - 10) {
-        // Ajustar si se sale por abajo
-        topPosition = viewportHeight - pickerHeight - 10;
+      // Guardar información del toggle si viene en el evento
+      if (event.detail?.toggleId) {
+        setEmojiPickerToggleId(event.detail.toggleId);
+        setEmojiPickerCurrentEmoji(event.detail.currentEmoji || '');
+      } else {
+        setEmojiPickerToggleId(null);
+        setEmojiPickerCurrentEmoji('');
       }
-      
-      setEmojiPickerPosition({
-        top: Math.max(10, topPosition),
-        left: Math.max(10, leftPosition)
-      });
       
       setShowEmojiPicker(true);
     };
@@ -1430,13 +1453,23 @@ export default function LocalEditor({ onShowConfig }) {
   const handleEmojiSelect = (emoji) => {
     if (!editor) return;
     
-    // Insertar el emoji en la posición actual del cursor
-    editor.chain().focus().insertContent({
-      type: 'text',
-      text: emoji
-    }).run();
+    // Si hay un toggleId, actualizar el toggle en lugar de insertar texto
+    if (emojiPickerToggleId && editor.storage?.toggleEditing?.[emojiPickerToggleId]) {
+      const toggleData = editor.storage.toggleEditing[emojiPickerToggleId];
+      toggleData.updateIcono(emoji);
+      // Limpiar la referencia
+      delete editor.storage.toggleEditing[emojiPickerToggleId];
+    } else {
+      // Insertar el emoji en la posición actual del cursor
+      editor.chain().focus().insertContent({
+        type: 'text',
+        text: emoji
+      }).run();
+    }
     
     setShowEmojiPicker(false);
+    setEmojiPickerToggleId(null);
+    setEmojiPickerCurrentEmoji('');
   };
 
   // Ref para seleccionarPagina para evitar dependencias
@@ -2641,8 +2674,12 @@ export default function LocalEditor({ onShowConfig }) {
         >
           <EmojiPicker
             onSelect={handleEmojiSelect}
-            onClose={() => setShowEmojiPicker(false)}
-            currentEmoji=""
+            onClose={() => {
+              setShowEmojiPicker(false);
+              setEmojiPickerToggleId(null);
+              setEmojiPickerCurrentEmoji('');
+            }}
+            currentEmoji={emojiPickerCurrentEmoji}
           />
         </div>
       )}

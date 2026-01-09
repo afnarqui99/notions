@@ -13,40 +13,60 @@ class CommandUsageService {
     this.loadUsageData();
   }
 
-  // Cargar datos de uso desde archivo
+  // Cargar datos de uso desde archivo o localStorage
   async loadUsageData() {
     try {
+      // Intentar cargar desde archivo primero
       const data = await LocalStorageService.readJSONFile(this.filename, 'data');
       if (data) {
         this.usageData = data.usageData || {};
         this.customOrder = data.customOrder || null;
-      } else {
-        // Si no existe, inicializar vacío
-        this.usageData = {};
-        this.customOrder = null;
-        // Crear el archivo inicial
-        await this.saveUsageData();
+        return;
       }
     } catch (error) {
-      console.error('Error cargando datos de uso de comandos:', error);
-      this.usageData = {};
-      this.customOrder = null;
-      // Intentar crear el archivo si no existe
-      await this.saveUsageData();
+      // Si falla, intentar desde localStorage
+      console.log('No se pudo cargar desde archivo, intentando localStorage:', error.message);
     }
+    
+    // Fallback a localStorage
+    try {
+      const storageKey = `notion-${this.filename}`;
+      const stored = localStorage.getItem(storageKey);
+      if (stored) {
+        const data = JSON.parse(stored);
+        this.usageData = data.usageData || {};
+        this.customOrder = data.customOrder || null;
+        return;
+      }
+    } catch (error) {
+      console.error('Error cargando desde localStorage:', error);
+    }
+    
+    // Si no hay datos en ningún lado, inicializar vacío
+    this.usageData = {};
+    this.customOrder = null;
   }
 
-  // Guardar datos de uso en archivo
+  // Guardar datos de uso en archivo o localStorage
   async saveUsageData() {
+    const dataToSave = {
+      usageData: this.usageData || {},
+      customOrder: this.customOrder || null,
+      lastUpdated: Date.now()
+    };
+    
     try {
-      const dataToSave = {
-        usageData: this.usageData || {},
-        customOrder: this.customOrder || null,
-        lastUpdated: Date.now()
-      };
+      // Intentar guardar en archivo primero
       await LocalStorageService.saveJSONFile(this.filename, dataToSave, 'data');
     } catch (error) {
-      console.error('Error guardando datos de uso de comandos:', error);
+      // Si falla (por ejemplo, no hay baseDirectoryHandle), usar localStorage como fallback
+      console.log('No se pudo guardar en archivo, usando localStorage como fallback:', error.message);
+      try {
+        const storageKey = `notion-${this.filename}`;
+        localStorage.setItem(storageKey, JSON.stringify(dataToSave));
+      } catch (localStorageError) {
+        console.error('Error guardando en localStorage:', localStorageError);
+      }
     }
   }
 
