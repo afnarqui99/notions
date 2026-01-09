@@ -30,15 +30,26 @@ export default function EmojiPicker({ onSelect, onClose, currentEmoji = '' }) {
   // Detectar si estamos dentro de un Portal/modal y actualizar z-index dinámicamente
   useEffect(() => {
     const checkModal = () => {
-      const hasModal = typeof document !== 'undefined' && !!document.querySelector('[data-drawer="table-drawer-modal"]');
+      const hasTableDrawer = typeof document !== 'undefined' && !!document.querySelector('[data-drawer="table-drawer-modal"]');
+      const hasEditToggleModal = typeof document !== 'undefined' && !!document.querySelector('[id^="toggle-edit-modal-"]');
+      const hasModal = hasTableDrawer || hasEditToggleModal;
       setIsInModal(hasModal);
       if (pickerRef.current) {
-        pickerRef.current.style.zIndex = hasModal ? '10003' : '50';
+        // Si está dentro del modal de edición de toggle, usar z-index muy alto
+        if (hasEditToggleModal) {
+          pickerRef.current.style.zIndex = '50001'; // Más alto que el modal (50000)
+          pickerRef.current.style.position = 'absolute'; // Asegurar que position esté definido
+        } else if (hasTableDrawer) {
+          pickerRef.current.style.zIndex = '10003';
+        } else {
+          pickerRef.current.style.zIndex = '50';
+        }
       }
     };
     
     checkModal();
-    const interval = setInterval(checkModal, 100);
+    // Verificar más frecuentemente para asegurar que el z-index se actualice
+    const interval = setInterval(checkModal, 50);
     return () => clearInterval(interval);
   }, []);
 
@@ -102,6 +113,13 @@ export default function EmojiPicker({ onSelect, onClose, currentEmoji = '' }) {
   // Calcular z-index dinámico para estar por encima del menú de sugerencias
   const getPickerZIndex = () => {
     if (typeof document === 'undefined') return 50;
+    
+    // Verificar si está dentro del modal de edición de toggle
+    const hasEditToggleModal = !!document.querySelector('[id^="toggle-edit-modal-"]');
+    if (hasEditToggleModal) {
+      return 50001; // Más alto que el modal (50000)
+    }
+    
     const openModals = document.querySelectorAll('[data-drawer="table-drawer-modal"]');
     const level = openModals.length;
     // El menú de sugerencias tiene: 10000 + (level * 1000) + 100
@@ -109,11 +127,17 @@ export default function EmojiPicker({ onSelect, onClose, currentEmoji = '' }) {
     return 10000 + (level * 1000) + 200;
   };
 
+  // Calcular z-index - asegurar que esté por encima del modal de edición de toggle
+  const calculatedZIndex = getPickerZIndex();
+  
   return (
     <div 
       ref={pickerRef}
       className="absolute mt-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg shadow-xl w-[420px] overflow-hidden"
-      style={{ zIndex: getPickerZIndex() }}
+      style={{ 
+        zIndex: calculatedZIndex,
+        position: 'absolute'
+      }}
     >
       {/* Header */}
       <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-3 flex items-center justify-between">
