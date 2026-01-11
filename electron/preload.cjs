@@ -15,6 +15,18 @@ const electronAPI = {
   executeCode: (code, language) => {
     return ipcRenderer.invoke('execute-code', code, language);
   },
+  // Iniciar servicio de ejecución
+  startCodeService: (language) => {
+    return ipcRenderer.invoke('start-code-service', language);
+  },
+  // Detener servicio de ejecución
+  stopCodeService: (language) => {
+    return ipcRenderer.invoke('stop-code-service', language);
+  },
+  // Obtener estado del servicio
+  getCodeServiceStatus: (language) => {
+    return ipcRenderer.invoke('get-code-service-status', language);
+  },
   // Ejecutar proyecto completo desde una ruta
   executeProject: (projectPath, language) => {
     return ipcRenderer.invoke('execute-project', projectPath, language);

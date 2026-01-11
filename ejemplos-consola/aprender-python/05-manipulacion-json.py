@@ -98,3 +98,4 @@ productos_json = json.dumps(productos, indent=2, ensure_ascii=False)
 print("\nLista completa en JSON:")
 print(productos_json)
 
+

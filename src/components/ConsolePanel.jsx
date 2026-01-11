@@ -2,17 +2,11 @@ import { useState, useEffect, useRef } from 'react';
 import { X, Play, Maximize2, Minimize2, FolderOpen, Terminal, Settings, BookOpen, Eye, Code, Sidebar, Info, CheckCircle, AlertCircle, FilePlus, Sparkles, Copy, Check, Layout, Split } from 'lucide-react';
 import cursosService from '../services/CursosService';
 import codeIntelligenceService from '../services/CodeIntelligenceService';
-import hljs from 'highlight.js';
-// Importar estilos de highlight.js - Tema oscuro tipo VS Code
-import 'highlight.js/styles/vs2015.css';
 import FileExplorer from './FileExplorer';
 import ConsolePluginsModal from './ConsolePluginsModal';
 
 export default function ConsolePanel({ isOpen, onClose, editor = null }) {
-  // Debug: verificar si el componente se está renderizando
-  useEffect(() => {
-    console.log('ConsolePanel renderizado, isOpen:', isOpen);
-  }, [isOpen]);
+  // TODOS LOS HOOKS DEBEN IR PRIMERO (regla de React)
   const [code, setCode] = useState('');
   const [output, setOutput] = useState('');
   const [isExecuting, setIsExecuting] = useState(false);
@@ -21,6 +15,8 @@ export default function ConsolePanel({ isOpen, onClose, editor = null }) {
   const [projectPath, setProjectPath] = useState('');
   const [isExecutingProject, setIsExecutingProject] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [serviceActive, setServiceActive] = useState(false); // Estado del servicio compartido
+  const [serviceQueueLength, setServiceQueueLength] = useState(0); // Longitud de la cola
   const [previewMode, setPreviewMode] = useState('code'); // 'code', 'preview', 'split'
   const [previewContent, setPreviewContent] = useState('');
   const [isHTMLCode, setIsHTMLCode] = useState(false);
@@ -52,6 +48,36 @@ export default function ConsolePanel({ isOpen, onClose, editor = null }) {
   const codeHighlightRef = useRef(null);
   const previewIframeRef = useRef(null);
   const resizeRef = useRef(null);
+  const hljsRef = useRef(null); // Ref para highlight.js
+
+  // Verificar si estamos en Electron (debe estar antes de cualquier uso)
+  const isElectron = typeof window !== 'undefined' && window.electronAPI && window.electronAPI.executeCode;
+
+  // Cargar CSS de highlight.js de forma diferida usando requestAnimationFrame
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    
+    const loadCSS = () => {
+      if (!document.querySelector('link[href*="vs2015"]')) {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/vs2015.min.css';
+        link.crossOrigin = 'anonymous';
+        document.head.appendChild(link);
+      }
+    };
+    
+    // Usar requestAnimationFrame para asegurar que el DOM esté listo
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', loadCSS);
+    } else {
+      requestAnimationFrame(loadCSS);
+    }
+    
+    return () => {
+      document.removeEventListener('DOMContentLoaded', loadCSS);
+    };
+  }, []);
 
   // Auto-scroll en la salida
   useEffect(() => {
@@ -92,44 +118,62 @@ export default function ConsolePanel({ isOpen, onClose, editor = null }) {
     }
   }, [showProjectMenu]);
 
-  // Mapeo de lenguajes a highlight.js
-  const getHighlightLanguage = (lang) => {
-    const langMap = {
-      'nodejs': 'javascript',
-      'python': 'python',
-      'dotnet': 'csharp',
-      'java': 'java',
-      'sqlite': 'sql'
-    };
-    return langMap[lang] || 'javascript';
-  };
-
   // Aplicar resaltado de sintaxis
   useEffect(() => {
     if (codeHighlightRef.current && code.trim()) {
+      // Función para obtener highlight.js (definida dentro del useEffect)
+      const getHljs = async () => {
+        if (!hljsRef.current) {
+          const hljsModule = await import('highlight.js');
+          hljsRef.current = hljsModule.default || hljsModule;
+        }
+        return hljsRef.current;
+      };
+      
+      // Mapeo de lenguajes a highlight.js (definido dentro del useEffect)
+      const getHighlightLanguage = (lang) => {
+        const langMap = {
+          'nodejs': 'javascript',
+          'python': 'python',
+          'dotnet': 'csharp',
+          'java': 'java',
+          'sqlite': 'sql'
+        };
+        return langMap[lang] || 'javascript';
+      };
+      
       const lang = getHighlightLanguage(language);
-      try {
-        const highlighted = hljs.highlight(code, { language: lang }).value;
-        codeHighlightRef.current.innerHTML = highlighted;
-        // Hacer el texto del pre transparente para que solo se vea el resaltado de colores
+      getHljs().then(hljsInstance => {
+        if (codeHighlightRef.current && code.trim()) {
+          try {
+            const highlighted = hljsInstance.highlight(code, { language: lang }).value;
+            codeHighlightRef.current.innerHTML = highlighted;
+            // Hacer el texto del pre transparente para que solo se vea el resaltado de colores
+            if (codeHighlightRef.current) {
+              codeHighlightRef.current.style.color = 'transparent';
+              codeHighlightRef.current.style.WebkitTextFillColor = 'transparent';
+            }
+          } catch (err) {
+            // Si falla el resaltado, mostrar el código sin resaltar (escapar HTML)
+            if (codeHighlightRef.current) {
+              codeHighlightRef.current.textContent = code;
+              codeHighlightRef.current.style.color = 'transparent';
+              codeHighlightRef.current.style.WebkitTextFillColor = 'transparent';
+            }
+          }
+        }
+      }).catch(err => {
+        console.warn('Error cargando highlight.js:', err);
         if (codeHighlightRef.current) {
+          codeHighlightRef.current.textContent = code;
           codeHighlightRef.current.style.color = 'transparent';
           codeHighlightRef.current.style.WebkitTextFillColor = 'transparent';
         }
-      } catch (err) {
-        // Si falla el resaltado, mostrar el código sin resaltar (escapar HTML)
-        codeHighlightRef.current.textContent = code;
-        if (codeHighlightRef.current.style) {
-          codeHighlightRef.current.style.color = 'transparent';
-          codeHighlightRef.current.style.WebkitTextFillColor = 'transparent';
-        }
-      }
+      });
     } else if (codeHighlightRef.current) {
       codeHighlightRef.current.textContent = '';
-      if (codeHighlightRef.current.style) {
-        codeHighlightRef.current.style.color = 'transparent';
-        codeHighlightRef.current.style.WebkitTextFillColor = 'transparent';
-      }
+      codeHighlightRef.current.style.color = 'transparent';
+      codeHighlightRef.current.style.WebkitTextFillColor = 'transparent';
     }
   }, [code, language]);
 
@@ -908,6 +952,65 @@ ${code}
     }
   };
 
+  // Gestionar servicio de ejecución
+  const startService = async () => {
+    if (!isElectron || !window.electronAPI?.startCodeService) return;
+    
+    try {
+      const serviceLanguage = language === 'nodejs' ? 'nodejs' : 'python';
+      const result = await window.electronAPI.startCodeService(serviceLanguage);
+      if (result.success) {
+        setServiceActive(true);
+        setServiceQueueLength(result.status?.queueLength || 0);
+        setOutput(`✅ Servicio ${serviceLanguage} iniciado\n`);
+      }
+    } catch (error) {
+      console.error('Error iniciando servicio:', error);
+      setOutput(`❌ Error al iniciar servicio: ${error.message}\n`);
+    }
+  };
+  
+  const stopService = async () => {
+    if (!isElectron || !window.electronAPI?.stopCodeService) return;
+    
+    try {
+      const serviceLanguage = language === 'nodejs' ? 'nodejs' : 'python';
+      await window.electronAPI.stopCodeService(serviceLanguage);
+      setServiceActive(false);
+      setServiceQueueLength(0);
+      setOutput(`🛑 Servicio ${serviceLanguage} detenido\n`);
+    } catch (error) {
+      console.error('Error deteniendo servicio:', error);
+      setOutput(`❌ Error al detener servicio: ${error.message}\n`);
+    }
+  };
+  
+  // Verificar estado del servicio periódicamente
+  useEffect(() => {
+    if (!isElectron || !window.electronAPI?.getCodeServiceStatus) return;
+    
+    const checkServiceStatus = async () => {
+      try {
+        const serviceLanguage = language === 'nodejs' ? 'nodejs' : 'python';
+        const status = await window.electronAPI.getCodeServiceStatus(serviceLanguage);
+        if (status) {
+          setServiceActive(status.active);
+          setServiceQueueLength(status.queueLength);
+        }
+      } catch (error) {
+        console.error('Error verificando estado del servicio:', error);
+      }
+    };
+    
+    // Verificar inmediatamente
+    checkServiceStatus();
+    
+    // Verificar cada 2 segundos
+    const interval = setInterval(checkServiceStatus, 2000);
+    
+    return () => clearInterval(interval);
+  }, [language, isElectron]);
+  
   // Cargar un curso específico en el explorador
   const loadCourse = async (nombreCurso, nombreDisplay) => {
     try {
@@ -1156,9 +1259,6 @@ ${code}
 
   if (!isOpen) return null;
 
-  // Verificar si estamos en Electron
-  const isElectron = typeof window !== 'undefined' && window.electronAPI && window.electronAPI.executeCode;
-
   return (
     <div 
       className={`fixed inset-0 bg-black/50 z-[60000] flex items-center justify-center p-4 ${
@@ -1227,6 +1327,34 @@ ${code}
               <option value="java">Java</option>
               <option value="sqlite">SQLite</option>
             </select>
+            {/* Botón de servicio (solo en Electron para Node.js y Python) */}
+            {isElectron && (language === 'nodejs' || language === 'python') && (
+              <>
+                {serviceActive ? (
+                  <button
+                    onClick={stopService}
+                    className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded transition-colors text-xs flex items-center gap-1"
+                    title={`Servicio activo (${serviceQueueLength} en cola). Clic para detener.`}
+                  >
+                    <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+                    <span className="text-xs">Servicio</span>
+                    {serviceQueueLength > 0 && (
+                      <span className="text-xs bg-yellow-500 px-1 rounded">{serviceQueueLength}</span>
+                    )}
+                  </button>
+                ) : (
+                  <button
+                    onClick={startService}
+                    className="px-2 py-1 bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors text-xs flex items-center gap-1"
+                    title="Iniciar servicio compartido (evita múltiples procesos)"
+                  >
+                    <div className="w-2 h-2 bg-gray-400 rounded-full" />
+                    <span className="text-xs">Servicio</span>
+                  </button>
+                )}
+                <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1" />
+              </>
+            )}
             <button
               onClick={executeCode}
               disabled={isExecuting || !code.trim() || (!isElectron && (language === 'python' || language === 'dotnet' || language === 'java' || language === 'sqlite'))}

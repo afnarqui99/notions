@@ -133,3 +133,4 @@ let productosJSON = JSON.stringify(productos, null, 2);
 console.log("\nLista completa en JSON:");
 console.log(productosJSON);
 
+

@@ -50,3 +50,4 @@ console.log(`Conversión: '${numeroTexto}' -> ${numeroEntero}`);
 let nombreCompleto = `${nombre} ${apellido}`;
 console.log(`Nombre completo: ${nombreCompleto}`);
 
+

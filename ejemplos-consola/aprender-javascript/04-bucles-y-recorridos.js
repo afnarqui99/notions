@@ -91,3 +91,4 @@ console.log("\nRecorrer con reduce:");
 let suma = numeros.reduce((acc, n) => acc + n, 0);
 console.log(`  Suma: ${suma}`);
 
+

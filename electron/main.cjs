@@ -25,6 +25,225 @@ let mainWindow;
 let tray = null;
 let isQuitting = false;
 
+// Servicio compartido de ejecución de código
+const CodeExecutionService = {
+  // Estado del servicio por lenguaje
+  services: {
+    nodejs: { active: false, queue: [], processing: false, lastUsed: null },
+    python: { active: false, queue: [], processing: false, lastUsed: null }
+  },
+  
+  // Timeout para cerrar automáticamente (5 minutos de inactividad)
+  AUTO_CLOSE_TIMEOUT: 5 * 60 * 1000,
+  autoCloseTimers: {},
+  
+  // Iniciar servicio para un lenguaje
+  startService(language) {
+    const service = this.services[language];
+    if (!service) return;
+    
+    service.active = true;
+    service.lastUsed = Date.now();
+    
+    // Limpiar timer de auto-cierre si existe
+    if (this.autoCloseTimers[language]) {
+      clearTimeout(this.autoCloseTimers[language]);
+      delete this.autoCloseTimers[language];
+    }
+    
+    console.log(`✅ Servicio ${language} iniciado`);
+  },
+  
+  // Detener servicio para un lenguaje
+  stopService(language) {
+    const service = this.services[language];
+    if (!service) return;
+    
+    service.active = false;
+    service.queue = [];
+    service.processing = false;
+    
+    // Limpiar timer de auto-cierre si existe
+    if (this.autoCloseTimers[language]) {
+      clearTimeout(this.autoCloseTimers[language]);
+      delete this.autoCloseTimers[language];
+    }
+    
+    console.log(`🛑 Servicio ${language} detenido`);
+  },
+  
+  // Verificar si el servicio está activo
+  isServiceActive(language) {
+    return this.services[language]?.active || false;
+  },
+  
+  // Agregar ejecución a la cola
+  async executeCode(code, language) {
+    const service = this.services[language];
+    if (!service) {
+      return Promise.resolve({ error: `Lenguaje no soportado: ${language}` });
+    }
+    
+    // Si el servicio no está activo, iniciarlo automáticamente
+    if (!service.active) {
+      this.startService(language);
+    }
+    
+    // Actualizar último uso
+    service.lastUsed = Date.now();
+    
+    // Programar auto-cierre
+    this.scheduleAutoClose(language);
+    
+    // Retornar promesa que se resolverá cuando se procese
+    return new Promise((resolve) => {
+      service.queue.push({ code, resolve });
+      this.processQueue(language);
+    });
+  },
+  
+  // Procesar cola de ejecuciones
+  async processQueue(language) {
+    const service = this.services[language];
+    if (!service || !service.active || service.processing || service.queue.length === 0) {
+      return;
+    }
+    
+    service.processing = true;
+    const { code, resolve } = service.queue.shift();
+    
+    try {
+      const result = await this.runCode(code, language);
+      resolve(result);
+    } catch (error) {
+      resolve({ error: error.message });
+    } finally {
+      service.processing = false;
+      service.lastUsed = Date.now();
+      
+      // Procesar siguiente en la cola
+      if (service.queue.length > 0) {
+        setImmediate(() => this.processQueue(language));
+      } else {
+        // Si no hay más en la cola, programar auto-cierre
+        this.scheduleAutoClose(language);
+      }
+    }
+  },
+  
+  // Ejecutar código (lógica original)
+  async runCode(code, language) {
+    return new Promise((resolve, reject) => {
+      let command, args;
+      
+      if (language === 'python') {
+        command = 'python';
+        args = ['-c', code];
+      } else {
+        // Node.js por defecto
+        const tempFile = path.join(os.tmpdir(), `node_exec_${Date.now()}_${Math.random().toString(36).substring(7)}.js`);
+        fs.writeFileSync(tempFile, code, 'utf8');
+        
+        command = 'node';
+        args = [tempFile];
+        
+        // Función para limpiar el archivo temporal
+        const cleanupTempFile = () => {
+          try {
+            if (fs.existsSync(tempFile)) {
+              fs.unlinkSync(tempFile);
+            }
+          } catch (err) {
+            // Ignorar errores de limpieza silenciosamente
+          }
+        };
+        
+        // Guardar la función de limpieza para usarla después
+        const originalResolve = resolve;
+        resolve = (result) => {
+          cleanupTempFile();
+          originalResolve(result);
+        };
+      }
+      
+      const childProcess = spawn(command, args, {
+        shell: true,
+        cwd: os.homedir(),
+        env: { ...process.env }
+      });
+      
+      let output = '';
+      let errorOutput = '';
+      
+      childProcess.stdout.on('data', (data) => {
+        output += data.toString();
+      });
+      
+      childProcess.stderr.on('data', (data) => {
+        errorOutput += data.toString();
+      });
+      
+      childProcess.on('close', (code) => {
+        if (code === 0) {
+          resolve({ output: output || 'Ejecutado correctamente (sin salida)' });
+        } else {
+          resolve({ error: errorOutput || `Proceso terminado con código ${code}` });
+        }
+      });
+      
+      childProcess.on('error', (error) => {
+        resolve({ 
+          error: `Error al ejecutar: ${error.message}\n\nAsegúrate de que ${command} esté instalado y en tu PATH.` 
+        });
+      });
+      
+      // Timeout de 30 segundos
+      let timeoutId = setTimeout(() => {
+        childProcess.kill();
+        resolve({ error: 'Tiempo de ejecución excedido (30 segundos)' });
+      }, 30000);
+      
+      // Limpiar timeout si el proceso termina antes
+      childProcess.on('close', () => {
+        if (timeoutId) clearTimeout(timeoutId);
+      });
+    });
+  },
+  
+  // Programar auto-cierre del servicio
+  scheduleAutoClose(language) {
+    const service = this.services[language];
+    if (!service) return;
+    
+    // Limpiar timer anterior si existe
+    if (this.autoCloseTimers[language]) {
+      clearTimeout(this.autoCloseTimers[language]);
+    }
+    
+    // Programar nuevo timer
+    this.autoCloseTimers[language] = setTimeout(() => {
+      // Solo cerrar si no hay nada en la cola y no se está procesando
+      if (service.queue.length === 0 && !service.processing) {
+        this.stopService(language);
+        console.log(`⏰ Servicio ${language} cerrado automáticamente por inactividad`);
+      }
+    }, this.AUTO_CLOSE_TIMEOUT);
+  },
+  
+  // Obtener estado del servicio
+  getServiceStatus(language) {
+    const service = this.services[language];
+    if (!service) return null;
+    
+    return {
+      active: service.active,
+      queueLength: service.queue.length,
+      processing: service.processing,
+      lastUsed: service.lastUsed
+    };
+  }
+};
+
 // Prevenir múltiples instancias
 const gotTheLock = app.requestSingleInstanceLock();
 
@@ -138,6 +357,8 @@ function createWindow() {
   }
   const iconPath = getIconPath();
   
+  const isDev = !app.isPackaged;
+  
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -145,7 +366,8 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       enableRemoteModule: false,
-      webSecurity: true,
+      webSecurity: false, // Temporalmente deshabilitado para debug
+      devTools: isDev, // Solo permitir DevTools en desarrollo
       preload: path.join(__dirname, 'preload.cjs'),
     },
     icon: iconPath, // Icono de la aplicación
@@ -170,17 +392,17 @@ function createWindow() {
             "media-src 'self'; " +
             "frame-src 'self';";
     } else {
-      // En producción: CSP para archivos locales (file://)
-      // Permitir recursos desde el mismo origen (file://) y data: blob:
-      csp = "default-src 'self' file:; " +
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " + // unsafe-eval necesario para algunos bundles
-            "style-src 'self' 'unsafe-inline'; " +
-            "img-src 'self' data: blob: file:; " +
-            "connect-src 'self'; " +
-            "font-src 'self' data: file:; " +
+      // En producción: CSP temporalmente más permisivo para debug
+      // TODO: Restringir después de resolver el problema
+      csp = "default-src * 'unsafe-inline' 'unsafe-eval' data: blob: file: https:; " +
+            "script-src * 'unsafe-inline' 'unsafe-eval' data: blob: file: https:; " +
+            "style-src * 'unsafe-inline' data: blob: file: https:; " +
+            "img-src * data: blob: file: https:; " +
+            "connect-src * data: blob: file: https:; " +
+            "font-src * data: blob: file: https:; " +
             "object-src 'none'; " +
-            "media-src 'self' file:; " +
-            "frame-src 'self';";
+            "media-src * data: blob: file: https:; " +
+            "frame-src * data: blob: file: https:;";
     }
     
     callback({
@@ -192,11 +414,18 @@ function createWindow() {
   });
 
   // Cargar la aplicación
-  const isDev = !app.isPackaged;
+  // isDev ya está definido arriba
+  
+  // Asegurar que DevTools esté cerrado en producción (verificación extra)
+  if (!isDev) {
+    // Forzar cierre de DevTools si está abierto (por seguridad)
+    mainWindow.webContents.closeDevTools();
+  }
   
   if (isDev) {
     // En desarrollo, cargar desde Vite
     mainWindow.loadURL('http://localhost:5174');
+    // Solo abrir DevTools en desarrollo explícitamente
     mainWindow.webContents.openDevTools();
   } else {
     // En producción, cargar desde los archivos estáticos
@@ -207,19 +436,22 @@ function createWindow() {
     // Lista de rutas posibles en orden de prioridad
     // app.getAppPath() es más confiable cuando está empaquetado
     const appPath = app.getAppPath();
+    const exeDir = path.dirname(app.getPath('exe'));
+    
     const possiblePaths = [
-      // Primero intentar desde app.getAppPath() (más confiable cuando está empaquetado)
-      path.join(appPath, 'dist', 'index.html'),
-      // Luego desde __dirname
-      path.join(__dirname, '../dist/index.html'),
-      path.join(__dirname, '../../dist/index.html'),
-      // Luego desde process.resourcesPath
+      // Primero intentar desde process.resourcesPath (más común en producción)
       path.join(process.resourcesPath, 'app.asar', 'dist', 'index.html'),
       path.join(process.resourcesPath, 'app', 'dist', 'index.html'),
       path.join(process.resourcesPath, 'dist', 'index.html'),
-      // Rutas alternativas
-      path.join(path.dirname(app.getPath('exe')), 'resources', 'app.asar', 'dist', 'index.html'),
-      path.join(path.dirname(app.getPath('exe')), 'resources', 'app', 'dist', 'index.html'),
+      // Luego desde app.getAppPath()
+      path.join(appPath, 'dist', 'index.html'),
+      // Luego desde __dirname
+      path.join(__dirname, '..', 'dist', 'index.html'),
+      path.join(__dirname, '..', '..', 'dist', 'index.html'),
+      // Rutas alternativas desde el directorio del ejecutable
+      path.join(exeDir, 'resources', 'app.asar', 'dist', 'index.html'),
+      path.join(exeDir, 'resources', 'app', 'dist', 'index.html'),
+      path.join(exeDir, 'dist', 'index.html'),
     ];
     
     console.log('=== DEBUG: Búsqueda de index.html ===');
@@ -244,45 +476,49 @@ function createWindow() {
     
     if (!htmlPath) {
       console.error('❌ ERROR: No se encontró index.html en ninguna de las rutas probadas');
+      mainWindow.show(); // Mostrar ventana para ver el error
       // Mostrar un mensaje de error en la ventana
       mainWindow.webContents.once('did-finish-load', () => {
         mainWindow.webContents.executeJavaScript(`
-          document.body.innerHTML = '<div style="padding: 20px; font-family: Arial; text-align: center;"><h1>Error al cargar la aplicación</h1><p>No se pudo encontrar el archivo index.html</p><p>Por favor, reinstala la aplicación.</p></div>';
+          document.body.innerHTML = '<div style="padding: 20px; font-family: Arial; text-align: center;"><h1>Error al cargar la aplicación</h1><p>No se pudo encontrar el archivo index.html</p><p>Por favor, reinstala la aplicación.</p><p>Revisa la consola de Electron para más detalles.</p></div>';
         `);
+      }).catch(e => console.error('Error ejecutando JS:', e));
+      // Intentar cargar una página vacía para mostrar el error
+      mainWindow.loadURL('data:text/html,<html><body style="padding:20px;font-family:Arial;text-align:center;"><h1>Error al cargar la aplicación</h1><p>No se pudo encontrar index.html</p><p>Revisa la consola de Electron</p></body></html>').catch(e => {
+        console.error('Error cargando página de error:', e);
       });
       return;
     }
     
     console.log('Cargando HTML desde:', htmlPath);
     
+    // Verificar que el archivo existe antes de cargarlo
+    if (!fs.existsSync(htmlPath)) {
+      console.error('❌ El archivo no existe:', htmlPath);
+      console.error('Rutas probadas:', possiblePaths);
+      mainWindow.show();
+      const errorMsg = `Error: Archivo no encontrado<br/>${htmlPath}<br/><br/>Rutas probadas:<br/>${possiblePaths.map(p => '• ' + p).join('<br/>')}`;
+      mainWindow.loadURL('data:text/html,<html><body style="padding:20px;font-family:Arial;"><h1>Error: Archivo no encontrado</h1><div style="text-align:left;max-width:800px;word-break:break-all;">' + errorMsg + '</div></body></html>');
+      return;
+    }
+    
+    console.log('✓ Archivo encontrado. Tamaño:', fs.statSync(htmlPath).size, 'bytes');
+    
     // Usar loadFile que maneja mejor las rutas relativas
     mainWindow.loadFile(htmlPath).catch(err => {
       console.error('Error cargando HTML con loadFile:', err);
+      mainWindow.show(); // Asegurarse de mostrar la ventana
       // Intentar con loadURL como fallback
-      const fileUrl = `file:///${htmlPath.replace(/\\/g, '/')}`;
+      const fileUrl = `file:///${htmlPath.replace(/\\/g, '/').replace(/^([A-Z]):/, '/$1:')}`;
       console.log('Intentando con loadURL:', fileUrl);
       mainWindow.loadURL(fileUrl).catch(err2 => {
         console.error('Error con loadURL:', err2);
+        mainWindow.show();
         // Mostrar mensaje de error
-        mainWindow.webContents.once('did-finish-load', () => {
-          mainWindow.webContents.executeJavaScript(`
-            document.body.innerHTML = '<div style="padding: 20px; font-family: Arial; text-align: center;"><h1>Error al cargar la aplicación</h1><p>Error: ${err2.message}</p><p>Ruta intentada: ${fileUrl}</p></div>';
-          `);
+        mainWindow.loadURL('data:text/html,<html><body style="padding:20px;font-family:Arial;text-align:center;"><h1>Error al cargar la aplicación</h1><p>Error: ' + err2.message + '</p><p>Ruta intentada: ' + fileUrl + '</p><p>Revisa la consola de Electron para más detalles.</p></body></html>').catch(e => {
+          console.error('Error cargando página de error:', e);
         });
       });
-    });
-    
-    // Deshabilitar DevTools en producción
-    // Bloquear F12 y Ctrl+Shift+I
-    mainWindow.webContents.on('before-input-event', (event, input) => {
-      if (input.key === 'F12' || (input.control && input.shift && input.key === 'I')) {
-        event.preventDefault();
-      }
-    });
-    
-    // Deshabilitar el menú contextual (clic derecho -> Inspeccionar)
-    mainWindow.webContents.on('context-menu', (event) => {
-      event.preventDefault();
     });
     
     // Escuchar errores de carga
@@ -306,14 +542,39 @@ function createWindow() {
     
     // Escuchar errores de consola del renderer
     mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
-      if (level === 3) { // Error level
+      console.log(`[Renderer ${level}]`, message);
+      if (level >= 2) { // Warning o Error
         console.error('[Renderer Error]', message, 'en', sourceId, 'línea', line);
       }
     });
     
+    // Deshabilitar DevTools en producción
+    // Bloquear F12 y Ctrl+Shift+I
+    if (!isDev) {
+      mainWindow.webContents.on('before-input-event', (event, input) => {
+        if (input.key === 'F12' || (input.control && input.shift && input.key === 'I')) {
+          event.preventDefault();
+        }
+      });
+      
+      // Deshabilitar el menú contextual (clic derecho -> Inspeccionar)
+      mainWindow.webContents.on('context-menu', (event) => {
+        event.preventDefault();
+      });
+    }
+    
     // Escuchar cuando la página termine de cargar
     mainWindow.webContents.on('did-finish-load', () => {
       console.log('✓ Página cargada correctamente');
+      
+      // Asegurar que DevTools esté cerrado en producción (después de cargar)
+      if (!isDev) {
+        if (mainWindow.webContents.isDevToolsOpened()) {
+          console.log('⚠️ DevTools detectado abierto en producción, cerrando...');
+          mainWindow.webContents.closeDevTools();
+        }
+      }
+      
       // Verificar que el contenido se haya cargado
       mainWindow.webContents.executeJavaScript(`
         (function() {
@@ -343,11 +604,27 @@ function createWindow() {
 
   // Mostrar ventana cuando esté lista
   mainWindow.once('ready-to-show', () => {
+    // Asegurar que DevTools esté cerrado en producción antes de mostrar
+    if (!isDev) {
+      if (mainWindow.webContents.isDevToolsOpened()) {
+        console.log('⚠️ DevTools detectado abierto antes de mostrar ventana, cerrando...');
+        mainWindow.webContents.closeDevTools();
+      }
+    }
+    
     mainWindow.show();
     
     // Enfocar la ventana
     if (isDev) {
       mainWindow.focus();
+    } else {
+      // Verificación final en producción después de mostrar
+      setTimeout(() => {
+        if (mainWindow && mainWindow.webContents && mainWindow.webContents.isDevToolsOpened()) {
+          console.log('⚠️ DevTools detectado abierto después de mostrar, cerrando...');
+          mainWindow.webContents.closeDevTools();
+        }
+      }, 100);
     }
   });
 
@@ -425,144 +702,81 @@ app.whenReady().then(() => {
     showNativeNotification(title, body, eventId);
   });
 
-  // Handler para ejecutar código
+  // Handler para iniciar servicio
+  ipcMain.handle('start-code-service', async (event, language) => {
+    CodeExecutionService.startService(language);
+    return { success: true, status: CodeExecutionService.getServiceStatus(language) };
+  });
+  
+  // Handler para detener servicio
+  ipcMain.handle('stop-code-service', async (event, language) => {
+    CodeExecutionService.stopService(language);
+    return { success: true };
+  });
+  
+  // Handler para obtener estado del servicio
+  ipcMain.handle('get-code-service-status', async (event, language) => {
+    return CodeExecutionService.getServiceStatus(language);
+  });
+  
+  // Handler para ejecutar código (ahora usa el servicio compartido)
   ipcMain.handle('execute-code', async (event, code, language) => {
-    return new Promise((resolve, reject) => {
-      let command, args;
-      
-      if (language === 'python') {
-        command = 'python';
-        args = ['-c', code];
-      } else if (language === 'dotnet') {
-        // .NET Core - crear archivo temporal y ejecutar
-        const tempFile = path.join(os.tmpdir(), `temp_${Date.now()}.cs`);
-        const tempProj = path.join(os.tmpdir(), `temp_proj_${Date.now()}`);
-        fs.mkdirSync(tempProj, { recursive: true });
-        
-        // Crear archivo .csproj
-        const csprojContent = `<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-  </PropertyGroup>
-</Project>`;
-        fs.writeFileSync(path.join(tempProj, 'Program.csproj'), csprojContent);
-        
-        // Crear Program.cs con el código
-        const programContent = `using System;
-using System.Collections.Generic;
-using System.Linq;
-
-${code}`;
-        fs.writeFileSync(path.join(tempProj, 'Program.cs'), programContent);
-        
-        command = 'dotnet';
-        args = ['run', '--project', tempProj];
-        resolve({ error: '⚠️ .NET Core requiere compilación. Usa "Ejecutar Proyecto" con un proyecto .NET completo.' });
-        return;
-      } else if (language === 'java') {
-        // Java - crear archivo temporal y compilar
-        const tempFile = path.join(os.tmpdir(), `Main_${Date.now()}.java`);
-        const tempDir = path.dirname(tempFile);
-        
-        // Envolver el código en una clase Main si no está
-        let javaCode = code;
-        if (!code.includes('public class Main')) {
-          javaCode = `public class Main {
-    public static void main(String[] args) {
-        ${code}
-    }
-}`;
-        }
-        
-        fs.writeFileSync(tempFile, javaCode);
-        
-        command = 'javac';
-        args = [tempFile];
-        resolve({ error: '⚠️ Java requiere compilación. Usa "Ejecutar Proyecto" con un proyecto Java completo.' });
-        return;
-      } else if (language === 'sqlite') {
-        // SQLite - ejecutar consultas
-        const dbPath = path.join(os.tmpdir(), 'ejemplos_consola.db');
-        const sqlite3 = require('child_process').spawn;
-        
-        // Crear archivo temporal con las consultas
-        const tempSql = path.join(os.tmpdir(), `temp_${Date.now()}.sql`);
-        fs.writeFileSync(tempSql, code);
-        
-        command = 'sqlite3';
-        args = [dbPath, '.read', tempSql];
-      } else {
-        // Node.js por defecto
-        // Usar un archivo temporal para evitar problemas con caracteres especiales y permisos en Windows
-        const tempFile = path.join(os.tmpdir(), `node_exec_${Date.now()}_${Math.random().toString(36).substring(7)}.js`);
-        fs.writeFileSync(tempFile, code, 'utf8');
-        
-        command = 'node';
-        args = [tempFile];
-        
-        // Función para limpiar el archivo temporal
-        const cleanupTempFile = () => {
-          try {
-            if (fs.existsSync(tempFile)) {
-              fs.unlinkSync(tempFile);
+    // Para lenguajes que no usan el servicio compartido, usar lógica original
+    if (language === 'dotnet' || language === 'java' || language === 'sqlite') {
+      return new Promise((resolve, reject) => {
+        if (language === 'dotnet') {
+          resolve({ error: '⚠️ .NET Core requiere compilación. Usa "Ejecutar Proyecto" con un proyecto .NET completo.' });
+          return;
+        } else if (language === 'java') {
+          resolve({ error: '⚠️ Java requiere compilación. Usa "Ejecutar Proyecto" con un proyecto Java completo.' });
+          return;
+        } else if (language === 'sqlite') {
+          const dbPath = path.join(os.tmpdir(), 'ejemplos_consola.db');
+          const tempSql = path.join(os.tmpdir(), `temp_${Date.now()}.sql`);
+          fs.writeFileSync(tempSql, code);
+          
+          const childProcess = spawn('sqlite3', [dbPath, '.read', tempSql], {
+            shell: true,
+            cwd: os.homedir(),
+            env: { ...process.env }
+          });
+          
+          let output = '';
+          let errorOutput = '';
+          
+          childProcess.stdout.on('data', (data) => {
+            output += data.toString();
+          });
+          
+          childProcess.stderr.on('data', (data) => {
+            errorOutput += data.toString();
+          });
+          
+          childProcess.on('close', (code) => {
+            if (code === 0) {
+              resolve({ output: output || 'Ejecutado correctamente (sin salida)' });
+            } else {
+              resolve({ error: errorOutput || `Proceso terminado con código ${code}` });
             }
-          } catch (err) {
-            // Ignorar errores de limpieza silenciosamente
-          }
-        };
-        
-        // Guardar la función de limpieza para usarla después
-        const originalResolve = resolve;
-        resolve = (result) => {
-          cleanupTempFile();
-          originalResolve(result);
-        };
-      }
-
-      const childProcess = spawn(command, args, {
-        shell: true,
-        cwd: os.homedir(), // Usar el directorio home para evitar problemas de permisos
-        env: { ...process.env }
-      });
-
-      let output = '';
-      let errorOutput = '';
-
-      childProcess.stdout.on('data', (data) => {
-        output += data.toString();
-      });
-
-      childProcess.stderr.on('data', (data) => {
-        errorOutput += data.toString();
-      });
-
-      childProcess.on('close', (code) => {
-        if (code === 0) {
-          resolve({ output: output || 'Ejecutado correctamente (sin salida)' });
-        } else {
-          resolve({ error: errorOutput || `Proceso terminado con código ${code}` });
+          });
+          
+          childProcess.on('error', (error) => {
+            resolve({ 
+              error: `Error al ejecutar: ${error.message}\n\nAsegúrate de que sqlite3 esté instalado y en tu PATH.` 
+            });
+          });
+          
+          setTimeout(() => {
+            childProcess.kill();
+            resolve({ error: 'Tiempo de ejecución excedido (30 segundos)' });
+          }, 30000);
         }
       });
-
-      childProcess.on('error', (error) => {
-        resolve({ 
-          error: `Error al ejecutar: ${error.message}\n\nAsegúrate de que ${command} esté instalado y en tu PATH.` 
-        });
-      });
-
-      // Timeout de 30 segundos
-      let timeoutId = setTimeout(() => {
-        childProcess.kill();
-        resolve({ error: 'Tiempo de ejecución excedido (30 segundos)' });
-      }, 30000);
-      
-      // Limpiar timeout si el proceso termina antes
-      childProcess.on('close', () => {
-        if (timeoutId) clearTimeout(timeoutId);
-      });
-    });
+    }
+    
+    // Para Node.js y Python, usar el servicio compartido
+    const serviceLanguage = language === 'nodejs' ? 'nodejs' : 'python';
+    return await CodeExecutionService.executeCode(code, serviceLanguage);
   });
 
   // Handler para ejecutar proyecto completo

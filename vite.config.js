@@ -11,6 +11,7 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
+    minify: 'esbuild', // Volver a activar minificación
     rollupOptions: {
       output: {
         // Asegurar que las rutas sean relativas
