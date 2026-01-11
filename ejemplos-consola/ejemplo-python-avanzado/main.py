@@ -50,3 +50,4 @@ print("\n--- Estadísticas de los datos ---")
 for clave, valor in resultado.items():
     print(f"{clave.capitalize()}: {valor}")
 
+

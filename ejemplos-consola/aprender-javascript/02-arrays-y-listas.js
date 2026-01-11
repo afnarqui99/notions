@@ -67,3 +67,4 @@ console.log(`Con spread:`, masNumeros);
 let [primero, segundo, ...resto] = numeros;
 console.log(`Primero: ${primero}, Segundo: ${segundo}, Resto:`, resto);
 
+

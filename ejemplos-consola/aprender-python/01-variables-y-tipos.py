@@ -40,3 +40,4 @@ numero_decimal = float(numero_texto)
 texto_numero = str(123)
 print(f"Conversión: '{numero_texto}' -> {numero_entero}")
 
+

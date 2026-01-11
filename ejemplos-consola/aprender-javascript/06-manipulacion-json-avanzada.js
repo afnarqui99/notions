@@ -188,3 +188,4 @@ function transformarProductos() {
 console.log("\nProductos transformados:");
 console.log(transformarProductos());
 
+

@@ -36,3 +36,4 @@ console.log("Datos originales:", datos);
 console.log("Números pares:", pares);
 console.log("Cuadrados:", cuadrados);
 
+

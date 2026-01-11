@@ -103,3 +103,4 @@ let datos = [1, 2, 3, 4, 5];
 let duplicados = procesarDatos(datos, x => x * 2);
 console.log(`Datos duplicados:`, duplicados);
 
+
