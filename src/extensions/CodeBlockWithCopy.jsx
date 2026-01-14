@@ -1,9 +1,10 @@
 import { NodeViewWrapper, NodeViewContent } from '@tiptap/react';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Copy, Check, Code2, Maximize2, Minimize2, Search, X, ChevronUp, ChevronDown } from 'lucide-react';
+import { Copy, Check, Code2, Maximize2, Minimize2, Search, X, ChevronUp, ChevronDown, Trash2 } from 'lucide-react';
+import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 
-export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
+export default function CodeBlockWithCopy({ node, updateAttributes, editor, getPos }) {
   const [copied, setCopied] = useState(false);
   const [isInDrawer, setIsInDrawer] = useState(false);
   const [isInModal, setIsInModal] = useState(false);
@@ -14,6 +15,7 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
   const [searchResults, setSearchResults] = useState([]);
   const [currentResultIndex, setCurrentResultIndex] = useState(-1);
   const [showSearch, setShowSearch] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const language = node.attrs.language || '';
   const contentRef = useRef(null);
   const wrapperRef = useRef(null);
@@ -1131,6 +1133,23 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
           <div className="absolute top-2 right-2 flex gap-2" style={{ 
             zIndex: isInModal ? 10002 : 110 // Mayor z-index cuando está en el Portal
           }}>
+            {/* Botón de eliminar - primero (más a la derecha) */}
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setShowDeleteModal(true);
+              }}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+              className="p-1.5 bg-red-600 hover:bg-red-700 text-white rounded transition-colors flex items-center gap-1 text-xs"
+              title="Eliminar bloque"
+              type="button"
+            >
+              <Trash2 className="w-3 h-3" />
+            </button>
                 <button
                   onClick={handleFullscreen}
                   onMouseDown={(e) => {
@@ -1366,6 +1385,39 @@ export default function CodeBlockWithCopy({ node, updateAttributes, editor }) {
         </div>,
         document.body
       )}
+      
+      {/* Modal de confirmación de eliminación */}
+      <ConfirmDeleteModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={() => {
+          if (editor && typeof getPos === 'function') {
+            try {
+              const pos = getPos();
+              if (pos !== undefined && pos !== null) {
+                editor.chain().focus().deleteRange({ from: pos, to: pos + node.nodeSize }).run();
+              }
+            } catch (error) {
+              console.error('Error al eliminar bloque:', error);
+              try {
+                const view = editor.view;
+                if (view && typeof getPos === 'function') {
+                  const pos = getPos();
+                  if (pos !== undefined && pos !== null) {
+                    view.dispatch(view.state.tr.delete(pos, pos + node.nodeSize));
+                  }
+                }
+              } catch (fallbackError) {
+                console.error('Error en fallback al eliminar:', fallbackError);
+              }
+            }
+          }
+        }}
+        title="¿Eliminar bloque de código?"
+        message={`¿Estás seguro de que quieres eliminar este ${language === 'json' ? 'bloque JSON' : 'bloque de código'}? Esta acción no se puede deshacer.`}
+        confirmText="Eliminar"
+        cancelText="Cancelar"
+      />
     </NodeViewWrapper>
   );
 }
