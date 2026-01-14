@@ -367,7 +367,7 @@ function createWindow() {
       contextIsolation: true,
       enableRemoteModule: false,
       webSecurity: false, // Temporalmente deshabilitado para debug
-      devTools: isDev, // Solo permitir DevTools en desarrollo
+      devTools: true, // Permitir DevTools siempre (F12)
       preload: path.join(__dirname, 'preload.cjs'),
     },
     icon: iconPath, // Icono de la aplicación
@@ -1191,6 +1191,22 @@ app.whenReady().then(() => {
     }
   });
 
+  // Handler para escribir contenido en un archivo
+  ipcMain.handle('write-file', async (event, filePath, content) => {
+    try {
+      // Crear directorio si no existe
+      const dir = path.dirname(filePath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+
+      fs.writeFileSync(filePath, content, 'utf8');
+      return { success: true };
+    } catch (error) {
+      return { error: error.message };
+    }
+  });
+
   // Handler para ejecutar comandos del sistema
   ipcMain.handle('execute-command', async (event, command, shell, cwd) => {
     return new Promise((resolve) => {
@@ -1212,8 +1228,41 @@ app.whenReady().then(() => {
         // Directorio de trabajo
         const workingDir = cwd || os.homedir();
 
-        const childProcess = spawn(commandToExecute, [], {
-          shell: true,
+        // Determinar el shell a usar para spawn
+        let spawnShell = true;
+        let spawnCommand = commandToExecute;
+        let spawnArgs = [];
+        
+        if (shellCommand === 'powershell') {
+          spawnCommand = 'powershell';
+          spawnArgs = ['-Command', command];
+          spawnShell = false;
+        } else if (shellCommand === 'cmd') {
+          spawnCommand = 'cmd';
+          spawnArgs = ['/c', command];
+          spawnShell = false;
+        } else if (process.platform === 'win32' && shellCommand === 'bash') {
+          // En Windows con bash, usar Git Bash o WSL
+          const gitBashPath = 'C:\\Program Files\\Git\\bin\\bash.exe';
+          if (fs.existsSync(gitBashPath)) {
+            spawnCommand = gitBashPath;
+            spawnArgs = ['-c', command];
+            spawnShell = false;
+          } else {
+            // Usar WSL
+            spawnCommand = 'wsl';
+            spawnArgs = ['bash', '-c', command];
+            spawnShell = false;
+          }
+        } else {
+          // Unix/Linux/Mac o bash nativo
+          spawnCommand = shellCommand || 'bash';
+          spawnArgs = ['-c', command];
+          spawnShell = false;
+        }
+        
+        const childProcess = spawn(spawnCommand, spawnArgs, {
+          shell: spawnShell,
           cwd: workingDir,
           env: { ...process.env }
         });

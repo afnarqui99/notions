@@ -18,6 +18,8 @@ import { ResumenFinancieroNode } from "../extensions/ResumenFinancieroNode";
 import { CalendarNode } from "../extensions/CalendarNode";
 import { ConsoleNode } from "../extensions/ConsoleNode";
 import { PostmanNode } from "../extensions/PostmanNode";
+import { VisualCodeNode } from "../extensions/VisualCodeNode";
+import { ConvertidorNode } from "../extensions/ConvertidorNode";
 import TableHeader from "@tiptap/extension-table-header";
 import { ImageExtended } from "../extensions/ImageExtended";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -131,6 +133,8 @@ export default function LocalEditor({ onShowConfig }) {
   const [showExportModal, setShowExportModal] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [showCommentPanel, setShowCommentPanel] = useState(false);
+  const [showReloadConfirmModal, setShowReloadConfirmModal] = useState(false);
+  const pendingReloadRef = useRef(false);
   const [showQuickNote, setShowQuickNote] = useState(false);
   const [showQuickNotesHistory, setShowQuickNotesHistory] = useState(false);
   const [quickNoteToLoad, setQuickNoteToLoad] = useState(null);
@@ -482,6 +486,8 @@ export default function LocalEditor({ onShowConfig }) {
       CalendarNode,
       ConsoleNode,
       PostmanNode,
+      VisualCodeNode,
+      ConvertidorNode,
       Heading.configure({ levels: [1, 2, 3, 4, 5, 6] }),
       Underline,
       TextStyle,
@@ -946,9 +952,54 @@ export default function LocalEditor({ onShowConfig }) {
     guardandoRef.current = guardando;
   }, [guardando]);
 
-  // Prevenir cierre de página si hay cambios sin guardar
+  // Manejar recarga de página (F5) con modal personalizado
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Detectar F5 o Ctrl+R / Cmd+R
+      if (e.key === 'F5' || (e.key === 'r' && (e.ctrlKey || e.metaKey))) {
+        if (hayCambiosSinGuardarRef.current && !guardandoRef.current) {
+          e.preventDefault();
+          e.stopPropagation();
+          setShowReloadConfirmModal(true);
+          return false;
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown, true);
+    };
+  }, []);
+
+  // Manejar confirmación de recarga
+  const handleConfirmReload = async () => {
+    // Intentar guardar antes de recargar
+    if (editor && paginaSeleccionada && guardarContenidoRef.current) {
+      const json = editor.getJSON();
+      await guardarContenidoRef.current(json, false); // No mostrar toast al cerrar
+    }
+    setShowReloadConfirmModal(false);
+    pendingReloadRef.current = true;
+    // Pequeño delay para asegurar que el estado se actualice
+    setTimeout(() => {
+      window.location.reload();
+    }, 100);
+  };
+
+  const handleCancelReload = () => {
+    setShowReloadConfirmModal(false);
+    pendingReloadRef.current = false;
+  };
+
+  // Prevenir cierre de página si hay cambios sin guardar (para otros casos como cerrar pestaña)
   useEffect(() => {
     const handleBeforeUnload = async (e) => {
+      // Si ya confirmamos la recarga, permitirla
+      if (pendingReloadRef.current) {
+        return;
+      }
+      
       // Usar refs para evitar dependencias
       if (hayCambiosSinGuardarRef.current && !guardandoRef.current) {
         // Intentar guardar antes de cerrar
@@ -957,7 +1008,7 @@ export default function LocalEditor({ onShowConfig }) {
           await guardarContenidoRef.current(json, false); // No mostrar toast al cerrar
         }
         
-        // Mostrar advertencia del navegador
+        // Mostrar advertencia del navegador (solo para cerrar pestaña/navegador)
         e.preventDefault();
         e.returnValue = 'Tienes cambios sin guardar. ¿Estás seguro de que quieres salir?';
         return e.returnValue;
@@ -2486,6 +2537,67 @@ export default function LocalEditor({ onShowConfig }) {
           </div>
         )}
       </div>
+
+      {/* Modal de confirmación de recarga */}
+      {showReloadConfirmModal && (
+        <div 
+          className="fixed inset-0 bg-black/50 dark:bg-black/70 z-[50000] flex items-center justify-center p-4"
+          onClick={handleCancelReload}
+        >
+          <div 
+            className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md border border-gray-200 dark:border-gray-700"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="px-6 py-5 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-yellow-600 dark:text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">¿Recargar la página?</h3>
+              </div>
+              <button
+                onClick={handleCancelReload}
+                className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6">
+              <p className="text-gray-700 dark:text-gray-300 mb-6 leading-relaxed">
+                Tienes cambios sin guardar. Si recargas la página, es posible que estos cambios se pierdan.
+              </p>
+              
+              {/* Footer */}
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={handleCancelReload}
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors font-medium"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmReload}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700 transition-colors font-medium flex items-center gap-2 shadow-sm hover:shadow-md"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Recargar de todas formas
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de error/éxito */}
       <Modal

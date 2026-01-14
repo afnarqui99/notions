@@ -32,7 +32,10 @@ export default function TerminalSettingsModal({
   }, [terminal, isOpen]);
 
   const handleSave = () => {
-    if (!terminal) return;
+    if (!terminal) {
+      console.error('[TerminalSettingsModal] No hay terminal para guardar');
+      return;
+    }
     
     const updated = {
       ...terminal,
@@ -41,6 +44,14 @@ export default function TerminalSettingsModal({
       currentDirectory: currentDirectory.trim() || '~',
       styles
     };
+    
+    console.log('[TerminalSettingsModal] Guardando configuración:', {
+      id: updated.id,
+      name: updated.name,
+      shell: updated.shell,
+      currentDirectory: updated.currentDirectory,
+      styles: updated.styles
+    });
     
     onSave(updated);
     onClose();
@@ -153,15 +164,72 @@ export default function TerminalSettingsModal({
               <Folder className="w-4 h-4 inline mr-2" />
               Directorio de trabajo
             </label>
-            <input
-              type="text"
-              value={currentDirectory}
-              onChange={(e) => setCurrentDirectory(e.target.value)}
-              placeholder="~ o ruta absoluta"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-sm"
-            />
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={currentDirectory}
+                onChange={(e) => setCurrentDirectory(e.target.value)}
+                placeholder="~ o ruta absoluta"
+                className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-sm"
+              />
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    console.log('[TerminalSettingsModal] Iniciando selección de directorio...');
+                    if (window.electronAPI && window.electronAPI.selectDirectory) {
+                      // Electron: usar diálogo nativo
+                      console.log('[TerminalSettingsModal] Usando Electron API');
+                      const selectedPath = await window.electronAPI.selectDirectory();
+                      if (selectedPath) {
+                        console.log('[TerminalSettingsModal] Directorio seleccionado:', selectedPath);
+                        setCurrentDirectory(selectedPath);
+                      } else {
+                        console.log('[TerminalSettingsModal] Selección cancelada');
+                      }
+                    } else if ('showDirectoryPicker' in window) {
+                      // Navegador: usar File System Access API
+                      console.log('[TerminalSettingsModal] Usando File System Access API');
+                      const directoryHandle = await window.showDirectoryPicker();
+                      const path = directoryHandle.name;
+                      console.log('[TerminalSettingsModal] Directorio seleccionado:', path);
+                      setCurrentDirectory(path);
+                    } else {
+                      // Fallback: usar input file con webkitdirectory
+                      console.log('[TerminalSettingsModal] Usando fallback webkitdirectory');
+                      const input = document.createElement('input');
+                      input.type = 'file';
+                      input.webkitdirectory = true;
+                      input.style.display = 'none';
+                      input.onchange = (e) => {
+                        const files = e.target.files;
+                        if (files && files.length > 0) {
+                          const firstFile = files[0];
+                          const path = firstFile.webkitRelativePath.split('/')[0];
+                          console.log('[TerminalSettingsModal] Directorio seleccionado (fallback):', path);
+                          setCurrentDirectory(path);
+                        }
+                        document.body.removeChild(input);
+                      };
+                      document.body.appendChild(input);
+                      input.click();
+                    }
+                  } catch (error) {
+                    console.error('[TerminalSettingsModal] Error seleccionando directorio:', error);
+                    if (error.name !== 'AbortError') {
+                      alert('Error al seleccionar directorio: ' + error.message);
+                    }
+                  }
+                }}
+                className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm flex items-center gap-2 transition-colors"
+                title="Seleccionar carpeta"
+              >
+                <Folder className="w-4 h-4" />
+                Buscar
+              </button>
+            </div>
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              Usa ~ para el directorio home o una ruta absoluta
+              Usa ~ para el directorio home, escribe una ruta absoluta o haz clic en "Buscar" para seleccionar una carpeta
             </p>
           </div>
 

@@ -157,11 +157,40 @@ export default function MultiTerminalView({
   };
 
   const updateTerminal = (updatedTerminal) => {
-    const updated = localTerminals.map(t => 
-      t.id === updatedTerminal.id ? updatedTerminal : t
-    );
+    console.log('[MultiTerminalView] Actualizando terminal:', {
+      id: updatedTerminal.id,
+      name: updatedTerminal.name,
+      shell: updatedTerminal.shell,
+      currentDirectory: updatedTerminal.currentDirectory,
+      styles: updatedTerminal.styles
+    });
+    const updated = localTerminals.map(t => {
+      if (t.id === updatedTerminal.id) {
+        // Crear un nuevo objeto para forzar la actualización
+        return {
+          ...updatedTerminal,
+          // Asegurarse de que todos los campos estén presentes
+          id: updatedTerminal.id,
+          name: updatedTerminal.name || t.name,
+          shell: updatedTerminal.shell || t.shell || 'bash',
+          currentDirectory: updatedTerminal.currentDirectory || t.currentDirectory || '~',
+          output: updatedTerminal.output !== undefined ? updatedTerminal.output : t.output,
+          history: updatedTerminal.history || t.history || [],
+          styles: updatedTerminal.styles || t.styles || {
+            backgroundColor: '#1e1e1e',
+            textColor: '#d4d4d4',
+            promptColor: '#4ec9b0',
+            errorColor: '#f48771'
+          },
+          createdAt: updatedTerminal.createdAt || t.createdAt
+        };
+      }
+      return t;
+    });
+    console.log('[MultiTerminalView] Terminal actualizado. Nuevo shell:', updated.find(t => t.id === updatedTerminal.id)?.shell);
     setLocalTerminals(updated);
     onUpdateTerminals(updated);
+    console.log('[MultiTerminalView] Terminal actualizado en la lista');
   };
 
   const executeCommand = async (terminalId, command) => {
