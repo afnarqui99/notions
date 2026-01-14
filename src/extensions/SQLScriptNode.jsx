@@ -1,12 +1,13 @@
 import { NodeViewWrapper } from '@tiptap/react';
 import { useState, useEffect, useRef } from 'react';
 import { Save, History, X, GitBranch, Eye, CheckCircle, AlertCircle, FolderOpen, FileText, Download, FileDown } from 'lucide-react';
+import BlockWithDeleteButton from '../components/BlockWithDeleteButton';
 import SQLVersionService from '../services/SQLVersionService';
 import SQLFileService from '../services/SQLFileService';
 import SQLFileSaveModal from '../components/SQLFileSaveModal';
 import jsPDF from 'jspdf';
 
-export default function SQLScriptNode({ node, updateAttributes }) {
+export default function SQLScriptNode({ node, updateAttributes, editor, getPos }) {
   const [content, setContent] = useState(node.attrs.content || '');
   const [version, setVersion] = useState(node.attrs.version || '');
   const [fileName, setFileName] = useState(node.attrs.fileName || '');
@@ -280,6 +281,7 @@ export default function SQLScriptNode({ node, updateAttributes }) {
 
   return (
     <NodeViewWrapper className="sql-script-node my-4">
+      <BlockWithDeleteButton editor={editor} getPos={getPos} node={node}>
       <div className="border border-gray-300 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-800">
         {/* Header */}
         <div className="bg-gray-100 dark:bg-gray-700 px-4 py-2 flex items-center justify-between border-b border-gray-300 dark:border-gray-600">
@@ -483,6 +485,7 @@ export default function SQLScriptNode({ node, updateAttributes }) {
         initialName={fileName}
         initialDescription={fileDescription}
       />
+      </BlockWithDeleteButton>
     </NodeViewWrapper>
   );
 }

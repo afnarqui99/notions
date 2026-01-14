@@ -4,6 +4,7 @@ import LocalStorageService from '../services/LocalStorageService';
 import { X, Download, Trash2, Plus, Search, File, Edit2, Save, FileText, FileImage, FileVideo, FileAudio, Archive, FileSpreadsheet } from 'lucide-react';
 import GroupSelector from '../components/GroupSelector';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
+import BlockWithDeleteButton from '../components/BlockWithDeleteButton';
 
 // Función para obtener icono según tipo de archivo
 const obtenerIconoPorTipo = (filename) => {
@@ -56,7 +57,7 @@ const esMedia = (filename, tipo) => {
   };
 };
 
-export default function GaleriaArchivosStyle({ node, updateAttributes }) {
+export default function GaleriaArchivosStyle({ node, updateAttributes, editor, getPos }) {
   const [archivos, setArchivos] = useState(() => node.attrs.archivos || []);
   const [archivosCargados, setArchivosCargados] = useState({}); // { id: url }
   const [archivoAmpliado, setArchivoAmpliado] = useState(null);
@@ -287,6 +288,7 @@ export default function GaleriaArchivosStyle({ node, updateAttributes }) {
 
   return (
     <NodeViewWrapper className="galeria-archivos-wrapper my-6">
+      <BlockWithDeleteButton editor={editor} getPos={getPos} node={node}>
       <div className="border rounded-lg p-4 bg-white">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
@@ -608,6 +610,7 @@ export default function GaleriaArchivosStyle({ node, updateAttributes }) {
         confirmText="Eliminar"
         cancelText="Cancelar"
       />
+      </BlockWithDeleteButton>
     </NodeViewWrapper>
   );
 }

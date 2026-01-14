@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { NodeViewWrapper } from '@tiptap/react';
 import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, Clock, X, Edit2, Trash2, Save, Tag, Settings, Maximize2, Minimize2, MoreVertical } from 'lucide-react';
+import BlockWithDeleteButton from '../components/BlockWithDeleteButton';
 import CalendarEventService from '../services/CalendarEventService';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import CategoryManagerModal from '../components/CategoryManagerModal';
@@ -377,7 +378,7 @@ function EventModal({ isOpen, onClose, event, calendarId, onSave, onDelete, cate
   );
 }
 
-export default function CalendarStyle({ node, updateAttributes }) {
+export default function CalendarStyle({ node, updateAttributes, editor, getPos }) {
   // Generar calendarId si no existe
   const generateCalendarId = () => {
     if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -1011,8 +1012,9 @@ export default function CalendarStyle({ node, updateAttributes }) {
         marginRight: 0,
         paddingLeft: '1rem',
         paddingRight: '1rem'
-      } : {}}
+      } : {      }}
     >
+      <BlockWithDeleteButton editor={editor} getPos={getPos} node={node}>
       <div className="border rounded-lg p-6 bg-white">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
@@ -1194,6 +1196,7 @@ export default function CalendarStyle({ node, updateAttributes }) {
           }}
         />
       </div>
+      </BlockWithDeleteButton>
     </NodeViewWrapper>
   );
 }

@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { NodeViewWrapper } from "@tiptap/react";
+import BlockWithDeleteButton from '../components/BlockWithDeleteButton';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -31,7 +32,7 @@ ChartJS.register(
   ArcElement
 );
 
-export default function ResumenFinancieroStyle({ node, updateAttributes, editor }) {
+export default function ResumenFinancieroStyle({ node, updateAttributes, editor, getPos }) {
   const [datosTablas, setDatosTablas] = useState({});
   const [cargando, setCargando] = useState(true);
   const [graficasExpandidas, setGraficasExpandidas] = useState(false); // Por defecto colapsadas
@@ -319,6 +320,7 @@ export default function ResumenFinancieroStyle({ node, updateAttributes, editor 
 
   return (
     <NodeViewWrapper className="my-4 p-6 border rounded-lg bg-white shadow-sm">
+      <BlockWithDeleteButton editor={editor} getPos={getPos} node={node}>
       {/* Resumen de valores */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
         <div className="p-4 bg-green-50 rounded-lg border border-green-200">
@@ -509,6 +511,7 @@ export default function ResumenFinancieroStyle({ node, updateAttributes, editor 
           </div>
         )}
       </div>
+      </BlockWithDeleteButton>
     </NodeViewWrapper>
   );
 }

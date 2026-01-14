@@ -1,16 +1,18 @@
 import { NodeViewWrapper } from '@tiptap/react';
 import { useState, useEffect, useRef } from 'react';
-import { Eye, Edit, Columns, Maximize, Minimize, Download, X } from 'lucide-react';
+import { Eye, Edit, Columns, Maximize, Minimize, Download, X, Trash2 } from 'lucide-react';
+import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import ReactMarkdown from 'react-markdown';
 import { marked } from 'marked';
 import jsPDF from 'jspdf';
 
-export default function MarkdownNode({ node, updateAttributes, editor }) {
+export default function MarkdownNode({ node, updateAttributes, editor, getPos }) {
   const [content, setContent] = useState(node.attrs.content || '');
   const [viewMode, setViewMode] = useState(node.attrs.viewMode || 'split'); // 'edit', 'preview', 'split'
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isEditorFullscreen, setIsEditorFullscreen] = useState(false);
   const [isPreviewFullscreen, setIsPreviewFullscreen] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const textareaRef = useRef(null);
   const previewRef = useRef(null);
 
@@ -466,6 +468,18 @@ export default function MarkdownNode({ node, updateAttributes, editor }) {
             </button>
           </div>
           <div className="flex items-center gap-2">
+            {/* Botón de eliminar - primero (más a la derecha) */}
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setShowDeleteModal(true);
+              }}
+              className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors"
+              title="Eliminar bloque"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
             {showPreview && (
               <button
                 onClick={handleExportPDF}
@@ -577,6 +591,39 @@ export default function MarkdownNode({ node, updateAttributes, editor }) {
   return (
     <NodeViewWrapper className="markdown-node my-4">
       {renderContent()}
+      
+      {/* Modal de confirmación de eliminación */}
+      <ConfirmDeleteModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={() => {
+          if (editor && typeof getPos === 'function') {
+            try {
+              const pos = getPos();
+              if (pos !== undefined && pos !== null) {
+                editor.chain().focus().deleteRange({ from: pos, to: pos + node.nodeSize }).run();
+              }
+            } catch (error) {
+              console.error('Error al eliminar bloque:', error);
+              try {
+                const view = editor.view;
+                if (view && typeof getPos === 'function') {
+                  const pos = getPos();
+                  if (pos !== undefined && pos !== null) {
+                    view.dispatch(view.state.tr.delete(pos, pos + node.nodeSize));
+                  }
+                }
+              } catch (fallbackError) {
+                console.error('Error en fallback al eliminar:', fallbackError);
+              }
+            }
+          }
+        }}
+        title="¿Eliminar bloque Markdown?"
+        message="¿Estás seguro de que quieres eliminar este bloque Markdown? Esta acción no se puede deshacer."
+        confirmText="Eliminar"
+        cancelText="Cancelar"
+      />
     </NodeViewWrapper>
   );
 }

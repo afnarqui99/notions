@@ -4,8 +4,9 @@ import LocalStorageService from '../services/LocalStorageService';
 import { X, Download, Trash2, Plus, Search, Maximize2, Edit2, Save } from 'lucide-react';
 import GroupSelector from '../components/GroupSelector';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
+import BlockWithDeleteButton from '../components/BlockWithDeleteButton';
 
-export default function GaleriaImagenesStyle({ node, updateAttributes }) {
+export default function GaleriaImagenesStyle({ node, updateAttributes, editor, getPos }) {
   const [imagenes, setImagenes] = useState(() => node.attrs.imagenes || []);
   const [imagenesCargadas, setImagenesCargadas] = useState({}); // { id: url }
   const [imagenAmpliada, setImagenAmpliada] = useState(null);
@@ -226,6 +227,7 @@ export default function GaleriaImagenesStyle({ node, updateAttributes }) {
 
   return (
     <NodeViewWrapper className="galeria-imagenes-wrapper my-6">
+      <BlockWithDeleteButton editor={editor} getPos={getPos} node={node}>
       <div className="border rounded-lg p-4 bg-white">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
@@ -502,6 +504,7 @@ export default function GaleriaImagenesStyle({ node, updateAttributes }) {
         confirmText="Eliminar"
         cancelText="Cancelar"
       />
+      </BlockWithDeleteButton>
     </NodeViewWrapper>
   );
 }
