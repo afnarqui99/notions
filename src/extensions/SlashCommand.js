@@ -211,6 +211,17 @@ export const SlashCommand = Extension.create({
             },
           },
           {
+            label: "Centro de Ejecución",
+            description: "Abrir página centralizada de terminales y gestión de proyectos",
+            icon: "⚡",
+            keywords: ["centro-ejecucion", "centro", "terminales", "proyectos", "ejecucion", "central"],
+            command: ({ editor, range }) => {
+              editor.chain().focus().deleteRange(range).run();
+              // Disparar evento para abrir el centro de ejecución
+              window.dispatchEvent(new CustomEvent('open-centro-ejecucion'));
+            },
+          },
+          {
             label: "Visual Code",
             description: "Editor de código similar a Visual Studio Code con explorador de archivos",
             icon: "📁",

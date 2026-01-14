@@ -57,8 +57,8 @@ export const VisualCodeNode = Node.create({
         },
       },
       theme: {
-        default: 'oneDark',
-        parseHTML: element => element.getAttribute('data-theme') || 'oneDark',
+        default: 'notion',
+        parseHTML: element => element.getAttribute('data-theme') || 'notion',
         renderHTML: attributes => {
           return {
             'data-theme': attributes.theme,
