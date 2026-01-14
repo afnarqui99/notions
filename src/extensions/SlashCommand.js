@@ -211,6 +211,38 @@ export const SlashCommand = Extension.create({
             },
           },
           {
+            label: "Visual Code",
+            description: "Editor de código similar a Visual Studio Code con explorador de archivos",
+            icon: "📁",
+            keywords: ["visualcode", "vscode", "editor", "codigo", "code", "programar", "desarrollar"],
+            command: ({ editor, range }) => {
+              editor.chain().focus().deleteRange(range).insertContent({
+                type: 'visualCodeBlock',
+                attrs: {
+                  projectPath: '',
+                  openFiles: '[]',
+                  activeFile: '',
+                  fileContents: '{}',
+                },
+              }).run();
+            },
+          },
+          {
+            label: "Convertidor",
+            description: "Convertir documentos: Markdown a PDF, PDF a Word, Word a PDF",
+            icon: "🔄",
+            keywords: ["convertidor", "converter", "pdf", "word", "markdown", "convertir", "documento"],
+            command: ({ editor, range }) => {
+              editor.chain().focus().deleteRange(range).insertContent({
+                type: 'convertidorBlock',
+                attrs: {
+                  conversionType: 'markdown-to-pdf',
+                  inputContent: '',
+                },
+              }).run();
+            },
+          },
+          {
   label: "Tabla",
   description: "Insertar una tabla dinámica con columnas configurables",
   icon: "📋",

@@ -67,6 +67,10 @@ const electronAPI = {
         readFile: (filePath) => {
           return ipcRenderer.invoke('read-file', filePath);
         },
+        // Escribir contenido en un archivo
+        writeFile: (filePath, content) => {
+          return ipcRenderer.invoke('write-file', filePath, content);
+        },
         // Ejecutar comando del sistema
         executeCommand: (command, shell, cwd) => {
           return ipcRenderer.invoke('execute-command', command, shell, cwd);

@@ -617,7 +617,7 @@ ${code}
           <div className="flex items-center gap-2">
             <Terminal className="w-4 h-4 text-blue-600 dark:text-blue-400" />
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-1 justify-end">
             <select
               value={language}
               onChange={(e) => setLanguage(e.target.value)}
@@ -693,31 +693,29 @@ ${code}
               </div>
             )}
             <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1" />
-          </div>
-          )}
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setTerminalMode(!terminalMode)}
-              className={`p-2 transition-colors ${
-                terminalMode 
-                  ? 'text-green-600 dark:text-green-400' 
-                  : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'
-              }`}
-              title={terminalMode ? "Cambiar a modo código" : "Cambiar a modo terminal"}
-            >
-              <Terminal className="w-5 h-5" />
-            </button>
-            <button
-              onClick={() => setShowFileExplorer(!showFileExplorer)}
-              className={`p-2 transition-colors ${
-                showFileExplorer 
-                  ? 'text-blue-600 dark:text-blue-400' 
-                  : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'
-              }`}
-              title="Explorador de archivos"
-            >
-              <Sidebar className="w-5 h-5" />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setTerminalMode(!terminalMode)}
+                className={`p-2 transition-colors ${
+                  terminalMode 
+                    ? 'text-green-600 dark:text-green-400' 
+                    : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'
+                }`}
+                title={terminalMode ? "Cambiar a modo código" : "Cambiar a modo terminal"}
+              >
+                <Terminal className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => setShowFileExplorer(!showFileExplorer)}
+                className={`p-2 transition-colors ${
+                  showFileExplorer 
+                    ? 'text-blue-600 dark:text-blue-400' 
+                    : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'
+                }`}
+                title="Explorador de archivos"
+              >
+                <Sidebar className="w-5 h-5" />
+              </button>
             <div className="relative">
               <button
                 onClick={() => {
@@ -854,13 +852,14 @@ ${code}
             >
               {isExpanded ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
             </button>
-            <button
-              onClick={() => deleteNode()}
-              className="p-2 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 transition-colors"
-              title="Eliminar bloque"
-            >
-              <X className="w-5 h-5" />
-            </button>
+              <button
+                onClick={() => deleteNode()}
+                className="p-2 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                title="Eliminar bloque"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -873,6 +872,7 @@ ${code}
                 terminals={terminals}
                 activeTerminalId={activeTerminalId}
                 onUpdateTerminals={(updated) => {
+                  console.log('[ConsoleBlock] Actualizando terminals:', updated.map(t => ({ id: t.id, shell: t.shell })));
                   setTerminals(updated);
                 }}
                 onUpdateActiveTerminal={(id) => {
@@ -1043,7 +1043,7 @@ ${code}
               </div>
             </div>
           </div>
-            </>
+          </>
           )}
         </div>
       </div>

@@ -17,6 +17,14 @@
     "dist": "npm run build && electron-builder"
   },
   "dependencies": {
+    "@codemirror/lang-css": "^6.3.1",
+    "@codemirror/lang-html": "^6.4.11",
+    "@codemirror/lang-javascript": "^6.2.4",
+    "@codemirror/lang-json": "^6.0.2",
+    "@codemirror/lang-python": "^6.2.1",
+    "@codemirror/theme-one-dark": "^6.1.3",
+    "@codemirror/view": "^6.39.10",
+    "@pdfsmaller/pdf-encrypt-lite": "^1.0.1",
     "@tiptap/extension-code-block-lowlight": "^2.14.0",
     "@tiptap/extension-image": "^2.14.0",
     "@tiptap/extension-link": "^2.14.0",
@@ -34,12 +42,17 @@
     "@tiptap/suggestion": "^2.14.0",
     "auto-launch": "^5.0.5",
     "chart.js": "^4.5.1",
+    "codemirror": "^6.0.2",
+    "docx": "^9.5.1",
     "highlight.js": "^11.11.1",
     "html2pdf.js": "^0.10.3",
     "jspdf": "^4.0.0",
     "lowlight": "^3.3.0",
     "lucide-react": "^0.503.0",
+    "mammoth": "^1.11.0",
     "marked": "^17.0.1",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^5.4.530",
     "react": "^19.0.0",
     "react-chartjs-2": "^5.3.1",
     "react-dom": "^19.0.0",
@@ -80,7 +93,9 @@
       {
         "from": "ejemplos-consola",
         "to": "cursos",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "win": {
@@ -119,7 +134,9 @@
       "uninstallerIcon": "build/icon.ico",
       "installerHeaderIcon": "build/icon.ico",
       "displayLanguageSelector": false,
-      "installerLanguages": ["Spanish"],
+      "installerLanguages": [
+        "Spanish"
+      ],
       "multiLanguageInstaller": false
     }
   }
