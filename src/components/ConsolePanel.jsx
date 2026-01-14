@@ -4,6 +4,7 @@ import cursosService from '../services/CursosService';
 import codeIntelligenceService from '../services/CodeIntelligenceService';
 import FileExplorer from './FileExplorer';
 import ConsolePluginsModal from './ConsolePluginsModal';
+import MultiTerminalView from './MultiTerminalView';
 
 export default function ConsolePanel({ isOpen, onClose, editor = null }) {
   // TODOS LOS HOOKS DEBEN IR PRIMERO (regla de React)
@@ -43,6 +44,9 @@ export default function ConsolePanel({ isOpen, onClose, editor = null }) {
   const [showCompletions, setShowCompletions] = useState(false);
   const [completionIndex, setCompletionIndex] = useState(-1);
   const [copied, setCopied] = useState(false);
+  const [terminalMode, setTerminalMode] = useState(false);
+  const [terminals, setTerminals] = useState([]);
+  const [activeTerminalId, setActiveTerminalId] = useState('');
   const outputRef = useRef(null);
   const codeTextareaRef = useRef(null);
   const codeHighlightRef = useRef(null);
@@ -1260,6 +1264,7 @@ ${code}
   if (!isOpen) return null;
 
   return (
+    <>
     <div 
       className={`fixed inset-0 bg-black/50 z-[60000] flex items-center justify-center p-4 ${
         isFullscreen ? '' : ''
@@ -1300,6 +1305,9 @@ ${code}
                           code: code,
                           language: language,
                           output: output,
+                          terminalMode: terminalMode,
+                          terminals: JSON.stringify(terminals),
+                          activeTerminalId: activeTerminalId,
                         },
                       }).run();
                       // NO cerrar el modal para mantener las funcionalidades disponibles
@@ -1393,6 +1401,17 @@ ${code}
             <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1" />
           </div>
           <div className="flex items-center gap-1">
+            <button
+              onClick={() => setTerminalMode(!terminalMode)}
+              className={`p-2 transition-colors ${
+                terminalMode 
+                  ? 'text-green-600 dark:text-green-400' 
+                  : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'
+              }`}
+              title={terminalMode ? "Cambiar a modo código" : "Cambiar a modo terminal"}
+            >
+              <Terminal className="w-5 h-5" />
+            </button>
             <button
               onClick={() => setShowFileExplorer(!showFileExplorer)}
               className={`p-2 transition-colors ${
@@ -1602,6 +1621,22 @@ ${code}
 
         {/* Content */}
         <div className="flex-1 flex overflow-hidden">
+          {/* Terminales múltiples */}
+          {terminalMode ? (
+            <div className="flex-1 flex flex-col overflow-hidden">
+              <MultiTerminalView
+                terminals={terminals}
+                activeTerminalId={activeTerminalId}
+                onUpdateTerminals={(updated) => {
+                  setTerminals(updated);
+                }}
+                onUpdateActiveTerminal={(id) => {
+                  setActiveTerminalId(id);
+                }}
+              />
+            </div>
+          ) : (
+            <>
           {/* File Explorer Sidebar */}
           {showFileExplorer && (
             <div className="w-64 flex-shrink-0 border-r border-gray-200 dark:border-gray-700 h-full">
@@ -2066,6 +2101,9 @@ ${code}
               {output || <span className="text-gray-500">La salida aparecerá aquí...</span>}
             </div>
           </div>
+        </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -2564,7 +2602,7 @@ ${code}
         localStorage.setItem('console-plugins', JSON.stringify(newPlugins));
       }}
     />
-    </div>
+    </>
   );
 }
 

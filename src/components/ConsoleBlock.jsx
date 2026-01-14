@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { NodeViewWrapper } from '@tiptap/react';
-import { Play, Maximize2, Minimize2, X, FolderOpen, Terminal, Settings, BookOpen, Eye, Code, Sidebar, Info, CheckCircle, AlertCircle, Sparkles } from 'lucide-react';
+import { Play, Maximize2, Minimize2, X, FolderOpen, Terminal, Settings, BookOpen, Eye, Code, Sidebar, Info, CheckCircle, AlertCircle, Sparkles, LayoutGrid } from 'lucide-react';
+import MultiTerminalView from './MultiTerminalView';
 // Importar highlight.js de forma dinámica para evitar problemas de inicialización
 let hljs = null;
 const getHljs = async () => {
@@ -52,6 +53,23 @@ export default function ConsoleBlock({ node, updateAttributes, deleteNode, edito
   const [completionIndex, setCompletionIndex] = useState(-1);
   const [serviceActive, setServiceActive] = useState(false);
   const [serviceQueueLength, setServiceQueueLength] = useState(0);
+  const [terminalMode, setTerminalMode] = useState(() => {
+    try {
+      return node.attrs.terminalMode || false;
+    } catch {
+      return false;
+    }
+  });
+  const [terminals, setTerminals] = useState(() => {
+    try {
+      return node.attrs.terminals ? JSON.parse(node.attrs.terminals) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [activeTerminalId, setActiveTerminalId] = useState(() => {
+    return node.attrs.activeTerminalId || '';
+  });
   const codeTextareaRef = useRef(null);
   const codeHighlightRef = useRef(null);
   const outputRef = useRef(null);
@@ -98,8 +116,15 @@ export default function ConsoleBlock({ node, updateAttributes, deleteNode, edito
 
   // Sincronizar con los atributos del nodo
   useEffect(() => {
-    updateAttributes({ code, language, output });
-  }, [code, language, output, updateAttributes]);
+    updateAttributes({ 
+      code, 
+      language, 
+      output,
+      terminalMode,
+      terminals: JSON.stringify(terminals),
+      activeTerminalId
+    });
+  }, [code, language, output, terminalMode, terminals, activeTerminalId, updateAttributes]);
 
   // Auto-scroll en la salida
   useEffect(() => {
@@ -669,7 +694,19 @@ ${code}
             )}
             <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1" />
           </div>
+          )}
           <div className="flex items-center gap-1">
+            <button
+              onClick={() => setTerminalMode(!terminalMode)}
+              className={`p-2 transition-colors ${
+                terminalMode 
+                  ? 'text-green-600 dark:text-green-400' 
+                  : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'
+              }`}
+              title={terminalMode ? "Cambiar a modo código" : "Cambiar a modo terminal"}
+            >
+              <Terminal className="w-5 h-5" />
+            </button>
             <button
               onClick={() => setShowFileExplorer(!showFileExplorer)}
               className={`p-2 transition-colors ${
@@ -829,6 +866,22 @@ ${code}
 
         {/* Content - Mismo layout que ConsolePanel */}
         <div className={`flex ${isExpanded ? 'h-[calc(100vh-8rem)]' : 'h-[95vh] max-h-[95vh]'}`}>
+          {/* Terminales múltiples */}
+          {terminalMode ? (
+            <div className="flex-1 flex flex-col overflow-hidden">
+              <MultiTerminalView
+                terminals={terminals}
+                activeTerminalId={activeTerminalId}
+                onUpdateTerminals={(updated) => {
+                  setTerminals(updated);
+                }}
+                onUpdateActiveTerminal={(id) => {
+                  setActiveTerminalId(id);
+                }}
+              />
+            </div>
+          ) : (
+            <>
           {/* File Explorer Sidebar */}
           {showFileExplorer && (
             <div className="w-64 flex-shrink-0 border-r border-gray-200 dark:border-gray-700 h-full">
@@ -990,6 +1043,8 @@ ${code}
               </div>
             </div>
           </div>
+            </>
+          )}
         </div>
       </div>
 

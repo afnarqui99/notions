@@ -1191,6 +1191,91 @@ app.whenReady().then(() => {
     }
   });
 
+  // Handler para ejecutar comandos del sistema
+  ipcMain.handle('execute-command', async (event, command, shell, cwd) => {
+    return new Promise((resolve) => {
+      try {
+        // Determinar el shell a usar
+        let shellCommand = shell || (process.platform === 'win32' ? 'cmd' : 'bash');
+        let commandToExecute = command;
+        
+        // Preparar comando según el shell
+        if (shellCommand === 'powershell') {
+          commandToExecute = `powershell -Command "${command.replace(/"/g, '\\"')}"`;
+        } else if (shellCommand === 'cmd') {
+          commandToExecute = `cmd /c "${command.replace(/"/g, '\\"')}"`;
+        } else {
+          // bash, sh, zsh
+          commandToExecute = command;
+        }
+
+        // Directorio de trabajo
+        const workingDir = cwd || os.homedir();
+
+        const childProcess = spawn(commandToExecute, [], {
+          shell: true,
+          cwd: workingDir,
+          env: { ...process.env }
+        });
+
+        let output = '';
+        let errorOutput = '';
+
+        childProcess.stdout.on('data', (data) => {
+          output += data.toString();
+        });
+
+        childProcess.stderr.on('data', (data) => {
+          errorOutput += data.toString();
+        });
+
+        childProcess.on('close', (code) => {
+          if (code === 0) {
+            resolve({ 
+              output: output || 'Comando ejecutado correctamente',
+              exitCode: code,
+              currentDirectory: workingDir
+            });
+          } else {
+            resolve({ 
+              error: errorOutput || `Comando terminado con código ${code}`,
+              output: output,
+              exitCode: code,
+              currentDirectory: workingDir
+            });
+          }
+        });
+
+        childProcess.on('error', (error) => {
+          resolve({ 
+            error: `Error al ejecutar comando: ${error.message}`,
+            currentDirectory: workingDir
+          });
+        });
+
+        // Timeout de 30 segundos para comandos
+        setTimeout(() => {
+          childProcess.kill();
+          resolve({ 
+            error: 'Tiempo de ejecución excedido (30 segundos)',
+            currentDirectory: workingDir
+          });
+        }, 30000);
+
+      } catch (error) {
+        resolve({ 
+          error: `Error: ${error.message}`,
+          currentDirectory: cwd || os.homedir()
+        });
+      }
+    });
+  });
+
+  // Handler para obtener directorio actual
+  ipcMain.handle('get-current-directory', async (event) => {
+    return process.cwd();
+  });
+
   // Handler para seleccionar directorio
   ipcMain.handle('select-directory', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {

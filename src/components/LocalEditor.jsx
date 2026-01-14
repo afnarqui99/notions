@@ -17,6 +17,7 @@ import { GaleriaArchivosNode } from "../extensions/GaleriaArchivosNode";
 import { ResumenFinancieroNode } from "../extensions/ResumenFinancieroNode";
 import { CalendarNode } from "../extensions/CalendarNode";
 import { ConsoleNode } from "../extensions/ConsoleNode";
+import { PostmanNode } from "../extensions/PostmanNode";
 import TableHeader from "@tiptap/extension-table-header";
 import { ImageExtended } from "../extensions/ImageExtended";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -480,6 +481,7 @@ export default function LocalEditor({ onShowConfig }) {
       ResumenFinancieroNode,
       CalendarNode,
       ConsoleNode,
+      PostmanNode,
       Heading.configure({ levels: [1, 2, 3, 4, 5, 6] }),
       Underline,
       TextStyle,

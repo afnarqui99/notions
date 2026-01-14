@@ -66,6 +66,14 @@ const electronAPI = {
         // Leer contenido de un archivo
         readFile: (filePath) => {
           return ipcRenderer.invoke('read-file', filePath);
+        },
+        // Ejecutar comando del sistema
+        executeCommand: (command, shell, cwd) => {
+          return ipcRenderer.invoke('execute-command', command, shell, cwd);
+        },
+        // Obtener directorio actual del proceso
+        getCurrentDirectory: () => {
+          return ipcRenderer.invoke('get-current-directory');
         }
 };
 
