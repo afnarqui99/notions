@@ -30,7 +30,7 @@ import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import { Toggle } from "../extensions/Toggle";
 import { Comment } from "../extensions/Comment";
-import { Settings, Plus, Image as ImageIcon, Paperclip, Download, Trash2, Tag as TagIcon, FileText, Save, Clock, MessageSquare, MoreVertical, Database } from "lucide-react";
+import { Settings, Plus, Image as ImageIcon, Paperclip, Download, Trash2, Tag as TagIcon, FileText, Save, Clock, MessageSquare, MoreVertical, Database, Zap } from "lucide-react";
 import LocalStorageService from "../services/LocalStorageService";
 import Modal from "./Modal";
 import ConfigModal from "./ConfigModal";
@@ -54,6 +54,7 @@ import CommentPanel from "./CommentPanel";
 import QuickNote from "./QuickNote";
 import QuickNotesHistory from "./QuickNotesHistory";
 import ConsolePanel from "./ConsolePanel";
+import CentroEjecucionPage from "./CentroEjecucionPage";
 import KeyboardShortcuts from "./KeyboardShortcuts";
 import EmojiPicker from "./EmojiPicker";
 import SQLFileManager from "./SQLFileManager";
@@ -139,6 +140,7 @@ export default function LocalEditor({ onShowConfig }) {
   const [showQuickNotesHistory, setShowQuickNotesHistory] = useState(false);
   const [quickNoteToLoad, setQuickNoteToLoad] = useState(null);
   const [showConsole, setShowConsole] = useState(false);
+  const [showCentroEjecucion, setShowCentroEjecucion] = useState(false);
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [emojiPickerPosition, setEmojiPickerPosition] = useState({ top: 0, left: 0 });
@@ -527,6 +529,7 @@ export default function LocalEditor({ onShowConfig }) {
   const cargandoPaginasRef = useRef(false);
   const rebuildIndexTimeoutRef = useRef(null);
   const autoguardandoRef = useRef(false);
+
 
   // Cargar lista de páginas
   useEffect(() => {
@@ -1190,6 +1193,107 @@ export default function LocalEditor({ onShowConfig }) {
     };
   }, []);
 
+  // Escuchar evento para abrir el centro de ejecución
+  useEffect(() => {
+    const handleOpenCentroEjecucion = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setShowCentroEjecucion(true);
+    };
+
+    window.addEventListener('open-centro-ejecucion', handleOpenCentroEjecucion);
+    return () => {
+      window.removeEventListener('open-centro-ejecucion', handleOpenCentroEjecucion);
+    };
+  }, []);
+
+  // Escuchar evento para abrir Visual Code con un proyecto
+  useEffect(() => {
+    const handleOpenVisualCode = (e) => {
+      console.log('[LocalEditor] Evento open-visual-code recibido:', e.detail);
+      e.preventDefault();
+      e.stopPropagation();
+      const { projectPath, projectTitle, projectColor, theme, fontSize, extensions } = e.detail || {};
+      
+      if (!projectPath) {
+        console.error('[LocalEditor] No se recibió projectPath en el evento');
+        alert('Error: No se recibió la ruta del proyecto');
+        return;
+      }
+      
+      if (!editor) {
+        console.error('[LocalEditor] Editor no está disponible');
+        alert('Error: El editor no está disponible. Asegúrate de estar en una página.');
+        return;
+      }
+      
+      console.log('[LocalEditor] Insertando bloque Visual Code con:', {
+        projectPath,
+        projectTitle,
+        projectColor,
+        theme,
+        fontSize
+      });
+      
+      // Insertar bloque Visual Code con el proyecto seleccionado
+      try {
+        // Obtener la posición actual del cursor
+        const { from } = editor.state.selection;
+        
+        editor.chain()
+          .focus()
+          .insertContentAt(from, {
+            type: 'visualCodeBlock',
+            attrs: {
+              projectPath: projectPath || '',
+              openFiles: '[]',
+              activeFile: '',
+              fileContents: '{}',
+              fontSize: (fontSize || 14).toString(),
+              theme: theme || 'notion',
+              projectTitle: projectTitle || '',
+              projectColor: projectColor || '#1e1e1e',
+              extensions: extensions ? JSON.stringify(extensions) : JSON.stringify({
+                errorLens: true,
+                betterComments: true,
+                es7ReactRedux: true,
+                reactSimpleSnippets: true,
+                autoCloseTag: true,
+                pasteJsonAsCode: true,
+                backticks: true,
+                tokyoNight: false,
+                beardedIcons: true
+              }),
+            },
+          })
+          .run();
+        
+        console.log('[LocalEditor] Bloque Visual Code insertado exitosamente');
+        
+        // Scroll al bloque insertado
+        setTimeout(() => {
+          const visualCodeBlocks = document.querySelectorAll('visual-code-block');
+          if (visualCodeBlocks.length > 0) {
+            visualCodeBlocks[visualCodeBlocks.length - 1].scrollIntoView({ 
+              behavior: 'smooth', 
+              block: 'center' 
+            });
+          }
+        }, 100);
+      } catch (error) {
+        console.error('[LocalEditor] Error insertando bloque Visual Code:', error);
+        alert('Error al insertar bloque Visual Code: ' + error.message);
+      }
+    };
+    
+    window.addEventListener('open-visual-code', handleOpenVisualCode);
+    console.log('[LocalEditor] Listener de open-visual-code registrado');
+    
+    return () => {
+      window.removeEventListener('open-visual-code', handleOpenVisualCode);
+    };
+  }, [editor]);
+
   // Escuchar evento para navegar a una página desde SQLScriptNode
   useEffect(() => {
     const handleNavigateToPage = (event) => {
@@ -1310,6 +1414,90 @@ export default function LocalEditor({ onShowConfig }) {
       });
     }
   };
+
+  // Crear página de Centro de Ejecución automáticamente si no existe
+  useEffect(() => {
+    const crearPaginaCentroEjecucion = async () => {
+      try {
+        // Verificar configuración y handle
+        const config = LocalStorageService.config;
+        const hasHandle = !!LocalStorageService.baseDirectoryHandle;
+        
+        if (config.useLocalStorage && !hasHandle) {
+          return; // No crear si no hay handle
+        }
+
+        // Buscar si ya existe una página con el título "Centro de Ejecución"
+        const files = await LocalStorageService.listFiles('data');
+        
+        // Verificar de forma más simple
+        let paginaExiste = false;
+        for (const file of files) {
+          if (!file.endsWith('.json')) continue;
+          // Excluir archivos que no son páginas
+          if (file.startsWith('quick-note-') || file === 'calendar-events.json' || file === '_pages-index.json') continue;
+          try {
+            const data = await LocalStorageService.readJSONFile(file, 'data');
+            if (data?.titulo === 'Centro de Ejecución' || data?.titulo === '⚡ Centro de Ejecución') {
+              paginaExiste = true;
+              break;
+            }
+          } catch {
+            continue;
+          }
+        }
+
+        if (!paginaExiste) {
+          // Crear la página automáticamente usando la función crearPagina
+          const contenido = {
+            type: "doc",
+            content: [
+              {
+                type: "heading",
+                attrs: { level: 1 },
+                content: [{ type: "text", text: "⚡ Centro de Ejecución" }]
+              },
+              {
+                type: "paragraph",
+                content: [
+                  { type: "text", text: "Esta es tu página centralizada para gestionar terminales, proyectos y servicios de ejecución." }
+                ]
+              },
+              {
+                type: "paragraph",
+                content: [
+                  { type: "text", text: "Escribe " },
+                  { type: "text", marks: [{ type: "code" }], text: "/centro ejecucion" },
+                  { type: "text", text: " o usa el botón flotante para abrir el Centro de Ejecución." }
+                ]
+              },
+              {
+                type: "paragraph"
+              },
+              {
+                type: "paragraph",
+                content: [
+                  { type: "text", marks: [{ type: "code" }], text: "/centro ejecucion" }
+                ]
+              }
+            ]
+          };
+
+          // Usar crearPagina que ya está definida en el componente
+          await crearPagina('⚡ Centro de Ejecución', '⚡', null, [], contenido);
+        }
+      } catch (error) {
+        console.error('Error creando página de Centro de Ejecución:', error);
+      }
+    };
+
+    // Esperar un poco para que el sistema esté listo y las páginas se hayan cargado
+    const timeoutId = setTimeout(() => {
+      crearPaginaCentroEjecucion();
+    }, 3000);
+
+    return () => clearTimeout(timeoutId);
+  }, [crearPagina]); // Incluir crearPagina en dependencias
 
   // Verificar scripts SQL asociados a una página
   const checkPageSQLScripts = useCallback(async (pageId) => {
@@ -2079,6 +2267,7 @@ export default function LocalEditor({ onShowConfig }) {
           setShowNewPageModal(true);
         }}
         onShowConfig={() => setShowConfigModal(true)}
+        onOpenCentroEjecucion={() => setShowCentroEjecucion(true)}
         filtroPagina={filtroPagina}
         setFiltroPagina={setFiltroPagina}
         onSidebarStateChange={setSidebarColapsado}
@@ -2159,6 +2348,27 @@ export default function LocalEditor({ onShowConfig }) {
         onClose={() => setShowConsole(false)}
         editor={editor}
       />
+
+      {/* Centro de Ejecución - Panel abrible/cerrable */}
+      <div className={`fixed inset-0 z-[60000] bg-white dark:bg-gray-900 transition-transform duration-300 ease-in-out ${
+        showCentroEjecucion ? 'translate-x-0' : 'translate-x-full'
+      }`}>
+        <CentroEjecucionPage onClose={() => setShowCentroEjecucion(false)} />
+      </div>
+
+      {/* Botón flotante para abrir Centro de Ejecución cuando está cerrado */}
+      {!showCentroEjecucion && (
+        <button
+          onClick={() => setShowCentroEjecucion(true)}
+          className="fixed bottom-6 right-6 z-[50000] bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-full shadow-lg transition-all hover:scale-110 flex items-center gap-2 group"
+          title="Abrir Centro de Ejecución"
+        >
+          <Zap className="w-5 h-5" />
+          <span className="hidden group-hover:inline-block text-sm font-medium pr-2">
+            Centro de Ejecución
+          </span>
+        </button>
+      )}
 
       {/* Atajos de Teclado */}
       <KeyboardShortcuts
@@ -2836,9 +3046,13 @@ export default function LocalEditor({ onShowConfig }) {
         />
       )}
 
-      {/* Botón de guardar flotante - Siempre visible en la parte inferior derecha */}
+      {/* Botón de guardar flotante - Ajustado según estado del sidebar */}
       {paginaSeleccionada && (
-        <div className="fixed bottom-4 right-4 z-50">
+        <div 
+          className={`fixed bottom-4 z-50 transition-all duration-300 ${
+            sidebarColapsado ? 'left-20' : 'left-80'
+          }`}
+        >
           <button
             onClick={async () => {
               if (!editor || guardando || autoguardandoRef.current || !hayCambiosSinGuardar) return;

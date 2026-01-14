@@ -1269,16 +1269,46 @@ app.whenReady().then(() => {
 
         let output = '';
         let errorOutput = '';
+        let hasOutput = false;
+        
+        // Detectar comandos que no terminan (servidores de desarrollo)
+        const isLongRunningCommand = /^(npm|yarn|pnpm)\s+(run\s+)?(dev|start|serve|watch)/i.test(command) ||
+                                    /^(python|node|nodemon|ts-node|tsx)\s+.*(dev|start|serve|watch)/i.test(command);
+
+        // Timeout para comandos de larga duración (30 segundos para servidores, 60 para otros)
+        const timeout = isLongRunningCommand ? 30000 : 60000;
+        const timeoutId = setTimeout(() => {
+          if (!hasOutput && isLongRunningCommand) {
+            // Para comandos de desarrollo, mostrar que está ejecutándose
+            childProcess.kill('SIGTERM');
+            resolve({ 
+              output: output + '\n\n[Servidor iniciado - El proceso continúa ejecutándose en segundo plano]\n[Presiona Ctrl+C para detener]',
+              exitCode: 0,
+              currentDirectory: workingDir,
+              isRunning: true
+            });
+          } else if (!hasOutput) {
+            childProcess.kill('SIGTERM');
+            resolve({ 
+              error: 'Comando excedió el tiempo de espera (60 segundos)',
+              exitCode: -1,
+              currentDirectory: workingDir
+            });
+          }
+        }, timeout);
 
         childProcess.stdout.on('data', (data) => {
+          hasOutput = true;
           output += data.toString();
         });
 
         childProcess.stderr.on('data', (data) => {
+          hasOutput = true;
           errorOutput += data.toString();
         });
 
         childProcess.on('close', (code) => {
+          clearTimeout(timeoutId);
           if (code === 0) {
             resolve({ 
               output: output || 'Comando ejecutado correctamente',

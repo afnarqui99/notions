@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { X, Terminal, Settings, Copy, Check, Edit, Search, Replace } from 'lucide-react';
+import { X, Terminal, Settings, Copy, Check, Edit, Search, Replace, Clock, ChevronDown, ChevronUp } from 'lucide-react';
+import terminalCommandService from '../services/TerminalCommandService';
 
 // Importar Settings si no está
 
@@ -18,7 +19,12 @@ export default function TerminalTab({
     backgroundColor: '#1e1e1e',
     textColor: '#d4d4d4',
     promptColor: '#4ec9b0',
-    errorColor: '#f48771'
+    errorColor: '#f48771',
+    fontSize: 14, // Mantener para compatibilidad
+    outputFontSize: 14,
+    inputFontSize: 14,
+    outputHeight: 400,
+    inputHeight: 80
   });
   const [currentShell, setCurrentShell] = useState(terminal.shell || 'bash');
   const [currentDirectory, setCurrentDirectory] = useState(terminal.currentDirectory || '~');
@@ -27,6 +33,9 @@ export default function TerminalTab({
   const [editedText, setEditedText] = useState('');
   const [searchText, setSearchText] = useState('');
   const [replaceText, setReplaceText] = useState('');
+  const [frequentCommands, setFrequentCommands] = useState([]);
+  const [showFrequentCommands, setShowFrequentCommands] = useState(false);
+  const [showAllCommands, setShowAllCommands] = useState(false);
   const inputRef = useRef(null);
   const outputRef = useRef(null);
 
@@ -42,8 +51,21 @@ export default function TerminalTab({
       backgroundColor: '#1e1e1e',
       textColor: '#d4d4d4',
       promptColor: '#4ec9b0',
-      errorColor: '#f48771'
+      errorColor: '#f48771',
+      fontSize: 14, // Mantener para compatibilidad
+      outputFontSize: 14,
+      inputFontSize: 14,
+      outputHeight: 400,
+      inputHeight: 80
     };
+    
+    // Migrar fontSize antiguo a los nuevos campos si no existen
+    if (newStyles.fontSize && !newStyles.outputFontSize) {
+      newStyles.outputFontSize = newStyles.fontSize;
+    }
+    if (newStyles.fontSize && !newStyles.inputFontSize) {
+      newStyles.inputFontSize = newStyles.fontSize;
+    }
     const newShell = terminal.shell || 'bash';
     const newDirectory = terminal.currentDirectory || '~';
     
@@ -83,6 +105,9 @@ export default function TerminalTab({
     setCommandHistory(newHistory);
     setHistoryIndex(-1);
     
+    // Guardar comando en servicio de comandos frecuentes
+    await terminalCommandService.saveCommand(terminal.id, command);
+    
     // Actualizar historial en el terminal
     const updatedTerminal = {
       ...terminal,
@@ -94,12 +119,38 @@ export default function TerminalTab({
     await onExecuteCommand(terminal.id, command);
     
     setCommand('');
+    setShowFrequentCommands(false);
   };
+
+  // Cargar comandos frecuentes cuando cambia el comando
+  useEffect(() => {
+    const loadFrequentCommands = async () => {
+      if (command.trim()) {
+        // Si hay texto, buscar coincidencias (sin límite para poder expandir)
+        const matching = await terminalCommandService.getMatchingCommands(terminal.id, command, 50);
+        setFrequentCommands(matching);
+        setShowFrequentCommands(matching.length > 0);
+      } else {
+        // Si no hay texto, mostrar los más frecuentes (sin límite para poder expandir)
+        const frequent = await terminalCommandService.getFrequentCommands(terminal.id, 50);
+        setFrequentCommands(frequent);
+        setShowFrequentCommands(frequent.length > 0);
+      }
+      // Resetear el estado de "mostrar todos" cuando cambia el comando
+      setShowAllCommands(false);
+    };
+
+    const timeoutId = setTimeout(loadFrequentCommands, 300);
+    return () => clearTimeout(timeoutId);
+  }, [command, terminal.id]);
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleExecute();
+    } else if (e.key === 'Enter' && e.shiftKey) {
+      // Permitir nueva línea con Shift+Enter
+      return;
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       if (commandHistory.length > 0) {
@@ -121,6 +172,8 @@ export default function TerminalTab({
           setCommand(commandHistory[newIndex]);
         }
       }
+    } else if (e.key === 'Escape') {
+      setShowFrequentCommands(false);
     }
   };
 
@@ -228,7 +281,7 @@ export default function TerminalTab({
 
   return (
     <div 
-      className="flex-1 flex flex-col h-full"
+      className="flex-1 flex flex-col h-full overflow-hidden"
       style={{ 
         backgroundColor: terminalStyles.backgroundColor,
         color: terminalStyles.textColor
@@ -237,10 +290,12 @@ export default function TerminalTab({
       {/* Output area */}
       <div 
         ref={outputRef}
-        className="flex-1 overflow-y-auto p-4 font-mono text-sm relative"
+        className="flex-1 overflow-y-auto p-4 font-mono relative"
         style={{ 
           backgroundColor: terminalStyles.backgroundColor,
-          color: terminalStyles.textColor
+          color: terminalStyles.textColor,
+          fontSize: `${terminalStyles.outputFontSize || terminalStyles.fontSize || 14}px`,
+          minHeight: '200px'
         }}
       >
         {/* Botones de copiar y editar */}
@@ -275,29 +330,124 @@ export default function TerminalTab({
           </div>
         )}
         {terminal.output ? (
-          <pre className="whitespace-pre-wrap break-words">{terminal.output}</pre>
+          <pre className="whitespace-pre-wrap break-words" style={{ fontSize: `${terminalStyles.outputFontSize || terminalStyles.fontSize || 14}px` }}>{terminal.output}</pre>
         ) : (
-          <div className="text-gray-500">
+          <div className="text-gray-500" style={{ fontSize: `${terminalStyles.outputFontSize || terminalStyles.fontSize || 14}px` }}>
             Terminal {terminal.name || terminal.id} listo. Escribe comandos para comenzar.
           </div>
         )}
       </div>
 
       {/* Input area */}
-      <div className="border-t border-gray-700 p-2 flex flex-col gap-1">
-        <div className="font-mono text-sm" style={{ color: terminalStyles.promptColor }}>
+      <div 
+        className="border-t border-gray-700 p-2 flex flex-col gap-1 relative flex-shrink-0"
+        style={{ 
+          minHeight: `${terminalStyles.inputHeight || 80}px`,
+          height: `${terminalStyles.inputHeight || 80}px`
+        }}
+      >
+        {/* Lista de comandos frecuentes - Centrado */}
+        {showFrequentCommands && frequentCommands.length > 0 && (
+          <div 
+            className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 min-w-[300px] max-w-[500px]"
+            style={{ maxHeight: '400px', overflowY: 'auto' }}
+          >
+            <div className="px-3 py-2 border-b border-gray-700 bg-gray-900 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-gray-400" />
+                <span className="text-xs font-semibold text-gray-300">
+                  Comandos frecuentes {frequentCommands.length > 7 && !showAllCommands ? `(${frequentCommands.length})` : ''}
+                </span>
+              </div>
+            </div>
+            <div className="py-1">
+              {(showAllCommands ? frequentCommands : frequentCommands.slice(0, 7)).map((item, index) => {
+                const language = terminalCommandService.detectCommandLanguage(item.command);
+                return (
+                  <button
+                    key={index}
+                    onClick={() => {
+                      setCommand(item.command);
+                      setShowFrequentCommands(false);
+                      setShowAllCommands(false);
+                      inputRef.current?.focus();
+                    }}
+                    className="w-full px-3 py-2 text-left hover:bg-gray-700 transition-colors flex items-center justify-between group"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm text-gray-200 font-mono truncate">
+                        {item.command}
+                      </div>
+                      {language && (
+                        <div className="text-xs text-gray-500 mt-0.5">
+                          {language}
+                        </div>
+                      )}
+                    </div>
+                    <div className="ml-2 flex items-center gap-2">
+                      <span className="text-xs text-gray-500">
+                        {item.count}x
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+              
+              {/* Botón para expandir/contraer si hay más de 7 comandos */}
+              {frequentCommands.length > 7 && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowAllCommands(!showAllCommands);
+                  }}
+                  className="w-full px-3 py-2 text-left hover:bg-gray-700 transition-colors flex items-center justify-center gap-2 border-t border-gray-700 text-xs text-gray-400 hover:text-gray-200"
+                >
+                  {showAllCommands ? (
+                    <>
+                      <ChevronUp className="w-3 h-3" />
+                      <span>Ver menos (mostrar solo 7)</span>
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="w-3 h-3" />
+                      <span>Ver más ({frequentCommands.length - 7} comandos adicionales)</span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+        <div className="font-mono" style={{ color: terminalStyles.promptColor, fontSize: `${terminalStyles.inputFontSize || terminalStyles.fontSize || 14}px` }}>
           {getPrompt()}
         </div>
-        <input
+        <textarea
           ref={inputRef}
-          type="text"
           value={command}
-          onChange={(e) => setCommand(e.target.value)}
+          onChange={(e) => {
+            setCommand(e.target.value);
+            setShowFrequentCommands(true);
+          }}
           onKeyDown={handleKeyDown}
-          onFocus={() => onActivate()}
-          className="flex-1 bg-transparent border-none outline-none font-mono text-sm"
-          style={{ color: terminalStyles.textColor }}
+          onFocus={() => {
+            onActivate();
+            setShowFrequentCommands(true);
+          }}
+          onBlur={() => {
+            // Delay para permitir clicks en la lista
+            setTimeout(() => setShowFrequentCommands(false), 200);
+          }}
+          className="flex-1 bg-transparent border-none outline-none font-mono resize-none"
+          style={{ 
+            color: terminalStyles.textColor, 
+            fontSize: `${terminalStyles.inputFontSize || terminalStyles.fontSize || 14}px`,
+            lineHeight: '1.5',
+            minHeight: `${(terminalStyles.inputHeight || 80) - 20}px`,
+            maxHeight: `${(terminalStyles.inputHeight || 80) - 20}px`,
+            overflowY: 'auto'
+          }}
           placeholder="Escribe un comando..."
+          rows={1}
         />
       </div>
 
@@ -308,7 +458,7 @@ export default function TerminalTab({
           onClick={() => setShowEditor(false)}
         >
           <div 
-            className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col"
+            className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-6xl max-h-[95vh] overflow-hidden flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, Star, ChevronDown, Settings, Plus, Trash2, Github, ChevronRight, Pencil, Tag as TagIcon, X, Moon, Sun, Database, Smile } from 'lucide-react';
+import { Search, Star, ChevronDown, Settings, Plus, Trash2, Github, ChevronRight, Pencil, Tag as TagIcon, X, Moon, Sun, Database, Smile, Zap } from 'lucide-react';
 import TagService from '../services/TagService';
 import { useTheme } from '../contexts/ThemeContext';
 import SQLFileService from '../services/SQLFileService';
@@ -18,7 +18,8 @@ export default function Sidebar({
   onEliminarPagina,
   onReordenarPaginas,
   onRenombrarPagina,
-  onCambiarParentId
+  onCambiarParentId,
+  onOpenCentroEjecucion
 }) {
   const { theme, toggleTheme } = useTheme();
   const [favoritos, setFavoritos] = useState(() => {
@@ -1058,6 +1059,15 @@ export default function Sidebar({
           >
             <Github className="w-5 h-5" />
           </a>
+          {onOpenCentroEjecucion && (
+            <button
+              onClick={onOpenCentroEjecucion}
+              className="flex-1 flex items-center justify-center px-2 py-2 text-blue-600 dark:text-blue-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+              title="Centro de Ejecución"
+            >
+              <Zap className="w-5 h-5" />
+            </button>
+          )}
           <button
             onClick={onShowConfig}
             className="flex-1 flex items-center justify-center px-2 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
