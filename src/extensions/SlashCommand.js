@@ -783,6 +783,27 @@ export const SlashCommand = Extension.create({
             },
           },
           {
+            icon: '🚀',
+            label: 'Postman',
+            description: 'Cliente API para probar endpoints REST (GET, POST, PUT, DELETE) con colecciones',
+            keywords: ['postman', 'api', 'rest', 'http', 'request', 'endpoint', 'cliente'],
+            command: ({ editor, range }) => {
+              editor.chain().focus().deleteRange(range).run();
+              editor.chain().focus().insertContent({
+                type: 'postmanBlock',
+                attrs: {
+                  method: 'GET',
+                  url: '',
+                  headers: '[]',
+                  body: '',
+                  bodyType: 'json',
+                  response: '',
+                  collections: '[]',
+                },
+              }).run();
+            },
+          },
+          {
             icon: '🖼️',
             label: 'Insertar imagen',
             description: 'Sube una imagen con título, descripción y fecha',

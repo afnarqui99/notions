@@ -38,6 +38,34 @@ export const ConsoleNode = Node.create({
           };
         },
       },
+      terminals: {
+        default: '[]',
+        parseHTML: element => element.getAttribute('data-terminals') || '[]',
+        renderHTML: attributes => {
+          return {
+            'data-terminals': attributes.terminals,
+          };
+        },
+      },
+      activeTerminalId: {
+        default: '',
+        parseHTML: element => element.getAttribute('data-active-terminal-id') || '',
+        renderHTML: attributes => {
+          if (!attributes.activeTerminalId) return {};
+          return {
+            'data-active-terminal-id': attributes.activeTerminalId,
+          };
+        },
+      },
+      terminalMode: {
+        default: false,
+        parseHTML: element => element.getAttribute('data-terminal-mode') === 'true',
+        renderHTML: attributes => {
+          return {
+            'data-terminal-mode': attributes.terminalMode ? 'true' : 'false',
+          };
+        },
+      },
     };
   },
 
