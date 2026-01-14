@@ -242,21 +242,24 @@ ${code}
     const newCode = e.target.value;
     setCode(newCode);
     
-    if (plugins.autocomplete && codeTextareaRef.current) {
-      const cursorPos = codeTextareaRef.current.selectionStart;
-      const completions = codeIntelligenceService.getCompletions(newCode, cursorPos, language);
-      if (completions.length > 0) {
-        setCompletions(completions);
-        setShowCompletions(true);
-        setCompletionIndex(-1);
+    // Pequeño delay para asegurar que el cursor esté actualizado
+    setTimeout(() => {
+      if (plugins.autocomplete && codeTextareaRef.current) {
+        const cursorPos = codeTextareaRef.current.selectionStart || newCode.length;
+        const completions = codeIntelligenceService.getCompletions(newCode, cursorPos, language);
+        if (completions.length > 0) {
+          setCompletions(completions);
+          setShowCompletions(true);
+          setCompletionIndex(-1);
+        } else {
+          setShowCompletions(false);
+          setCompletions([]);
+        }
       } else {
         setShowCompletions(false);
         setCompletions([]);
       }
-    } else {
-      setShowCompletions(false);
-      setCompletions([]);
-    }
+    }, 50);
   };
 
   // Manejar teclas para autocompletado y plugins
@@ -887,6 +890,74 @@ ${code}
                   }}
                   spellCheck={false}
                 />
+                
+                {/* Autocompletado - Dropdown */}
+                {showCompletions && completions.length > 0 && plugins.autocomplete && (
+                  <div 
+                    className="absolute bg-gray-800 border border-gray-600 rounded-lg shadow-xl z-[100] max-h-48 overflow-y-auto"
+                    style={{
+                      top: '60px',
+                      left: '20px',
+                      minWidth: '250px',
+                      maxWidth: '400px'
+                    }}
+                  >
+                    <div className="px-2 py-1 text-xs text-gray-400 border-b border-gray-700">
+                      Sugerencias ({completions.length})
+                    </div>
+                    {completions.map((completion, index) => (
+                      <div
+                        key={index}
+                        onClick={() => {
+                          if (completion.snippet) {
+                            const expanded = codeIntelligenceService.expandSnippet(completion.snippet);
+                            const lines = code.split('\n');
+                            const currentLine = lines[lines.length - 1] || '';
+                            const beforeCursor = codeTextareaRef.current?.selectionStart || 0;
+                            const lineStart = code.lastIndexOf('\n', beforeCursor - 1) + 1;
+                            const wordMatch = currentLine.match(/(\w+)$/);
+                            if (wordMatch) {
+                              const newCode = code.substring(0, lineStart + currentLine.length - wordMatch[1].length) + 
+                                            expanded + 
+                                            code.substring(lineStart + currentLine.length);
+                              setCode(newCode);
+                            }
+                          } else {
+                            const lines = code.split('\n');
+                            const currentLine = lines[lines.length - 1] || '';
+                            const wordMatch = currentLine.match(/(\w+)$/);
+                            if (wordMatch) {
+                              const newCode = code.replace(new RegExp(`\\b${wordMatch[1]}\\b$`, 'm'), completion.label);
+                              setCode(newCode);
+                            }
+                          }
+                          setShowCompletions(false);
+                        }}
+                        className={`px-3 py-2 cursor-pointer text-sm flex items-center gap-2 ${
+                          index === completionIndex
+                            ? 'bg-blue-600 text-white'
+                            : 'text-gray-300 hover:bg-gray-700'
+                        }`}
+                      >
+                        <span className="font-semibold">{completion.label}</span>
+                        {completion.detail && (
+                          <span className="text-xs opacity-75">- {completion.detail}</span>
+                        )}
+                      </div>
+                    ))}
+                    <div className="px-2 py-1 text-xs text-gray-500 border-t border-gray-700">
+                      Usa ↑↓ para navegar, Enter para seleccionar, Esc para cerrar
+                    </div>
+                  </div>
+                )}
+                
+                {/* Errores de sintaxis - Indicador */}
+                {syntaxErrors.length > 0 && plugins.syntaxValidation && (
+                  <div className="absolute top-2 right-2 bg-red-600 text-white px-3 py-1 rounded-lg text-xs z-50 flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4" />
+                    <span>{syntaxErrors.length} error(es) de sintaxis</span>
+                  </div>
+                )}
               </div>
             </div>
 

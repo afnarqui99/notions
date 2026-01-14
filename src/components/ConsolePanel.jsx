@@ -1302,12 +1302,11 @@ ${code}
                           output: output,
                         },
                       }).run();
-                      // Cerrar el modal después de insertar
-                      onClose();
+                      // NO cerrar el modal para mantener las funcionalidades disponibles
                     }
                   }}
                   className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded transition-colors text-xs flex items-center gap-1"
-                  title="Insertar consola en la página (se guarda en el documento)"
+                  title="Insertar consola en la página (se guarda en el documento). El modal permanece abierto para mantener todas las funcionalidades."
                 >
                   <FilePlus className="w-3 h-3" />
                   Insertar en página
