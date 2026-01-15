@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   ChevronRight, 
   ChevronDown, 
@@ -6,7 +6,13 @@ import {
   Folder, 
   FolderOpen,
   X,
-  Loader2
+  Loader2,
+  Plus,
+  FilePlus,
+  FolderPlus,
+  Edit2,
+  Trash2,
+  MoreVertical
 } from 'lucide-react';
 
 const STORAGE_KEY = 'console-file-explorer-state';
@@ -17,7 +23,10 @@ export default function FileExplorer({
   projectPath, 
   onFileSelect,
   onProjectPathChange,
-  onProjectHandleChange // Nuevo callback para pasar el handle del proyecto
+  onProjectHandleChange, // Nuevo callback para pasar el handle del proyecto
+  hideHeader = false, // Opción para ocultar el header cuando se usa dentro de otro componente
+  vscodeStyle = false, // Estilo VS Code/Cursor con colores oscuros
+  openFiles = [] // Lista de archivos abiertos para resaltarlos en amarillo
 }) {
   const [fileTree, setFileTree] = useState({});
   const [expandedFolders, setExpandedFolders] = useState(() => {
@@ -31,6 +40,14 @@ export default function FileExplorer({
   const [loading, setLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [loadingFolders, setLoadingFolders] = useState(new Set());
+  const [contextMenu, setContextMenu] = useState(null); // { x, y, item, parentPath }
+  const [showCreateFileModal, setShowCreateFileModal] = useState(false);
+  const [showCreateFolderModal, setShowCreateFolderModal] = useState(false);
+  const [showRenameModal, setShowRenameModal] = useState(false);
+  const [newItemName, setNewItemName] = useState('');
+  const [renameItem, setRenameItem] = useState(null);
+  const [createParentPath, setCreateParentPath] = useState(null);
+  const contextMenuRef = useRef(null);
 
   // Cargar ruta guardada al abrir
   useEffect(() => {
@@ -161,7 +178,7 @@ export default function FileExplorer({
     setExpandedFolders(newExpanded);
   };
 
-  const handleFileClick = async (filePath, isFolder) => {
+  const handleFileClick = useCallback(async (filePath, isFolder) => {
     if (isFolder) {
       toggleFolder(filePath);
     } else {
@@ -193,7 +210,7 @@ export default function FileExplorer({
         console.error('Error al leer archivo:', error);
       }
     }
-  };
+  }, [fileTree, onFileSelect, toggleFolder]);
 
   const selectProjectFolder = async () => {
     try {
@@ -288,6 +305,181 @@ export default function FileExplorer({
     }
   };
 
+  // Función para manejar clic derecho (menú contextual)
+  const handleContextMenu = useCallback((e, item, parentPath) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      item: item,
+      parentPath: parentPath || projectPath
+    });
+  }, [projectPath]);
+
+  // Cerrar menú contextual al hacer clic fuera
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target)) {
+        setContextMenu(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Crear nuevo archivo
+  const handleCreateFile = async () => {
+    if (!newItemName.trim()) {
+      alert('Por favor ingresa un nombre para el archivo');
+      return;
+    }
+    
+    try {
+      const parentPath = createParentPath || projectPath;
+      const newFilePath = await pathJoin(parentPath, newItemName);
+      
+      if (window.electronAPI && window.electronAPI.createFile) {
+        const result = await window.electronAPI.createFile(newFilePath, '');
+        if (result.success) {
+          // Recargar el árbol de archivos
+          await loadFilesRecursive(parentPath, parentPath === projectPath ? null : parentPath);
+          // Expandir la carpeta padre
+          setExpandedFolders(prev => new Set([...prev, parentPath]));
+          setShowCreateFileModal(false);
+          setNewItemName('');
+          setCreateParentPath(null);
+          // Abrir el archivo recién creado
+          if (onFileSelect) {
+            onFileSelect(newFilePath, '');
+          }
+        } else {
+          alert('Error al crear archivo: ' + result.error);
+        }
+      } else {
+        alert('La funcionalidad de crear archivos solo está disponible en Electron');
+      }
+    } catch (error) {
+      console.error('Error creando archivo:', error);
+      alert('Error al crear archivo: ' + error.message);
+    }
+  };
+
+  // Crear nueva carpeta
+  const handleCreateFolder = async () => {
+    if (!newItemName.trim()) {
+      alert('Por favor ingresa un nombre para la carpeta');
+      return;
+    }
+    
+    try {
+      const parentPath = createParentPath || projectPath;
+      const newFolderPath = await pathJoin(parentPath, newItemName);
+      
+      if (window.electronAPI && window.electronAPI.createDirectory) {
+        const result = await window.electronAPI.createDirectory(newFolderPath);
+        if (result.success) {
+          // Recargar el árbol de archivos
+          await loadFilesRecursive(parentPath, parentPath === projectPath ? null : parentPath);
+          // Expandir la carpeta padre y la nueva carpeta
+          setExpandedFolders(prev => new Set([...prev, parentPath, newFolderPath]));
+          setShowCreateFolderModal(false);
+          setNewItemName('');
+          setCreateParentPath(null);
+        } else {
+          alert('Error al crear carpeta: ' + result.error);
+        }
+      } else {
+        alert('La funcionalidad de crear carpetas solo está disponible en Electron');
+      }
+    } catch (error) {
+      console.error('Error creando carpeta:', error);
+      alert('Error al crear carpeta: ' + error.message);
+    }
+  };
+
+  // Renombrar archivo o carpeta
+  const handleRename = async () => {
+    if (!newItemName.trim() || !renameItem) {
+      alert('Por favor ingresa un nuevo nombre');
+      return;
+    }
+    
+    if (newItemName === renameItem.name) {
+      setShowRenameModal(false);
+      setRenameItem(null);
+      setNewItemName('');
+      return;
+    }
+    
+    try {
+      const oldPath = renameItem.path;
+      const parentPath = oldPath.substring(0, oldPath.lastIndexOf('/')) || oldPath.substring(0, oldPath.lastIndexOf('\\')) || projectPath;
+      const newPath = await pathJoin(parentPath, newItemName);
+      
+      if (window.electronAPI && window.electronAPI.renameFile) {
+        const result = await window.electronAPI.renameFile(oldPath, newPath);
+        if (result.success) {
+          // Recargar el árbol de archivos
+          const reloadPath = renameItem.type === 'folder' ? parentPath : parentPath;
+          await loadFilesRecursive(reloadPath === projectPath ? projectPath : reloadPath, reloadPath === projectPath ? null : reloadPath);
+          setShowRenameModal(false);
+          setRenameItem(null);
+          setNewItemName('');
+        } else {
+          alert('Error al renombrar: ' + result.error);
+        }
+      } else {
+        alert('La funcionalidad de renombrar solo está disponible en Electron');
+      }
+    } catch (error) {
+      console.error('Error renombrando:', error);
+      alert('Error al renombrar: ' + error.message);
+    }
+  };
+
+  // Eliminar archivo o carpeta
+  const handleDelete = async (item) => {
+    if (!item) return;
+    
+    const itemType = item.type === 'folder' ? 'carpeta' : 'archivo';
+    const confirmMessage = `¿Estás seguro de que quieres eliminar ${itemType === 'carpeta' ? 'la carpeta' : 'el archivo'} "${item.name}"?\n\n${itemType === 'carpeta' ? 'Esto eliminará todos los archivos dentro de la carpeta.' : 'Esta acción no se puede deshacer.'}`;
+    
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+    
+    try {
+      if (window.electronAPI && window.electronAPI.deleteFile) {
+        const result = await window.electronAPI.deleteFile(item.path);
+        if (result.success) {
+          // Recargar el árbol de archivos
+          const parentPath = item.path.substring(0, item.path.lastIndexOf('/')) || item.path.substring(0, item.path.lastIndexOf('\\'));
+          const reloadPath = parentPath || projectPath;
+          await loadFilesRecursive(reloadPath === projectPath ? projectPath : reloadPath, reloadPath === projectPath ? null : reloadPath);
+          setContextMenu(null);
+        } else {
+          alert('Error al eliminar: ' + result.error);
+        }
+      } else {
+        alert('La funcionalidad de eliminar solo está disponible en Electron');
+      }
+    } catch (error) {
+      console.error('Error eliminando:', error);
+      alert('Error al eliminar: ' + error.message);
+    }
+  };
+
+  // Función auxiliar para unir rutas
+  const pathJoin = async (base, ...parts) => {
+    if (window.electronAPI && window.electronAPI.pathJoin) {
+      return await window.electronAPI.pathJoin(base, ...parts);
+    }
+    // Fallback manual
+    const separator = base.includes('\\') ? '\\' : '/';
+    return [base, ...parts].join(separator).replace(/[/\\]+/g, separator);
+  };
+
   const renderFileTree = useCallback((parentPath, level = 0) => {
     const currentPath = parentPath || projectPath;
     const folderItems = fileTree[currentPath] || [];
@@ -307,7 +499,71 @@ export default function FileExplorer({
       const isSelected = selectedFile === item.path;
       const isFolder = item.type === 'folder';
       const isLoading = loadingFolders.has(item.path);
+      const isOpen = openFiles.includes(item.path);
 
+      // Estilos VS Code/Cursor
+      if (vscodeStyle) {
+        const hoverBg = '#2a2d2e';
+        const selectedBg = isSelected ? '#094771' : 'transparent';
+        // Archivos abiertos en amarillo claro, archivos normales en blanco/gris muy claro para mejor visibilidad
+        const textColor = isOpen ? '#dcdcaa' : '#d4d4d4'; // Amarillo para archivos abiertos, blanco/gris claro para normales
+        const folderColor = '#4ec9b0'; // Cyan para carpetas
+        const chevronColor = '#858585';
+        const fileIconColor = isOpen ? '#dcdcaa' : '#d4d4d4'; // Icono de archivo con mismo color que texto
+        
+        return (
+          <div key={item.path}>
+            <div
+              onClick={() => handleFileClick(item.path, isFolder)}
+              onContextMenu={(e) => handleContextMenu(e, item, currentPath)}
+              className="flex items-center gap-1 px-2 py-1 cursor-pointer text-sm transition-colors group"
+              style={{ 
+                paddingLeft: `${level * 16 + 8}px`,
+                backgroundColor: isSelected ? selectedBg : 'transparent',
+                color: textColor
+              }}
+              onMouseEnter={(e) => {
+                if (!isSelected) e.currentTarget.style.backgroundColor = hoverBg;
+              }}
+              onMouseLeave={(e) => {
+                if (!isSelected) e.currentTarget.style.backgroundColor = 'transparent';
+              }}
+            >
+              {isFolder ? (
+                <>
+                  {isLoading ? (
+                    <Loader2 className="w-3 h-3 flex-shrink-0 animate-spin" style={{ color: chevronColor }} />
+                  ) : isExpanded ? (
+                    <ChevronDown className="w-3 h-3 flex-shrink-0" style={{ color: chevronColor }} />
+                  ) : (
+                    <ChevronRight className="w-3 h-3 flex-shrink-0" style={{ color: chevronColor }} />
+                  )}
+                  {isExpanded ? (
+                    <FolderOpen className="w-4 h-4 flex-shrink-0" style={{ color: folderColor }} />
+                  ) : (
+                    <Folder className="w-4 h-4 flex-shrink-0" style={{ color: folderColor }} />
+                  )}
+                </>
+              ) : (
+                <>
+                  <div className="w-3 h-3 flex-shrink-0" /> {/* Spacer para alineación */}
+                  <File className="w-4 h-4 flex-shrink-0" style={{ color: fileIconColor }} />
+                </>
+              )}
+              <span className="truncate flex-1 select-none" style={{ color: textColor, fontWeight: isOpen ? '500' : '400' }}>
+                {item.name}
+              </span>
+            </div>
+            {isFolder && isExpanded && (
+              <div>
+                {renderFileTree(item.path, level + 1)}
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      // Estilos por defecto (original)
       return (
         <div key={item.path}>
           <div
@@ -350,38 +606,127 @@ export default function FileExplorer({
         </div>
       );
     });
-  }, [fileTree, expandedFolders, selectedFile, loadingFolders, projectPath, handleFileClick]);
+  }, [fileTree, expandedFolders, selectedFile, loadingFolders, projectPath, handleFileClick, vscodeStyle, openFiles]);
 
   if (!isOpen) return null;
 
   return (
-    <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">
-      {/* Header */}
-      <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between bg-white dark:bg-gray-900">
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-          Explorador
-        </h3>
-        <button
-          onClick={onClose}
-          className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-        >
-          <X className="w-4 h-4" />
-        </button>
-      </div>
+    <div 
+      className="flex flex-col h-full"
+      style={vscodeStyle ? {
+        backgroundColor: '#252526', // Fondo del sidebar de VS Code (más claro que el editor)
+        color: '#d4d4d4' // Color de texto por defecto más visible
+      } : {}}
+    >
 
       {/* Botón para seleccionar carpeta */}
-      <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+      <div 
+        className={`px-4 py-2 ${!hideHeader ? 'border-b' : ''}`}
+        style={vscodeStyle ? {
+          borderColor: '#3e3e42'
+        } : {}}
+      >
         <button
           onClick={selectProjectFolder}
-          className="w-full px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
+          className="w-full px-3 py-2 text-sm rounded-lg transition-colors flex items-center justify-center gap-2"
+          style={vscodeStyle ? {
+            backgroundColor: '#0e639c',
+            color: '#ffffff'
+          } : {
+            backgroundColor: '#2563eb',
+            color: '#ffffff'
+          }}
+          onMouseEnter={(e) => {
+            if (vscodeStyle) {
+              e.currentTarget.style.backgroundColor = '#1177bb';
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (vscodeStyle) {
+              e.currentTarget.style.backgroundColor = '#0e639c';
+            }
+          }}
         >
           <Folder className="w-4 h-4" />
           {projectPath ? 'Cambiar Carpeta' : 'Abrir Carpeta'}
         </button>
         {projectPath && (
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 truncate" title={projectPath}>
-            {projectPath}
-          </p>
+          <>
+            <p 
+              className="text-xs mt-2 truncate" 
+              title={projectPath}
+              style={vscodeStyle ? {
+                color: '#858585'
+              } : {}}
+            >
+              {projectPath}
+            </p>
+            {/* Botones de acción rápida */}
+            <div className="flex gap-2 mt-3">
+              <button
+                onClick={() => {
+                  setCreateParentPath(projectPath);
+                  setNewItemName('');
+                  setShowCreateFileModal(true);
+                }}
+                className="flex-1 px-2 py-1.5 text-xs rounded transition-colors flex items-center justify-center gap-1.5"
+                style={vscodeStyle ? {
+                  backgroundColor: '#2d2d30',
+                  color: '#cccccc',
+                  border: '1px solid #3e3e42'
+                } : {
+                  backgroundColor: '#f3f4f6',
+                  color: '#374151',
+                  border: '1px solid #e5e7eb'
+                }}
+                onMouseEnter={(e) => {
+                  if (vscodeStyle) {
+                    e.currentTarget.style.backgroundColor = '#37373d';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (vscodeStyle) {
+                    e.currentTarget.style.backgroundColor = '#2d2d30';
+                  }
+                }}
+                title="Crear nuevo archivo (o clic derecho en el explorador)"
+              >
+                <FilePlus className="w-3.5 h-3.5" />
+                <span>Archivo</span>
+              </button>
+              <button
+                onClick={() => {
+                  setCreateParentPath(projectPath);
+                  setNewItemName('');
+                  setShowCreateFolderModal(true);
+                }}
+                className="flex-1 px-2 py-1.5 text-xs rounded transition-colors flex items-center justify-center gap-1.5"
+                style={vscodeStyle ? {
+                  backgroundColor: '#2d2d30',
+                  color: '#cccccc',
+                  border: '1px solid #3e3e42'
+                } : {
+                  backgroundColor: '#f3f4f6',
+                  color: '#374151',
+                  border: '1px solid #e5e7eb'
+                }}
+                onMouseEnter={(e) => {
+                  if (vscodeStyle) {
+                    e.currentTarget.style.backgroundColor = '#37373d';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (vscodeStyle) {
+                    e.currentTarget.style.backgroundColor = '#2d2d30';
+                  }
+                }}
+                title="Crear nueva carpeta (o clic derecho en el explorador)"
+              >
+                <FolderPlus className="w-3.5 h-3.5" />
+                <span>Carpeta</span>
+              </button>
+            </div>
+          </>
         )}
       </div>
 
@@ -389,22 +734,340 @@ export default function FileExplorer({
       <div className="flex-1 overflow-y-auto">
         {loading && !projectPath ? (
           <div className="flex items-center justify-center py-8">
-            <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+            <Loader2 
+              className="w-6 h-6 animate-spin" 
+              style={vscodeStyle ? { color: '#858585' } : {}}
+            />
           </div>
-        ) : projectPath && fileTree[projectPath] ? (
+        ) : projectPath && fileTree[projectPath] && fileTree[projectPath].length > 0 ? (
           <div className="py-1">
             {renderFileTree(projectPath)}
           </div>
         ) : projectPath ? (
-          <div className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
-            No se encontraron archivos
+          <div 
+            className="px-4 py-8 text-center"
+            style={vscodeStyle ? { color: '#858585' } : {}}
+            onContextMenu={(e) => handleContextMenu(e, null, projectPath)}
+          >
+            <p className="text-sm mb-4">No se encontraron archivos</p>
+            <div className="flex gap-2 justify-center">
+              <button
+                onClick={() => {
+                  setCreateParentPath(projectPath);
+                  setNewItemName('');
+                  setShowCreateFileModal(true);
+                }}
+                className="px-3 py-1.5 text-sm rounded flex items-center gap-2"
+                style={vscodeStyle ? {
+                  backgroundColor: '#0e639c',
+                  color: '#ffffff'
+                } : {
+                  backgroundColor: '#2563eb',
+                  color: '#ffffff'
+                }}
+              >
+                <FilePlus className="w-4 h-4" />
+                Nuevo archivo
+              </button>
+              <button
+                onClick={() => {
+                  setCreateParentPath(projectPath);
+                  setNewItemName('');
+                  setShowCreateFolderModal(true);
+                }}
+                className="px-3 py-1.5 text-sm rounded flex items-center gap-2"
+                style={vscodeStyle ? {
+                  backgroundColor: '#0e639c',
+                  color: '#ffffff'
+                } : {
+                  backgroundColor: '#2563eb',
+                  color: '#ffffff'
+                }}
+              >
+                <FolderPlus className="w-4 h-4" />
+                Nueva carpeta
+              </button>
+            </div>
           </div>
         ) : (
-          <div className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+          <div 
+            className="px-4 py-8 text-center text-sm"
+            style={vscodeStyle ? { color: '#858585' } : {}}
+          >
             Selecciona una carpeta para explorar
           </div>
         )}
       </div>
+
+      {/* Menú contextual */}
+      {contextMenu && (
+        <div
+          ref={contextMenuRef}
+          className="fixed bg-[#252526] border border-[#3e3e42] rounded shadow-lg py-1 z-[10000] min-w-[180px]"
+          style={{
+            left: `${contextMenu.x}px`,
+            top: `${contextMenu.y}px`,
+            ...(vscodeStyle ? {
+              backgroundColor: '#252526',
+              borderColor: '#3e3e42'
+            } : {})
+          }}
+        >
+          {/* Opciones para carpeta o espacio vacío */}
+          {(!contextMenu.item || contextMenu.item.type === 'folder') && (
+            <>
+              <button
+                onClick={() => {
+                  setCreateParentPath(contextMenu.item ? contextMenu.item.path : contextMenu.parentPath);
+                  setNewItemName('');
+                  setShowCreateFileModal(true);
+                  setContextMenu(null);
+                }}
+                className="w-full px-3 py-1.5 text-left text-sm hover:bg-[#2a2d2e] flex items-center gap-2 transition-colors"
+                style={vscodeStyle ? { color: '#cccccc' } : {}}
+              >
+                <FilePlus className="w-4 h-4" />
+                Nuevo archivo
+              </button>
+              <button
+                onClick={() => {
+                  setCreateParentPath(contextMenu.item ? contextMenu.item.path : contextMenu.parentPath);
+                  setNewItemName('');
+                  setShowCreateFolderModal(true);
+                  setContextMenu(null);
+                }}
+                className="w-full px-3 py-1.5 text-left text-sm hover:bg-[#2a2d2e] flex items-center gap-2 transition-colors"
+                style={vscodeStyle ? { color: '#cccccc' } : {}}
+              >
+                <FolderPlus className="w-4 h-4" />
+                Nueva carpeta
+              </button>
+            </>
+          )}
+          
+          {/* Opciones para archivo o carpeta seleccionada */}
+          {contextMenu.item && (
+            <>
+              <div className="border-t border-[#3e3e42] my-1" />
+              <button
+                onClick={() => {
+                  setRenameItem(contextMenu.item);
+                  setNewItemName(contextMenu.item.name);
+                  setShowRenameModal(true);
+                  setContextMenu(null);
+                }}
+                className="w-full px-3 py-1.5 text-left text-sm hover:bg-[#2a2d2e] flex items-center gap-2 transition-colors"
+                style={vscodeStyle ? { color: '#cccccc' } : {}}
+              >
+                <Edit2 className="w-4 h-4" />
+                Renombrar
+              </button>
+              <button
+                onClick={() => {
+                  handleDelete(contextMenu.item);
+                }}
+                className="w-full px-3 py-1.5 text-left text-sm hover:bg-[#2a2d2e] flex items-center gap-2 transition-colors text-red-400"
+              >
+                <Trash2 className="w-4 h-4" />
+                Eliminar
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Modal para crear archivo */}
+      {showCreateFileModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[10001]">
+          <div 
+            className="bg-[#1e1e1e] border border-[#3e3e42] rounded-lg p-4 min-w-[400px]"
+            style={vscodeStyle ? {
+              backgroundColor: '#1e1e1e',
+              borderColor: '#3e3e42'
+            } : {}}
+          >
+            <h3 className="text-lg font-semibold mb-4" style={vscodeStyle ? { color: '#cccccc' } : {}}>
+              Nuevo archivo
+            </h3>
+            <input
+              type="text"
+              value={newItemName}
+              onChange={(e) => setNewItemName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handleCreateFile();
+                } else if (e.key === 'Escape') {
+                  setShowCreateFileModal(false);
+                  setNewItemName('');
+                }
+              }}
+              placeholder="nombre-del-archivo.js"
+              className="w-full px-3 py-2 mb-4 rounded border"
+              style={vscodeStyle ? {
+                backgroundColor: '#252526',
+                borderColor: '#3e3e42',
+                color: '#cccccc'
+              } : {}}
+              autoFocus
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => {
+                  setShowCreateFileModal(false);
+                  setNewItemName('');
+                }}
+                className="px-4 py-2 rounded text-sm"
+                style={vscodeStyle ? {
+                  backgroundColor: '#3e3e42',
+                  color: '#cccccc'
+                } : {}}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleCreateFile}
+                className="px-4 py-2 rounded text-sm text-white"
+                style={vscodeStyle ? {
+                  backgroundColor: '#0e639c'
+                } : {
+                  backgroundColor: '#2563eb'
+                }}
+              >
+                Crear
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal para crear carpeta */}
+      {showCreateFolderModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[10001]">
+          <div 
+            className="bg-[#1e1e1e] border border-[#3e3e42] rounded-lg p-4 min-w-[400px]"
+            style={vscodeStyle ? {
+              backgroundColor: '#1e1e1e',
+              borderColor: '#3e3e42'
+            } : {}}
+          >
+            <h3 className="text-lg font-semibold mb-4" style={vscodeStyle ? { color: '#cccccc' } : {}}>
+              Nueva carpeta
+            </h3>
+            <input
+              type="text"
+              value={newItemName}
+              onChange={(e) => setNewItemName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handleCreateFolder();
+                } else if (e.key === 'Escape') {
+                  setShowCreateFolderModal(false);
+                  setNewItemName('');
+                }
+              }}
+              placeholder="nombre-de-la-carpeta"
+              className="w-full px-3 py-2 mb-4 rounded border"
+              style={vscodeStyle ? {
+                backgroundColor: '#252526',
+                borderColor: '#3e3e42',
+                color: '#cccccc'
+              } : {}}
+              autoFocus
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => {
+                  setShowCreateFolderModal(false);
+                  setNewItemName('');
+                }}
+                className="px-4 py-2 rounded text-sm"
+                style={vscodeStyle ? {
+                  backgroundColor: '#3e3e42',
+                  color: '#cccccc'
+                } : {}}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleCreateFolder}
+                className="px-4 py-2 rounded text-sm text-white"
+                style={vscodeStyle ? {
+                  backgroundColor: '#0e639c'
+                } : {
+                  backgroundColor: '#2563eb'
+                }}
+              >
+                Crear
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal para renombrar */}
+      {showRenameModal && renameItem && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[10001]">
+          <div 
+            className="bg-[#1e1e1e] border border-[#3e3e42] rounded-lg p-4 min-w-[400px]"
+            style={vscodeStyle ? {
+              backgroundColor: '#1e1e1e',
+              borderColor: '#3e3e42'
+            } : {}}
+          >
+            <h3 className="text-lg font-semibold mb-4" style={vscodeStyle ? { color: '#cccccc' } : {}}>
+              Renombrar {renameItem.type === 'folder' ? 'carpeta' : 'archivo'}
+            </h3>
+            <input
+              type="text"
+              value={newItemName}
+              onChange={(e) => setNewItemName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handleRename();
+                } else if (e.key === 'Escape') {
+                  setShowRenameModal(false);
+                  setRenameItem(null);
+                  setNewItemName('');
+                }
+              }}
+              className="w-full px-3 py-2 mb-4 rounded border"
+              style={vscodeStyle ? {
+                backgroundColor: '#252526',
+                borderColor: '#3e3e42',
+                color: '#cccccc'
+              } : {}}
+              autoFocus
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => {
+                  setShowRenameModal(false);
+                  setRenameItem(null);
+                  setNewItemName('');
+                }}
+                className="px-4 py-2 rounded text-sm"
+                style={vscodeStyle ? {
+                  backgroundColor: '#3e3e42',
+                  color: '#cccccc'
+                } : {}}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleRename}
+                className="px-4 py-2 rounded text-sm text-white"
+                style={vscodeStyle ? {
+                  backgroundColor: '#0e639c'
+                } : {
+                  backgroundColor: '#2563eb'
+                }}
+              >
+                Renombrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

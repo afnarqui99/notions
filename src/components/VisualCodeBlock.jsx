@@ -20,7 +20,8 @@ import {
   Package,
   Settings,
   Check,
-  XCircle
+  XCircle,
+  Sparkles
 } from 'lucide-react';
 import LocalStorageService from '../services/LocalStorageService';
 import { EditorView, basicSetup } from 'codemirror';
@@ -33,6 +34,7 @@ import { json } from '@codemirror/lang-json';
 import { oneDark } from '@codemirror/theme-one-dark';
 import FileExplorer from './FileExplorer';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
+import AIChatPanel from './AIChatPanel';
 
 // Panel de Extensiones - Estilo VS Code
 function ExtensionsPanel({ extensions, setExtensions }) {
@@ -187,9 +189,9 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
   });
   const [theme, setTheme] = useState(() => {
     try {
-      return node.attrs.theme || 'notion';
+      return node.attrs.theme || 'oneDark';
     } catch {
-      return 'notion';
+      return 'oneDark';
     }
   });
   const [projectTitle, setProjectTitle] = useState(() => {
@@ -210,6 +212,7 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [showExtensionsPanel, setShowExtensionsPanel] = useState(false);
+  const [showAIChat, setShowAIChat] = useState(false);
   const [extensions, setExtensions] = useState(() => {
     try {
       return node.attrs.extensions ? JSON.parse(node.attrs.extensions) : {
@@ -241,6 +244,34 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
   const editorViewRef = useRef(null);
   const editorContainerRef = useRef(null);
   const isElectron = typeof window !== 'undefined' && window.electronAPI && window.electronAPI.readFile;
+
+  // Permite que el Centro de Ejecución (o cualquier otra parte) enfoque este bloque
+  // y abra el Explorador automáticamente.
+  useEffect(() => {
+    const handleFocusVisualCode = (event) => {
+      const detail = event?.detail || {};
+      const targetProjectPath = detail.projectPath;
+      if (!targetProjectPath || targetProjectPath !== projectPath) return;
+
+      // Expandir el bloque automáticamente para mejor visibilidad
+      setIsExpanded(true);
+      
+      // Si el modo es 'fullscreen', expandir a pantalla completa
+      if (detail.openMode === 'fullscreen') {
+        setIsFullscreen(true);
+      }
+
+      if (detail.openExplorer) {
+        setShowFileExplorer(true);
+        setShowExtensionsPanel(false);
+      }
+    };
+
+    window.addEventListener('focus-visual-code', handleFocusVisualCode);
+    return () => {
+      window.removeEventListener('focus-visual-code', handleFocusVisualCode);
+    };
+  }, [projectPath]);
 
   // Sincronizar con atributos del nodo
   useEffect(() => {
@@ -570,7 +601,58 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
           '.cm-cursor': { borderLeftColor: '#AEAFAD' },
         }, { dark: true });
       case 'oneDark':
-        return oneDark;
+        // Tema Dark+ de VS Code (Dark Modern)
+        return EditorView.theme({
+          '&': {
+            backgroundColor: '#1e1e1e',
+            color: '#d4d4d4',
+          },
+          '.cm-content': {
+            backgroundColor: '#1e1e1e',
+            color: '#d4d4d4',
+            caretColor: '#aeafad',
+          },
+          '.cm-gutters': {
+            backgroundColor: '#1e1e1e',
+            color: '#858585',
+            border: 'none',
+          },
+          '.cm-lineNumbers': {
+            color: '#858585',
+          },
+          '.cm-activeLineGutter': {
+            backgroundColor: 'transparent',
+            color: '#c6c6c6',
+            fontWeight: 'normal',
+          },
+          '.cm-line': {
+            color: '#d4d4d4',
+          },
+          '.cm-keyword': { color: '#569cd6' },
+          '.cm-string': { color: '#ce9178' },
+          '.cm-comment': { color: '#6a9955' },
+          '.cm-number': { color: '#b5cea8' },
+          '.cm-function': { color: '#dcdcaa' },
+          '.cm-variable': { color: '#9cdcfe' },
+          '.cm-variable-2': { color: '#9cdcfe' },
+          '.cm-variable-3': { color: '#4ec9b0' },
+          '.cm-type': { color: '#4ec9b0' },
+          '.cm-property': { color: '#9cdcfe' },
+          '.cm-operator': { color: '#d4d4d4' },
+          '.cm-meta': { color: '#569cd6' },
+          '.cm-bracket': { color: '#d4d4d4' },
+          '.cm-tag': { color: '#569cd6' },
+          '.cm-attribute': { color: '#9cdcfe' },
+          '.cm-selectionBackground': { backgroundColor: '#264f78' },
+          '.cm-cursor': { borderLeftColor: '#aeafad' },
+          '.cm-matchingBracket': {
+            backgroundColor: 'rgba(255, 255, 255, 0.1)',
+            outline: '1px solid rgba(255, 255, 255, 0.2)',
+          },
+          '.cm-nonmatchingBracket': {
+            backgroundColor: 'rgba(255, 0, 0, 0.2)',
+          },
+        }, { dark: true });
       case 'light':
         return EditorView.theme({
           '&': {
@@ -631,20 +713,99 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
             color: '#565f89',
           },
         });
-      default:
+      case 'cursorDark':
+        // Tema oscuro principal de Cursor (similar a VS Code Dark+ pero con ajustes)
         return EditorView.theme({
           '&': {
-            backgroundColor: '#1E1E1E',
-            color: '#D4D4D4',
+            backgroundColor: '#1e1e1e',
+            color: '#d4d4d4',
           },
           '.cm-content': {
-            backgroundColor: '#1E1E1E',
-            color: '#D4D4D4',
+            backgroundColor: '#1e1e1e',
+            color: '#d4d4d4',
+            caretColor: '#aeafad',
           },
           '.cm-gutters': {
-            backgroundColor: '#1E1E1E',
+            backgroundColor: '#252526',
+            color: '#858585',
+            border: 'none',
+          },
+          '.cm-lineNumbers': {
             color: '#858585',
           },
+          '.cm-activeLineGutter': {
+            backgroundColor: 'transparent',
+            color: '#c6c6c6',
+            fontWeight: 'normal',
+          },
+          '.cm-line': {
+            color: '#d4d4d4',
+          },
+          '.cm-keyword': { color: '#569cd6' },
+          '.cm-string': { color: '#ce9178' },
+          '.cm-comment': { color: '#6a9955' },
+          '.cm-number': { color: '#b5cea8' },
+          '.cm-function': { color: '#dcdcaa' },
+          '.cm-variable': { color: '#9cdcfe' },
+          '.cm-variable-2': { color: '#9cdcfe' },
+          '.cm-variable-3': { color: '#4ec9b0' },
+          '.cm-type': { color: '#4ec9b0' },
+          '.cm-property': { color: '#9cdcfe' },
+          '.cm-operator': { color: '#d4d4d4' },
+          '.cm-meta': { color: '#569cd6' },
+          '.cm-bracket': { color: '#d4d4d4' },
+          '.cm-tag': { color: '#569cd6' },
+          '.cm-attribute': { color: '#9cdcfe' },
+          '.cm-selectionBackground': { backgroundColor: '#264f78' },
+          '.cm-cursor': { borderLeftColor: '#aeafad' },
+          '.cm-matchingBracket': {
+            backgroundColor: 'rgba(255, 255, 255, 0.1)',
+            outline: '1px solid rgba(255, 255, 255, 0.2)',
+          },
+          '.cm-nonmatchingBracket': {
+            backgroundColor: 'rgba(255, 0, 0, 0.2)',
+          },
+        }, { dark: true });
+      default:
+        // Tema Dark+ de VS Code por defecto
+        return EditorView.theme({
+          '&': {
+            backgroundColor: '#1e1e1e',
+            color: '#d4d4d4',
+          },
+          '.cm-content': {
+            backgroundColor: '#1e1e1e',
+            color: '#d4d4d4',
+            caretColor: '#aeafad',
+          },
+          '.cm-gutters': {
+            backgroundColor: '#1e1e1e',
+            color: '#858585',
+            border: 'none',
+          },
+          '.cm-lineNumbers': {
+            color: '#858585',
+          },
+          '.cm-activeLineGutter': {
+            backgroundColor: 'transparent',
+            color: '#c6c6c6',
+          },
+          '.cm-line': {
+            color: '#d4d4d4',
+          },
+          '.cm-keyword': { color: '#569cd6' },
+          '.cm-string': { color: '#ce9178' },
+          '.cm-comment': { color: '#6a9955' },
+          '.cm-number': { color: '#b5cea8' },
+          '.cm-function': { color: '#dcdcaa' },
+          '.cm-variable': { color: '#9cdcfe' },
+          '.cm-type': { color: '#4ec9b0' },
+          '.cm-property': { color: '#9cdcfe' },
+          '.cm-operator': { color: '#d4d4d4' },
+          '.cm-meta': { color: '#569cd6' },
+          '.cm-bracket': { color: '#d4d4d4' },
+          '.cm-selectionBackground': { backgroundColor: '#264f78' },
+          '.cm-cursor': { borderLeftColor: '#aeafad' },
         }, { dark: true });
     }
   };
@@ -722,6 +883,18 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
         commentColor: '#565f89'
       }
     },
+    { 
+      value: 'cursorDark', 
+      label: 'Cursor Dark',
+      description: 'Tema oscuro principal de Cursor (recomendado)',
+      preview: {
+        backgroundColor: '#1e1e1e',
+        textColor: '#d4d4d4',
+        keywordColor: '#569cd6',
+        stringColor: '#ce9178',
+        commentColor: '#6a9955'
+      }
+    },
   ];
 
   const initializeEditor = () => {
@@ -751,44 +924,134 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
         langExtension = javascript();
     }
 
-    // Construir extensiones según las extensiones habilitadas
+    // Configuración avanzada estilo VS Code/Cursor
     const editorExtensions = [
+      // Basic setup incluye line numbers, history, fold, etc.
       basicSetup,
+      
+      // Lenguaje
       langExtension,
+      
+      // Cerrar brackets automáticamente
+      closeBrackets(),
+      
+      // Tema
       getThemeExtension(),
+      
+      // Listener para cambios
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
           const newContent = update.state.doc.toString();
           setFileContents(prev => ({ ...prev, [activeFile]: newContent }));
         }
       }),
+      
+      // Tema personalizado con estilos exactos de VS Code/Cursor
       EditorView.theme({
         '&': {
           fontSize: `${fontSize}px`,
+          height: '100%',
+          fontFamily: '"Consolas", "Monaco", "Courier New", "Menlo", monospace',
         },
         '.cm-content': {
           fontSize: `${fontSize}px`,
+          fontFamily: '"Consolas", "Monaco", "Courier New", "Menlo", monospace',
+          padding: '0',
+          minHeight: '100%',
+          lineHeight: `${fontSize * 1.5}px`,
+          paddingTop: '10px',
+          paddingBottom: '10px',
         },
-      }),
+        '.cm-editor': {
+          height: '100%',
+        },
+        '.cm-scroller': {
+          overflow: 'auto',
+          fontFamily: '"Consolas", "Monaco", "Courier New", "Menlo", monospace',
+        },
+        '.cm-line': {
+          padding: '0 12px',
+        },
+        '.cm-gutters': {
+          backgroundColor: 'transparent',
+          border: 'none',
+          paddingRight: '8px',
+        },
+        '.cm-lineNumbers': {
+          minWidth: '50px',
+          paddingRight: '16px',
+          textAlign: 'right',
+          fontFamily: '"Consolas", "Monaco", "Courier New", "Menlo", monospace',
+          fontSize: `${fontSize}px`,
+        },
+        '.cm-lineNumbers .cm-gutterElement': {
+          padding: '0 8px 0 0',
+          minWidth: '20px',
+        },
+        '.cm-activeLineGutter': {
+          backgroundColor: 'transparent',
+          fontWeight: 'bold',
+        },
+        '.cm-cursor': {
+          borderLeftWidth: '2px',
+          borderLeftStyle: 'solid',
+          marginLeft: '-1px',
+          animation: 'blink 1s step-end infinite',
+        },
+        '@keyframes blink': {
+          '0%, 50%': { opacity: '1' },
+          '51%, 100%': { opacity: '0' },
+        },
+        '.cm-dropCursor': {
+          borderLeftWidth: '2px',
+          borderLeftStyle: 'solid',
+        },
+        '.cm-selectionBackground': {
+          backgroundColor: 'rgba(173, 214, 255, 0.3)',
+        },
+        '.cm-focused .cm-selectionBackground': {
+          backgroundColor: 'rgba(173, 214, 255, 0.3)',
+        },
+        '.cm-selectionMatch': {
+          backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        },
+        '.cm-matchingBracket': {
+          backgroundColor: 'rgba(255, 255, 255, 0.1)',
+          outline: '1px solid rgba(255, 255, 255, 0.2)',
+        },
+        '.cm-nonmatchingBracket': {
+          backgroundColor: 'rgba(255, 0, 0, 0.1)',
+        },
+        '.cm-foldPlaceholder': {
+          backgroundColor: 'transparent',
+          border: 'none',
+          color: '#888',
+        },
+        '.cm-tooltip': {
+          backgroundColor: '#252526',
+          border: '1px solid #3e3e42',
+          borderRadius: '4px',
+        },
+        '.cm-tooltip-autocomplete': {
+          '& > ul > li[aria-selected]': {
+            backgroundColor: '#094771',
+            color: '#ffffff',
+          },
+        },
+        '.cm-focused': {
+          outline: 'none',
+        },
+      }, { dark: theme !== 'light' }),
     ];
 
     // Auto Close Tag - Cerrar automáticamente etiquetas HTML/XML
     if (extensions.autoCloseTag && (language === 'html' || language === 'javascript')) {
-      try {
-        editorExtensions.push(closeBrackets());
-      } catch (e) {
-        console.warn('Extensiones de CodeMirror no disponibles:', e);
-      }
+      editorExtensions.push(closeBrackets());
     }
 
     // Backticks - Mejorar manejo de template literals
     if (extensions.backticks && language === 'javascript') {
-      try {
-        const { closeBrackets } = require('@codemirror/autocomplete');
-        editorExtensions.push(closeBrackets({ brackets: ['`'] }));
-      } catch (e) {
-        console.warn('Extensiones de CodeMirror no disponibles:', e);
-      }
+      editorExtensions.push(closeBrackets({ brackets: ['`'] }));
     }
 
     const view = new EditorView({
@@ -798,6 +1061,11 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
     });
 
     editorViewRef.current = view;
+    
+    // Enfocar el editor automáticamente
+    setTimeout(() => {
+      view.focus();
+    }, 100);
   };
 
   // Actualizar fontSize cuando cambia
@@ -1000,7 +1268,7 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
           style={{ backgroundColor: projectColor || '#1e1e1e' }}
         >
           <div className="flex items-center gap-2 flex-1 min-w-0">
-            <span className="text-[#cccccc] font-medium text-[13px]">Visual Code</span>
+            <span className="text-[#cccccc] font-medium text-[13px]">afnarqui</span>
             {projectPath && (
               <>
                 <span className="text-[#858585] text-[11px]">•</span>
@@ -1150,6 +1418,23 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
                 <Palette className="w-3.5 h-3.5" />
               </button>
             </div>
+            {/* AI Chat Button */}
+            <div className="relative">
+              <button
+                className={`p-1.5 rounded transition-colors ${
+                  showAIChat 
+                    ? 'bg-[#0e639c] text-[#ffffff]' 
+                    : 'text-[#cccccc] hover:text-[#ffffff] hover:bg-[#3e3e42]'
+                }`}
+                title="Chat de IA"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowAIChat(!showAIChat);
+                }}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+              </button>
+            </div>
             <button
               onClick={() => setShowFileExplorer(!showFileExplorer)}
               className="px-2.5 py-1 bg-[#3e3e42] hover:bg-[#464647] text-[#cccccc] rounded text-[12px] transition-colors"
@@ -1272,7 +1557,7 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
           )}
 
           {/* Main Editor Area */}
-          <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 flex flex-col overflow-hidden min-h-0">
             {/* Tabs - Estilo VS Code */}
             {openFiles.length > 0 && (
               <div className="bg-[#2d2d2d] border-b border-[#3e3e42] flex items-center overflow-x-auto">
@@ -1323,9 +1608,9 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
             )}
 
             {/* Editor - Estilo VS Code */}
-            <div className="flex-1 overflow-hidden bg-[#1e1e1e]">
+            <div className="flex-1 overflow-hidden bg-[#1e1e1e] min-h-0">
               {activeFile ? (
-                <div ref={editorContainerRef} className="h-full w-full" />
+                <div ref={editorContainerRef} className="h-full w-full min-h-0" />
               ) : (
                 <div className="h-full flex items-center justify-center text-[#858585]">
                   <div className="text-center">
@@ -1518,6 +1803,15 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
           </div>
         </div>
       )}
+
+      {/* AI Chat Panel */}
+      <AIChatPanel
+        isOpen={showAIChat}
+        onClose={() => setShowAIChat(false)}
+        activeFile={activeFile}
+        fileContents={fileContents}
+        projectPath={projectPath}
+      />
     </NodeViewWrapper>
   );
 }

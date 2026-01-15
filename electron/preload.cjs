@@ -51,6 +51,10 @@ const electronAPI = {
         pathExists: (path) => {
           return ipcRenderer.invoke('path-exists', path);
         },
+        // Verificar si una ruta es un directorio
+        isDirectory: (path) => {
+          return ipcRenderer.invoke('is-directory', path);
+        },
         // Listar cursos en una ruta
         listCursos: (path) => {
           return ipcRenderer.invoke('list-cursos', path);
@@ -71,13 +75,81 @@ const electronAPI = {
         writeFile: (filePath, content) => {
           return ipcRenderer.invoke('write-file', filePath, content);
         },
+        deleteFile: (filePath) => {
+          return ipcRenderer.invoke('delete-file', filePath);
+        },
+        createDirectory: (dirPath) => {
+          return ipcRenderer.invoke('create-directory', dirPath);
+        },
+        createFile: (filePath, initialContent = '') => {
+          return ipcRenderer.invoke('create-file', filePath, initialContent);
+        },
+        renameFile: (oldPath, newPath) => {
+          return ipcRenderer.invoke('rename-file', oldPath, newPath);
+        },
+        pathJoin: (...paths) => {
+          return ipcRenderer.invoke('path-join', ...paths).then(result => result.path);
+        },
         // Ejecutar comando del sistema
-        executeCommand: (command, shell, cwd) => {
-          return ipcRenderer.invoke('execute-command', command, shell, cwd);
+        executeCommand: (command, shell, cwd, terminalId) => {
+          return ipcRenderer.invoke('execute-command', command, shell, cwd, terminalId);
+        },
+        // Detener proceso de terminal
+        stopTerminalProcess: (terminalId) => {
+          return ipcRenderer.invoke('stop-terminal-process', terminalId);
+        },
+        // Verificar si un proceso está muerto
+        isProcessDead: (terminalId) => {
+          return ipcRenderer.invoke('is-process-dead', terminalId);
+        },
+        // Obtener procesos usando un puerto específico
+        getProcessesByPort: (port) => {
+          return ipcRenderer.invoke('get-processes-by-port', port);
+        },
+        // Matar un proceso por PID
+        killProcessByPid: (pid) => {
+          return ipcRenderer.invoke('kill-process-by-pid', pid);
+        },
+        // Matar todos los procesos usando un puerto específico
+        killProcessesByPort: (port) => {
+          return ipcRenderer.invoke('kill-processes-by-port', port);
+        },
+        // Reiniciar proceso de terminal
+        restartTerminalProcess: (terminalId) => {
+          return ipcRenderer.invoke('restart-terminal-process', terminalId);
+        },
+        // Verificar si hay un proceso corriendo
+        hasRunningProcess: (terminalId) => {
+          return ipcRenderer.invoke('has-running-process', terminalId);
+        },
+        // Obtener información del proceso
+        getProcessInfo: (terminalId) => {
+          return ipcRenderer.invoke('get-process-info', terminalId);
+        },
+        // Obtener estadísticas de procesos
+        getProcessStats: () => {
+          return ipcRenderer.invoke('get-process-stats');
+        },
+        // Escuchar output de terminal en tiempo real
+        onTerminalOutput: (callback) => {
+          ipcRenderer.on('terminal-output', (event, data) => callback(data));
+        },
+        // Escuchar cierre de proceso
+        onTerminalProcessClosed: (callback) => {
+          ipcRenderer.on('terminal-process-closed', (event, data) => callback(data));
+        },
+        // Remover listeners
+        removeTerminalListeners: () => {
+          ipcRenderer.removeAllListeners('terminal-output');
+          ipcRenderer.removeAllListeners('terminal-process-closed');
         },
         // Obtener directorio actual del proceso
         getCurrentDirectory: () => {
           return ipcRenderer.invoke('get-current-directory');
+        },
+        // Normalizar una ruta
+        normalizePath: (inputPath) => {
+          return ipcRenderer.invoke('normalize-path', inputPath);
         }
 };
 

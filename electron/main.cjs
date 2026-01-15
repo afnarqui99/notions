@@ -1,6 +1,6 @@
 const { app, BrowserWindow, shell, Tray, Menu, nativeImage, Notification, ipcMain, dialog, session } = require('electron');
 const path = require('path');
-const { spawn } = require('child_process');
+const { spawn, exec } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const AutoLaunch = require('auto-launch');
@@ -24,6 +24,329 @@ try {
 let mainWindow;
 let tray = null;
 let isQuitting = false;
+
+// Gestor de procesos en segundo plano para terminales
+const ProcessManager = {
+  processes: new Map(), // terminalId -> { process, command, cwd, output, maxOutputSize, lastCommand }
+  maxOutputSize: 10000000, // 10MB máximo de output por proceso (aumentado para procesos largos)
+  
+  // Agregar proceso
+  addProcess(terminalId, process, command, cwd) {
+    this.processes.set(terminalId, {
+      process,
+      command,
+      cwd,
+      output: '',
+      errorOutput: '',
+      startTime: Date.now(),
+      maxOutputSize: this.maxOutputSize,
+      lastCommand: command // Guardar el comando para poder reiniciarlo
+    });
+    
+    // Limpiar cuando el proceso termine
+    process.on('close', () => {
+      this.removeProcess(terminalId);
+    });
+    
+    // Limpiar cuando haya error
+    process.on('error', () => {
+      this.removeProcess(terminalId);
+    });
+  },
+  
+  // Remover proceso
+  removeProcess(terminalId) {
+    const proc = this.processes.get(terminalId);
+    if (proc && proc.process) {
+      try {
+        if (!proc.process.killed) {
+          proc.process.kill('SIGTERM');
+        }
+      } catch (e) {
+        // Ignorar errores al matar proceso
+      }
+    }
+    this.processes.delete(terminalId);
+  },
+  
+  // Detener proceso y todos sus hijos de forma agresiva
+  stopProcess(terminalId) {
+    const proc = this.processes.get(terminalId);
+    if (proc && proc.process) {
+      try {
+        const pid = proc.process.pid;
+        const command = proc.command || '';
+        
+        if (process.platform === 'win32') {
+          // En Windows, usar taskkill para matar el proceso y todos sus hijos
+          // Primero intentar matar por PID
+          exec(`taskkill /PID ${pid} /T /F`, (error) => {
+            if (error) {
+              console.warn('No se pudo matar por PID, intentando por nombre...', error.message);
+              
+              // Si falla, intentar matar por nombre del proceso
+              // Para npm run dev, matar node.exe y vite
+              if (command.includes('npm') || command.includes('vite') || command.includes('node')) {
+                exec('taskkill /F /IM node.exe /T', (error2) => {
+                  if (error2 && !error2.message.includes('no se encontró')) {
+                    console.error('Error matando node.exe:', error2);
+                  }
+                });
+              }
+              
+              // Fallback: intentar matar directamente
+              try {
+                if (!proc.process.killed) {
+                  proc.process.kill('SIGTERM');
+                  setTimeout(() => {
+                    if (proc.process && !proc.process.killed) {
+                      try {
+                        proc.process.kill('SIGKILL');
+                      } catch (e) {
+                        console.error('Error en SIGKILL:', e);
+                      }
+                    }
+                  }, 500);
+                }
+              } catch (e) {
+                console.error('Error en fallback:', e);
+              }
+            } else {
+              console.log(`Proceso ${pid} y sus hijos fueron terminados exitosamente`);
+            }
+          });
+        } else {
+          // En Unix/Linux/Mac, matar el grupo de procesos
+          try {
+            // Intentar matar el grupo de procesos (PGID) con SIGTERM primero
+            try {
+              process.kill(-pid, 'SIGTERM');
+            } catch (e) {
+              // Si falla el grupo, intentar matar directamente
+              proc.process.kill('SIGTERM');
+            }
+            
+            // Si después de 500ms sigue vivo, forzar con SIGKILL
+            setTimeout(() => {
+              try {
+                if (proc.process && !proc.process.killed) {
+                  try {
+                    process.kill(-pid, 'SIGKILL');
+                  } catch (e) {
+                    // Si falla el grupo, intentar matar directamente
+                    try {
+                      proc.process.kill('SIGKILL');
+                    } catch (e2) {
+                      console.error('Error matando proceso con SIGKILL:', e2);
+                    }
+                  }
+                }
+              } catch (e) {
+                console.error('Error verificando proceso:', e);
+              }
+            }, 500);
+          } catch (e) {
+            // Si falla el grupo, intentar matar directamente
+            try {
+              proc.process.kill('SIGTERM');
+              setTimeout(() => {
+                if (proc.process && !proc.process.killed) {
+                  proc.process.kill('SIGKILL');
+                }
+              }, 500);
+            } catch (e2) {
+              console.error('Error matando proceso:', e2);
+            }
+          }
+        }
+        
+        // Verificar que el proceso se haya matado después de un delay
+        setTimeout(() => {
+          if (proc.process && !proc.process.killed) {
+            console.warn(`Proceso ${pid} aún está corriendo después de intentar matarlo`);
+            // Intentar una vez más de forma más agresiva
+            try {
+              if (process.platform === 'win32') {
+                exec(`taskkill /F /PID ${pid} /T`, () => {});
+              } else {
+                try {
+                  process.kill(-pid, 'SIGKILL');
+                } catch (e) {
+                  proc.process.kill('SIGKILL');
+                }
+              }
+            } catch (e) {
+              console.error('Error en segundo intento de matar proceso:', e);
+            }
+          }
+        }, 2000);
+        
+        // No remover inmediatamente, esperar a que el evento 'close' lo haga
+        return true;
+      } catch (e) {
+        console.error('Error deteniendo proceso:', e);
+        this.removeProcess(terminalId);
+        return false;
+      }
+    }
+    return false;
+  },
+  
+  // Verificar si un proceso realmente está muerto
+  async isProcessDead(terminalId) {
+    const proc = this.processes.get(terminalId);
+    if (!proc || !proc.process) {
+      return true; // Si no existe, está "muerto"
+    }
+    
+    try {
+      // Verificar si el proceso está muerto
+      if (proc.process.killed) {
+        return true;
+      }
+      
+      // En Windows, verificar con tasklist
+      if (process.platform === 'win32') {
+        return new Promise((resolve) => {
+          exec(`tasklist /FI "PID eq ${proc.process.pid}"`, (error, stdout) => {
+            if (error) {
+              resolve(true); // Si hay error, asumir que está muerto
+            } else {
+              // Si el PID aparece en tasklist, está vivo
+              resolve(!stdout.includes(proc.process.pid.toString()));
+            }
+          });
+        });
+      } else {
+        // En Unix/Linux/Mac, usar kill -0 para verificar
+        return new Promise((resolve) => {
+          try {
+            process.kill(proc.process.pid, 0); // Signal 0 solo verifica, no mata
+            resolve(false); // Si no hay error, el proceso está vivo
+          } catch (e) {
+            resolve(true); // Si hay error (proceso no existe), está muerto
+          }
+        });
+      }
+    } catch (e) {
+      console.error('Error verificando proceso:', e);
+      return true; // En caso de error, asumir que está muerto
+    }
+  },
+  
+  // Reiniciar proceso (detener y volver a ejecutar el mismo comando)
+  async restartProcess(terminalId) {
+    const proc = this.processes.get(terminalId);
+    if (!proc) return false;
+    
+    const { command, cwd, lastCommand } = proc;
+    const commandToRestart = lastCommand || command;
+    
+    // Detener el proceso actual
+    this.stopProcess(terminalId);
+    
+    // Esperar un momento para que el proceso termine
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // El proceso será reiniciado desde el frontend llamando a executeCommand nuevamente
+    return { command: commandToRestart, cwd };
+  },
+  
+  // Verificar si hay un proceso corriendo para un terminal
+  hasRunningProcess(terminalId) {
+    const proc = this.processes.get(terminalId);
+    return proc && proc.process && !proc.process.killed;
+  },
+  
+  // Obtener información del proceso
+  getProcessInfo(terminalId) {
+    const proc = this.processes.get(terminalId);
+    if (!proc) return null;
+    
+    return {
+      command: proc.command,
+      cwd: proc.cwd,
+      running: !proc.process.killed,
+      uptime: Date.now() - proc.startTime,
+      outputSize: (proc.output + proc.errorOutput).length
+    };
+  },
+  
+  // Agregar output a un proceso (con límite de tamaño)
+  addOutput(terminalId, data, isError = false) {
+    const proc = this.processes.get(terminalId);
+    if (!proc) return;
+    
+    const outputStr = data.toString();
+    const currentSize = (proc.output + proc.errorOutput).length;
+    
+    // Si excede el límite, truncar manteniendo los últimos datos
+    if (currentSize + outputStr.length > proc.maxOutputSize) {
+      const keepSize = Math.floor(proc.maxOutputSize * 0.7); // Mantener 70% de los datos más recientes
+      const totalOutput = proc.output + proc.errorOutput;
+      const truncated = totalOutput.slice(-keepSize);
+      proc.output = truncated;
+      proc.errorOutput = '';
+    }
+    
+    if (isError) {
+      proc.errorOutput += outputStr;
+    } else {
+      proc.output += outputStr;
+    }
+    
+    // Enviar output en tiempo real al renderer (sin limpiar ANSI aquí, se hace en el frontend)
+    // Esto permite que el frontend decida si quiere mostrar colores o limpiarlos
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('terminal-output', {
+        terminalId,
+        data: outputStr,
+        isError
+      });
+    }
+  },
+  
+  // Obtener output acumulado
+  getOutput(terminalId) {
+    const proc = this.processes.get(terminalId);
+    if (!proc) return { output: '', errorOutput: '' };
+    return {
+      output: proc.output,
+      errorOutput: proc.errorOutput
+    };
+  },
+  
+  // Limpiar procesos inactivos (más de 1 hora)
+  cleanupInactive() {
+    const now = Date.now();
+    const maxAge = 60 * 60 * 1000; // 1 hora
+    
+    for (const [terminalId, proc] of this.processes.entries()) {
+      if (now - proc.startTime > maxAge && proc.process.killed) {
+        this.removeProcess(terminalId);
+      }
+    }
+  },
+  
+  // Obtener estadísticas de procesos
+  getStats() {
+    return {
+      active: this.processes.size,
+      processes: Array.from(this.processes.entries()).map(([id, proc]) => ({
+        terminalId: id,
+        command: proc.command,
+        running: !proc.process.killed,
+        outputSize: (proc.output + proc.errorOutput).length,
+        uptime: Date.now() - proc.startTime
+      }))
+    };
+  }
+};
+
+// Limpiar procesos inactivos cada 10 minutos
+setInterval(() => {
+  ProcessManager.cleanupInactive();
+}, 10 * 60 * 1000);
 
 // Servicio compartido de ejecución de código
 const CodeExecutionService = {
@@ -1071,6 +1394,19 @@ app.whenReady().then(() => {
     }
   });
 
+  // Handler para verificar si una ruta es un directorio
+  ipcMain.handle('is-directory', async (event, filePath) => {
+    try {
+      if (!fs.existsSync(filePath)) {
+        return { isDirectory: false, exists: false };
+      }
+      const stats = fs.statSync(filePath);
+      return { isDirectory: stats.isDirectory(), exists: true };
+    } catch (error) {
+      return { isDirectory: false, exists: false, error: error.message };
+    }
+  });
+
   // Handler para listar cursos en una ruta
   ipcMain.handle('list-cursos', async (event, cursosPath) => {
     try {
@@ -1207,8 +1543,100 @@ app.whenReady().then(() => {
     }
   });
 
+  // Handler para eliminar un archivo
+  ipcMain.handle('delete-file', async (event, filePath) => {
+    try {
+      if (fs.existsSync(filePath)) {
+        const stats = fs.statSync(filePath);
+        if (stats.isDirectory()) {
+          // Eliminar directorio recursivamente
+          fs.rmSync(filePath, { recursive: true, force: true });
+          console.log('[Electron] Directorio eliminado exitosamente:', filePath);
+        } else {
+          fs.unlinkSync(filePath);
+          console.log('[Electron] Archivo eliminado exitosamente:', filePath);
+        }
+        return { success: true };
+      } else {
+        // Si el archivo no existe, considerarlo como éxito (ya está eliminado)
+        console.log('[Electron] Archivo no encontrado (ya eliminado):', filePath);
+        return { success: true };
+      }
+    } catch (error) {
+      console.error('[Electron] Error eliminando archivo:', filePath, error);
+      return { error: error.message, success: false };
+    }
+  });
+
+  // Handler para crear un directorio
+  ipcMain.handle('create-directory', async (event, dirPath) => {
+    try {
+      if (fs.existsSync(dirPath)) {
+        return { error: 'El directorio ya existe', success: false };
+      }
+      fs.mkdirSync(dirPath, { recursive: true });
+      console.log('[Electron] Directorio creado exitosamente:', dirPath);
+      return { success: true };
+    } catch (error) {
+      console.error('[Electron] Error creando directorio:', dirPath, error);
+      return { error: error.message, success: false };
+    }
+  });
+
+  // Handler para crear un archivo nuevo
+  ipcMain.handle('create-file', async (event, filePath, initialContent = '') => {
+    try {
+      if (fs.existsSync(filePath)) {
+        return { error: 'El archivo ya existe', success: false };
+      }
+      // Crear directorio padre si no existe
+      const dir = path.dirname(filePath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      fs.writeFileSync(filePath, initialContent, 'utf8');
+      console.log('[Electron] Archivo creado exitosamente:', filePath);
+      return { success: true };
+    } catch (error) {
+      console.error('[Electron] Error creando archivo:', filePath, error);
+      return { error: error.message, success: false };
+    }
+  });
+
+  // Handler para renombrar/mover un archivo o directorio
+  ipcMain.handle('rename-file', async (event, oldPath, newPath) => {
+    try {
+      if (!fs.existsSync(oldPath)) {
+        return { error: 'El archivo o directorio no existe', success: false };
+      }
+      if (fs.existsSync(newPath)) {
+        return { error: 'Ya existe un archivo o directorio con ese nombre', success: false };
+      }
+      // Crear directorio padre si no existe
+      const dir = path.dirname(newPath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      fs.renameSync(oldPath, newPath);
+      console.log('[Electron] Archivo/directorio renombrado exitosamente:', oldPath, '->', newPath);
+      return { success: true };
+    } catch (error) {
+      console.error('[Electron] Error renombrando archivo:', oldPath, error);
+      return { error: error.message, success: false };
+    }
+  });
+
+  // Handler para unir rutas (path.join)
+  ipcMain.handle('path-join', async (event, ...paths) => {
+    try {
+      return { success: true, path: path.join(...paths) };
+    } catch (error) {
+      return { error: error.message, success: false };
+    }
+  });
+
   // Handler para ejecutar comandos del sistema
-  ipcMain.handle('execute-command', async (event, command, shell, cwd) => {
+  ipcMain.handle('execute-command', async (event, command, shell, cwd, terminalId) => {
     return new Promise((resolve) => {
       try {
         // Determinar el shell a usar
@@ -1261,64 +1689,150 @@ app.whenReady().then(() => {
           spawnShell = false;
         }
         
-        const childProcess = spawn(spawnCommand, spawnArgs, {
+        // Configurar opciones para spawn
+        const spawnOptions = {
           shell: spawnShell,
           cwd: workingDir,
           env: { ...process.env }
-        });
-
-        let output = '';
-        let errorOutput = '';
-        let hasOutput = false;
+        };
         
+        // En Windows, asegurar que los procesos hijos se puedan matar
+        if (process.platform === 'win32') {
+          // En Windows, los procesos hijos se matan automáticamente con taskkill /T
+          spawnOptions.detached = false;
+        } else {
+          // En Unix/Linux/Mac, crear un nuevo grupo de procesos
+          spawnOptions.detached = false; // Mantener en el mismo grupo para poder matarlo
+        }
+        
+        const childProcess = spawn(spawnCommand, spawnArgs, spawnOptions);
+
         // Detectar comandos que no terminan (servidores de desarrollo)
         const isLongRunningCommand = /^(npm|yarn|pnpm)\s+(run\s+)?(dev|start|serve|watch)/i.test(command) ||
                                     /^(python|node|nodemon|ts-node|tsx)\s+.*(dev|start|serve|watch)/i.test(command);
 
-        // Timeout para comandos de larga duración (30 segundos para servidores, 60 para otros)
-        const timeout = isLongRunningCommand ? 30000 : 60000;
-        const timeoutId = setTimeout(() => {
-          if (!hasOutput && isLongRunningCommand) {
-            // Para comandos de desarrollo, mostrar que está ejecutándose
+        let hasOutput = false;
+        let lastOutputTime = Date.now();
+        let initialOutputSent = false;
+        
+        // Si es un comando de larga duración y hay terminalId, registrarlo en ProcessManager
+        if (isLongRunningCommand && terminalId) {
+          ProcessManager.addProcess(terminalId, childProcess, command, workingDir);
+          
+          // Enviar output inicial inmediatamente
+          childProcess.stdout.on('data', (data) => {
+            hasOutput = true;
+            lastOutputTime = Date.now();
+            ProcessManager.addOutput(terminalId, data, false);
+            if (!initialOutputSent) {
+              initialOutputSent = true;
+              resolve({ 
+                output: '',
+                exitCode: 0,
+                currentDirectory: workingDir,
+                isRunning: true,
+                streaming: true
+              });
+            }
+          });
+
+          childProcess.stderr.on('data', (data) => {
+            hasOutput = true;
+            lastOutputTime = Date.now();
+            ProcessManager.addOutput(terminalId, data, true);
+            if (!initialOutputSent) {
+              initialOutputSent = true;
+              resolve({ 
+                output: '',
+                exitCode: 0,
+                currentDirectory: workingDir,
+                isRunning: true,
+                streaming: true
+              });
+            }
+          });
+
+          childProcess.on('close', (code) => {
+            ProcessManager.removeProcess(terminalId);
+            // Enviar evento de cierre
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('terminal-process-closed', {
+                terminalId,
+                exitCode: code
+              });
+            }
+          });
+
+          childProcess.on('error', (error) => {
+            ProcessManager.removeProcess(terminalId);
+            if (!initialOutputSent) {
+              resolve({ 
+                error: `Error al ejecutar comando: ${error.message}`,
+                currentDirectory: workingDir
+              });
+            }
+          });
+          
+          // Timeout inicial para comandos sin output
+          setTimeout(() => {
+            if (!hasOutput && !initialOutputSent) {
+              resolve({ 
+                output: 'Iniciando proceso...',
+                exitCode: 0,
+                currentDirectory: workingDir,
+                isRunning: true,
+                streaming: true
+              });
+            }
+          }, 2000);
+          
+          return; // Salir temprano para comandos de larga duración
+        }
+
+        // Para comandos normales, comportamiento original
+        let output = '';
+        let errorOutput = '';
+        const timeout = 120000;
+        let timeoutId = null;
+
+        childProcess.stdout.on('data', (data) => {
+          hasOutput = true;
+          lastOutputTime = Date.now();
+          output += data.toString();
+        });
+
+        childProcess.stderr.on('data', (data) => {
+          hasOutput = true;
+          lastOutputTime = Date.now();
+          errorOutput += data.toString();
+        });
+
+        timeoutId = setTimeout(() => {
+          if (!hasOutput) {
             childProcess.kill('SIGTERM');
             resolve({ 
-              output: output + '\n\n[Servidor iniciado - El proceso continúa ejecutándose en segundo plano]\n[Presiona Ctrl+C para detener]',
-              exitCode: 0,
-              currentDirectory: workingDir,
-              isRunning: true
-            });
-          } else if (!hasOutput) {
-            childProcess.kill('SIGTERM');
-            resolve({ 
-              error: 'Comando excedió el tiempo de espera (60 segundos)',
+              error: 'Comando excedió el tiempo de espera sin producir output',
               exitCode: -1,
               currentDirectory: workingDir
             });
           }
         }, timeout);
 
-        childProcess.stdout.on('data', (data) => {
-          hasOutput = true;
-          output += data.toString();
-        });
-
-        childProcess.stderr.on('data', (data) => {
-          hasOutput = true;
-          errorOutput += data.toString();
-        });
-
         childProcess.on('close', (code) => {
           clearTimeout(timeoutId);
-          if (code === 0) {
+          // Combinar output y errorOutput
+          const combinedOutput = output + (errorOutput ? '\n' + errorOutput : '');
+          
+          if (code === 0 || code === null) {
             resolve({ 
-              output: output || 'Comando ejecutado correctamente',
-              exitCode: code,
+              output: combinedOutput || 'Comando ejecutado correctamente',
+              exitCode: code || 0,
               currentDirectory: workingDir
             });
           } else {
             resolve({ 
               error: errorOutput || `Comando terminado con código ${code}`,
-              output: output,
+              output: output, // Mantener output separado también
               exitCode: code,
               currentDirectory: workingDir
             });
@@ -1326,20 +1840,12 @@ app.whenReady().then(() => {
         });
 
         childProcess.on('error', (error) => {
+          clearTimeout(timeoutId);
           resolve({ 
             error: `Error al ejecutar comando: ${error.message}`,
             currentDirectory: workingDir
           });
         });
-
-        // Timeout de 30 segundos para comandos
-        setTimeout(() => {
-          childProcess.kill();
-          resolve({ 
-            error: 'Tiempo de ejecución excedido (30 segundos)',
-            currentDirectory: workingDir
-          });
-        }, 30000);
 
       } catch (error) {
         resolve({ 
@@ -1366,6 +1872,285 @@ app.whenReady().then(() => {
       return result.filePaths[0];
     }
     return null;
+  });
+
+  // Handler para normalizar una ruta
+  ipcMain.handle('normalize-path', async (event, inputPath) => {
+    try {
+      // Usar path.resolve para normalizar la ruta (resuelve .. y .)
+      const normalized = path.resolve(inputPath);
+      return normalized;
+    } catch (error) {
+      console.error(`Error normalizando ruta '${inputPath}':`, error);
+      return inputPath; // Fallback a la ruta original en caso de error
+    }
+  });
+
+  // Handler para detener un proceso de terminal
+  ipcMain.handle('stop-terminal-process', async (event, terminalId) => {
+    const result = ProcessManager.stopProcess(terminalId);
+    
+    // Esperar un momento y verificar que el proceso realmente se haya matado
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    const isDead = await ProcessManager.isProcessDead(terminalId);
+    if (!isDead) {
+      console.warn(`Proceso ${terminalId} aún está vivo después de intentar matarlo`);
+      // Intentar una vez más de forma más agresiva
+      ProcessManager.stopProcess(terminalId);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    
+    return result;
+  });
+  
+  // Handler para verificar si un proceso está muerto
+  ipcMain.handle('is-process-dead', async (event, terminalId) => {
+    return ProcessManager.isProcessDead(terminalId);
+  });
+
+  // Handler para obtener procesos que están usando un puerto específico
+  ipcMain.handle('get-processes-by-port', async (event, port) => {
+    return new Promise((resolve) => {
+      if (process.platform === 'win32') {
+        // En Windows, usar netstat para encontrar procesos usando el puerto
+        exec(`netstat -ano | findstr :${port}`, (error, stdout) => {
+          if (error || !stdout) {
+            resolve([]);
+            return;
+          }
+          
+          const processes = [];
+          const lines = stdout.split('\n');
+          const pids = new Set();
+          
+          for (const line of lines) {
+            const match = line.match(/\s+(\d+)\s*$/);
+            if (match) {
+              const pid = parseInt(match[1]);
+              if (pid && !pids.has(pid)) {
+                pids.add(pid);
+                // Obtener nombre del proceso
+                exec(`tasklist /FI "PID eq ${pid}" /FO CSV /NH`, (error2, stdout2) => {
+                  if (!error2 && stdout2) {
+                    const parts = stdout2.split(',');
+                    if (parts.length > 0) {
+                      const processName = parts[0].replace(/"/g, '').trim();
+                      processes.push({ pid, name: processName, port });
+                    }
+                  }
+                });
+              }
+            }
+          }
+          
+          // Esperar un momento para que se completen las consultas de tasklist
+          setTimeout(() => {
+            resolve(Array.from(pids).map(pid => {
+              const found = processes.find(p => p.pid === pid);
+              return found || { pid, name: 'Unknown', port };
+            }));
+          }, 500);
+        });
+      } else {
+        // En Unix/Linux/Mac, usar lsof
+        exec(`lsof -ti:${port}`, (error, stdout) => {
+          if (error || !stdout) {
+            resolve([]);
+            return;
+          }
+          
+          const pids = stdout.trim().split('\n').filter(Boolean).map(pid => parseInt(pid));
+          const processes = [];
+          
+          // Obtener información de cada proceso
+          const promises = pids.map(pid => {
+            return new Promise((resolvePid) => {
+              exec(`ps -p ${pid} -o comm=`, (error2, stdout2) => {
+                const name = error2 ? 'Unknown' : stdout2.trim();
+                resolvePid({ pid, name, port });
+              });
+            });
+          });
+          
+          Promise.all(promises).then(results => {
+            resolve(results);
+          });
+        });
+      }
+    });
+  });
+
+  // Handler para matar un proceso por PID
+  ipcMain.handle('kill-process-by-pid', async (event, pid) => {
+    return new Promise((resolve) => {
+      if (process.platform === 'win32') {
+        exec(`taskkill /PID ${pid} /T /F`, (error) => {
+          if (error) {
+            resolve({ success: false, error: error.message });
+          } else {
+            resolve({ success: true });
+          }
+        });
+      } else {
+        try {
+          // Intentar SIGTERM primero
+          process.kill(pid, 'SIGTERM');
+          setTimeout(() => {
+            try {
+              // Si después de 1 segundo sigue vivo, usar SIGKILL
+              process.kill(pid, 'SIGKILL');
+            } catch (e) {
+              // Proceso ya está muerto
+            }
+            resolve({ success: true });
+          }, 1000);
+        } catch (error) {
+          resolve({ success: false, error: error.message });
+        }
+      }
+    });
+  });
+
+  // Handler para matar todos los procesos usando un puerto específico
+  ipcMain.handle('kill-processes-by-port', async (event, port) => {
+    return new Promise(async (resolve) => {
+      try {
+        // Obtener procesos usando el puerto (usar el mismo código que get-processes-by-port)
+        let processes = [];
+        
+        if (process.platform === 'win32') {
+          // En Windows, usar netstat para encontrar procesos usando el puerto
+          await new Promise((resolveNetstat) => {
+            exec(`netstat -ano | findstr :${port}`, (error, stdout) => {
+              if (error || !stdout) {
+                resolveNetstat();
+                return;
+              }
+              
+              const lines = stdout.split('\n');
+              const pids = new Set();
+              
+              for (const line of lines) {
+                const match = line.match(/\s+(\d+)\s*$/);
+                if (match) {
+                  const pid = parseInt(match[1]);
+                  if (pid && !pids.has(pid)) {
+                    pids.add(pid);
+                    processes.push({ pid, name: 'Unknown', port });
+                  }
+                }
+              }
+              
+              // Obtener nombres de procesos
+              const namePromises = Array.from(pids).map(pid => {
+                return new Promise((resolveName) => {
+                  exec(`tasklist /FI "PID eq ${pid}" /FO CSV /NH`, (error2, stdout2) => {
+                    if (!error2 && stdout2) {
+                      const parts = stdout2.split(',');
+                      if (parts.length > 0) {
+                        const processName = parts[0].replace(/"/g, '').trim();
+                        const proc = processes.find(p => p.pid === pid);
+                        if (proc) proc.name = processName;
+                      }
+                    }
+                    resolveName();
+                  });
+                });
+              });
+              
+              Promise.all(namePromises).then(() => resolveNetstat());
+            });
+          });
+        } else {
+          // En Unix/Linux/Mac, usar lsof
+          await new Promise((resolveLsof) => {
+            exec(`lsof -ti:${port}`, (error, stdout) => {
+              if (error || !stdout) {
+                resolveLsof();
+                return;
+              }
+              
+              const pids = stdout.trim().split('\n').filter(Boolean).map(pid => parseInt(pid));
+              
+              const promises = pids.map(pid => {
+                return new Promise((resolvePid) => {
+                  exec(`ps -p ${pid} -o comm=`, (error2, stdout2) => {
+                    const name = error2 ? 'Unknown' : stdout2.trim();
+                    processes.push({ pid, name, port });
+                    resolvePid();
+                  });
+                });
+              });
+              
+              Promise.all(promises).then(() => resolveLsof());
+            });
+          });
+        }
+        
+        if (processes.length === 0) {
+          resolve({ success: true, killed: 0, message: 'No hay procesos usando el puerto' });
+          return;
+        }
+        
+        // Matar todos los procesos
+        const killPromises = processes.map(proc => {
+          return new Promise((resolveKill) => {
+            if (process.platform === 'win32') {
+              exec(`taskkill /PID ${proc.pid} /T /F`, (error) => {
+                resolveKill({ pid: proc.pid, success: !error });
+              });
+            } else {
+              try {
+                process.kill(proc.pid, 'SIGTERM');
+                setTimeout(() => {
+                  try {
+                    process.kill(proc.pid, 'SIGKILL');
+                  } catch (e) {
+                    // Proceso ya está muerto
+                  }
+                  resolveKill({ pid: proc.pid, success: true });
+                }, 1000);
+              } catch (error) {
+                resolveKill({ pid: proc.pid, success: false });
+              }
+            }
+          });
+        });
+        
+        const results = await Promise.all(killPromises);
+        const killed = results.filter(r => r.success).length;
+        
+        resolve({ 
+          success: true, 
+          killed, 
+          total: processes.length,
+          message: `Se mataron ${killed} de ${processes.length} procesos`
+        });
+      } catch (error) {
+        resolve({ success: false, error: error.message });
+      }
+    });
+  });
+
+  // Handler para reiniciar un proceso de terminal
+  ipcMain.handle('restart-terminal-process', async (event, terminalId) => {
+    return ProcessManager.restartProcess(terminalId);
+  });
+
+  // Handler para verificar si hay un proceso corriendo
+  ipcMain.handle('has-running-process', async (event, terminalId) => {
+    return ProcessManager.hasRunningProcess(terminalId);
+  });
+
+  // Handler para obtener información del proceso
+  ipcMain.handle('get-process-info', async (event, terminalId) => {
+    return ProcessManager.getProcessInfo(terminalId);
+  });
+
+  // Handler para obtener estadísticas de procesos
+  ipcMain.handle('get-process-stats', async () => {
+    return ProcessManager.getStats();
   });
 
   app.on('activate', () => {

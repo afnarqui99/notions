@@ -15,15 +15,29 @@ import {
   Loader,
   Server,
   FileCode,
-  Zap
+  Zap,
+  Trash2,
+  Maximize2,
+  ChevronLeft,
+  ChevronRight,
+  Palette,
+  Type
 } from 'lucide-react';
 import MultiTerminalView from './MultiTerminalView';
+import VisualCodeTab from './VisualCodeTab';
+import TerminalSettingsModal from './TerminalSettingsModal';
 import terminalCommandService from '../services/TerminalCommandService';
 import LocalStorageService from '../services/LocalStorageService';
 
 export default function CentroEjecucionPage({ onClose }) {
   const [terminals, setTerminals] = useState([]);
   const [activeTerminalId, setActiveTerminalId] = useState('');
+  const [visualCodeTabs, setVisualCodeTabs] = useState([]);
+  const [activeTabType, setActiveTabType] = useState('terminal'); // 'terminal' o 'visualcode'
+  const [activeVisualCodeId, setActiveVisualCodeId] = useState('');
+  const [showOpenProjectModal, setShowOpenProjectModal] = useState(null); // ID del proyecto para el que se muestra el modal
+  const [showTerminalSettings, setShowTerminalSettings] = useState(false);
+  const [settingsTerminal, setSettingsTerminal] = useState(null);
   const [serviceStatus, setServiceStatus] = useState({
     nodejs: { active: false, queueLength: 0, processing: false },
     python: { active: false, queueLength: 0, processing: false }
@@ -31,7 +45,60 @@ export default function CentroEjecucionPage({ onClose }) {
   const [executionQueue, setExecutionQueue] = useState([]);
   const [projects, setProjects] = useState([]);
   const [loadingProjects, setLoadingProjects] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true); // Por defecto colapsado
+  const [showSidebarSettings, setShowSidebarSettings] = useState(false);
+  const [sidebarStyles, setSidebarStyles] = useState({
+    width: 256, // 64 * 4 = 256px (w-64)
+    backgroundColor: '#000000', // Por defecto negro
+    textColor: '#ffffff', // Texto blanco para contraste
+    borderColor: '#374151', // Borde gris oscuro
+    collapsedWidth: 48
+  });
   const isElectron = typeof window !== 'undefined' && window.electronAPI;
+
+  // Cargar configuración del sidebar
+  useEffect(() => {
+    const loadSidebarConfig = async () => {
+      try {
+        const saved = await LocalStorageService.readJSONFile('centro-ejecucion-sidebar.json', 'data');
+        if (saved) {
+          // Solo cargar si existe configuración guardada, de lo contrario usar valores por defecto
+          if (saved.collapsed !== undefined) {
+            setSidebarCollapsed(saved.collapsed);
+          }
+          if (saved.styles) {
+            setSidebarStyles(prev => ({ ...prev, ...saved.styles }));
+          }
+        }
+        // Si no hay configuración guardada, los valores por defecto ya están establecidos (negro y colapsado)
+      } catch (error) {
+        console.error('Error cargando configuración del sidebar:', error);
+        // En caso de error, mantener valores por defecto (negro y colapsado)
+      }
+    };
+
+    loadSidebarConfig();
+  }, []);
+
+  // Guardar configuración del sidebar
+  useEffect(() => {
+    const saveSidebarConfig = async () => {
+      try {
+        await LocalStorageService.saveJSONFile(
+          'centro-ejecucion-sidebar.json',
+          {
+            collapsed: sidebarCollapsed,
+            styles: sidebarStyles
+          },
+          'data'
+        );
+      } catch (error) {
+        console.error('Error guardando configuración del sidebar:', error);
+      }
+    };
+
+    saveSidebarConfig();
+  }, [sidebarCollapsed, sidebarStyles]);
 
   // Cargar terminales guardadas
   useEffect(() => {
@@ -75,6 +142,44 @@ export default function CentroEjecucionPage({ onClose }) {
       saveTerminals();
     }
   }, [terminals, activeTerminalId]);
+
+  // Cargar pestañas de Visual Code guardadas
+  useEffect(() => {
+    const loadVisualCodeTabs = async () => {
+      try {
+        const saved = await LocalStorageService.readJSONFile('centro-ejecucion-visualcode-tabs.json', 'data');
+        if (saved && saved.tabs && saved.tabs.length > 0) {
+          setVisualCodeTabs(saved.tabs);
+          setActiveVisualCodeId(saved.activeVisualCodeId || saved.tabs[0]?.id || '');
+          if (saved.activeTabType) {
+            setActiveTabType(saved.activeTabType);
+          }
+        }
+      } catch (error) {
+        console.error('Error cargando pestañas Visual Code:', error);
+      }
+    };
+
+    loadVisualCodeTabs();
+  }, []);
+
+  // Guardar pestañas de Visual Code cuando cambian
+  useEffect(() => {
+    if (visualCodeTabs.length > 0 || activeTabType === 'visualcode') {
+      const saveVisualCodeTabs = async () => {
+        try {
+          await LocalStorageService.saveJSONFile(
+            'centro-ejecucion-visualcode-tabs.json',
+            { tabs: visualCodeTabs, activeVisualCodeId, activeTabType },
+            'data'
+          );
+        } catch (error) {
+          console.error('Error guardando pestañas Visual Code:', error);
+        }
+      };
+      saveVisualCodeTabs();
+    }
+  }, [visualCodeTabs, activeVisualCodeId, activeTabType]);
 
   // Verificar estado de servicios periódicamente
   useEffect(() => {
@@ -137,6 +242,64 @@ export default function CentroEjecucionPage({ onClose }) {
     loadProjects();
   }, []);
 
+  // Función para eliminar un proyecto
+  const deleteProject = async (projectId, projectName) => {
+    if (!window.confirm(`¿Estás seguro de que quieres eliminar el proyecto "${projectName || projectId}" de la lista?\n\nEsto no borrará los archivos de tu disco.`)) {
+      return;
+    }
+
+    try {
+      console.log('[CentroEjecucionPage] Intentando eliminar proyecto:', projectId);
+      
+      // Eliminar archivo de configuración del proyecto
+      const eliminado = await LocalStorageService.deleteJSONFile(
+        `visual-code-project-${projectId}.json`,
+        'data/visual-code-projects'
+      );
+
+      console.log('[CentroEjecucionPage] Resultado de deleteJSONFile:', eliminado);
+
+      if (!eliminado) {
+        alert('Error: No se pudo eliminar el archivo del proyecto. Por favor, verifica los permisos o intenta nuevamente.');
+        return;
+      }
+
+      // Recargar proyectos
+      const files = await LocalStorageService.listFiles('data/visual-code-projects');
+      console.log('[CentroEjecucionPage] Archivos encontrados después de eliminar:', files);
+      
+      const projectFiles = files.filter(f => f.startsWith('visual-code-project-') && f.endsWith('.json'));
+      
+      const projectsData = await Promise.all(
+        projectFiles.map(async (file) => {
+          try {
+            const config = await LocalStorageService.readJSONFile(file, 'data/visual-code-projects');
+            return {
+              id: file.replace('visual-code-project-', '').replace('.json', ''),
+              name: config.title || config.projectPath || 'Sin nombre',
+              path: config.projectPath,
+              color: config.color || '#1e1e1e',
+              lastUpdated: config.lastUpdated,
+              ...config
+            };
+          } catch (error) {
+            console.error(`Error cargando proyecto ${file}:`, error);
+            return null;
+          }
+        })
+      );
+
+      const proyectosFiltrados = projectsData.filter(p => p !== null);
+      console.log('[CentroEjecucionPage] Proyectos después de filtrar:', proyectosFiltrados);
+      
+      setProjects(proyectosFiltrados);
+      console.log('[CentroEjecucionPage] Proyecto eliminado exitosamente:', projectId);
+    } catch (error) {
+      console.error('[CentroEjecucionPage] Error eliminando proyecto:', error);
+      alert('Error al eliminar el proyecto: ' + error.message);
+    }
+  };
+
   const createDefaultTerminal = () => {
     const isWindows = typeof window !== 'undefined' && window.electronAPI?.platform === 'win32';
     return {
@@ -187,17 +350,25 @@ export default function CentroEjecucionPage({ onClose }) {
       activeTerminalId
     });
     
+    // Si no hay terminales, crear una por defecto
     if (terminals.length === 0) {
-      alert('No hay terminales disponibles. Crea una terminal primero.');
+      console.log('[CentroEjecucionPage] No hay terminales, creando una por defecto...');
+      const defaultTerm = createDefaultTerminal();
+      defaultTerm.currentDirectory = projectPath;
+      setTerminals([defaultTerm]);
+      setActiveTerminalId(defaultTerm.id);
+      console.log('[CentroEjecucionPage] Terminal por defecto creada con directorio:', projectPath);
       return;
     }
     
-    if (!activeTerminalId) {
-      alert('No hay una terminal activa. Selecciona una terminal primero.');
-      return;
+    // Si no hay terminal activa, usar la primera disponible
+    let terminalIdToUpdate = activeTerminalId;
+    if (!terminalIdToUpdate && terminals.length > 0) {
+      terminalIdToUpdate = terminals[0].id;
+      setActiveTerminalId(terminalIdToUpdate);
     }
     
-    const terminal = terminals.find(t => t.id === activeTerminalId);
+    const terminal = terminals.find(t => t.id === terminalIdToUpdate);
     if (terminal) {
       const updatedTerminal = {
         ...terminal,
@@ -206,8 +377,12 @@ export default function CentroEjecucionPage({ onClose }) {
       updateTerminal(updatedTerminal);
       console.log('[CentroEjecucionPage] Directorio de terminal actualizado a:', projectPath);
     } else {
-      console.error('[CentroEjecucionPage] Terminal activa no encontrada');
-      alert('Error: No se encontró la terminal activa');
+      console.error('[CentroEjecucionPage] Terminal no encontrada, creando nueva...');
+      const defaultTerm = createDefaultTerminal();
+      defaultTerm.currentDirectory = projectPath;
+      const updated = [...terminals, defaultTerm];
+      setTerminals(updated);
+      setActiveTerminalId(defaultTerm.id);
     }
   };
 
@@ -372,7 +547,7 @@ export default function CentroEjecucionPage({ onClose }) {
     }
   };
 
-  const openProjectInVisualCode = (project) => {
+  const openProjectInVisualCode = (project, openMode = 'tab') => {
     if (!project || !project.path) {
       console.error('[CentroEjecucionPage] No se puede abrir proyecto sin path');
       alert('Error: El proyecto no tiene una ruta válida');
@@ -389,38 +564,53 @@ export default function CentroEjecucionPage({ onClose }) {
       return;
     }
     
-    console.log('[CentroEjecucionPage] Disparando evento open-visual-code con:', {
-      projectPath: project.path,
-      projectTitle: project.name || project.title,
-      projectColor: project.color,
-      theme: project.theme || 'notion',
-      fontSize: project.fontSize || 14,
-      extensions: project.extensions
-    });
+    // Cerrar modal
+    setShowOpenProjectModal(null);
     
-    // Disparar evento para abrir Visual Code con el proyecto
-    // Esto creará o abrirá un bloque Visual Code con el proyecto seleccionado
-    const event = new CustomEvent('open-visual-code', { 
-      detail: { 
-        projectPath: project.path,
-        projectTitle: project.name || project.title,
-        projectColor: project.color,
-        theme: project.theme || 'notion',
+    if (openMode === 'tab') {
+      // Abrir en pestaña dentro del panel
+      const existingTab = visualCodeTabs.find(tab => tab.path === project.path);
+      if (existingTab) {
+        // Si ya existe, activarlo
+        setActiveVisualCodeId(existingTab.id);
+        setActiveTabType('visualcode');
+        return;
+      }
+      
+      // Crear nueva pestaña de Visual Code
+      const newTab = {
+        id: `visualcode-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        name: project.name || project.title || project.path.split(/[/\\]/).pop() || 'Proyecto',
+        path: project.path,
+        color: project.color || '#1e1e1e',
+        theme: project.theme || 'oneDark',
         fontSize: project.fontSize || 14,
-        extensions: project.extensions
-      },
-      bubbles: true,
-      cancelable: true
-    });
-    
-    window.dispatchEvent(event);
-    console.log('[CentroEjecucionPage] Evento disparado, esperando respuesta...');
-    
-    // Cerrar el Centro de Ejecución para que el usuario vea el bloque Visual Code
-    if (onClose) {
-      setTimeout(() => {
-        onClose();
-      }, 300);
+        extensions: project.extensions || {},
+        createdAt: new Date().toISOString()
+      };
+      
+      setVisualCodeTabs(prev => [...prev, newTab]);
+      setActiveVisualCodeId(newTab.id);
+      setActiveTabType('visualcode');
+      console.log('[CentroEjecucionPage] Pestaña Visual Code agregada:', newTab);
+    } else if (openMode === 'page' || openMode === 'fullscreen') {
+      // Abrir en la página como bloque
+      const event = new CustomEvent('open-visual-code', { 
+        detail: { 
+          projectPath: project.path,
+          projectTitle: project.name || project.title,
+          projectColor: project.color,
+          theme: project.theme || 'oneDark',
+          fontSize: project.fontSize || 14,
+          extensions: project.extensions,
+          openMode: openMode // 'page' o 'fullscreen'
+        },
+        bubbles: true,
+        cancelable: true
+      });
+      
+      window.dispatchEvent(event);
+      console.log('[CentroEjecucionPage] Evento disparado para abrir en página:', openMode);
     }
   };
 
@@ -452,7 +642,7 @@ export default function CentroEjecucionPage({ onClose }) {
           projectPath: selectedPath,
           title: selectedPath.split(/[/\\]/).pop() || 'Nuevo Proyecto',
           color: '#1e1e1e',
-          theme: 'notion',
+          theme: 'oneDark',
           fontSize: 14,
           extensions: {
             errorLens: true,
@@ -602,117 +792,652 @@ export default function CentroEjecucionPage({ onClose }) {
       {/* Content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Sidebar - Proyectos */}
-        <div className="w-64 flex-shrink-0 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-y-auto">
-          <div className="p-3 border-b border-gray-200 dark:border-gray-700">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                Proyectos
-              </h2>
+        <div 
+          className="flex-shrink-0 border-r dark:border-gray-700 overflow-y-auto transition-all duration-300"
+          style={{
+            width: sidebarCollapsed ? `${sidebarStyles.collapsedWidth}px` : `${sidebarStyles.width}px`,
+            backgroundColor: sidebarStyles.backgroundColor,
+            borderColor: sidebarStyles.borderColor
+          }}
+        >
+          {sidebarCollapsed ? (
+            // Sidebar colapsado - solo iconos
+            <div className="flex flex-col items-center py-2 gap-2">
+              <button
+                onClick={() => setSidebarCollapsed(false)}
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                title="Expandir sidebar"
+              >
+                <ChevronRight className="w-5 h-5" style={{ color: sidebarStyles.textColor }} />
+              </button>
               <button
                 onClick={handleSelectProject}
-                className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
                 title="Abrir proyecto"
               >
-                <FolderOpen className="w-4 h-4" />
+                <FolderOpen className="w-5 h-5" style={{ color: sidebarStyles.textColor }} />
               </button>
+              <button
+                onClick={() => setShowSidebarSettings(true)}
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                title="Configurar sidebar"
+              >
+                <Settings className="w-5 h-5" style={{ color: sidebarStyles.textColor }} />
+              </button>
+              {projects.length > 0 && (
+                <div className="mt-2 pt-2 border-t" style={{ borderColor: sidebarStyles.borderColor }}>
+                  <div className="text-xs text-center" style={{ color: sidebarStyles.textColor }}>
+                    {projects.length}
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
-          <div className="p-2">
-            {loadingProjects ? (
-              <div className="text-center text-gray-500 text-sm py-4">
-                <Loader className="w-5 h-5 animate-spin mx-auto mb-2" />
-                Cargando proyectos...
-              </div>
-            ) : projects.length === 0 ? (
-              <div className="text-center text-gray-500 text-sm py-4">
-                <FileCode className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                <p className="font-medium text-gray-700 dark:text-gray-300 mb-1">No hay proyectos guardados</p>
-                <p className="text-xs mb-3 text-gray-500 dark:text-gray-400">
-                  Selecciona una carpeta para crear un proyecto
-                </p>
+          ) : (
+            // Sidebar expandido
+            <>
+              <div className="p-3 border-b dark:border-gray-700" style={{ borderColor: sidebarStyles.borderColor }}>
+                <div className="flex items-center justify-between mb-2">
+                  <h2 
+                    className="text-sm font-semibold"
+                    style={{ color: sidebarStyles.textColor }}
+                  >
+                    Proyectos
+                  </h2>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setShowSidebarSettings(true)}
+                      className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                      title="Configurar sidebar"
+                    >
+                      <Settings className="w-4 h-4" style={{ color: sidebarStyles.textColor }} />
+                    </button>
+                    <button
+                      onClick={() => setSidebarCollapsed(true)}
+                      className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                      title="Colapsar sidebar"
+                    >
+                      <ChevronLeft className="w-4 h-4" style={{ color: sidebarStyles.textColor }} />
+                    </button>
+                  </div>
+                </div>
                 <button
                   onClick={handleSelectProject}
-                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs flex items-center gap-2 mx-auto transition-colors"
-                  title="Seleccionar carpeta del proyecto desde tu sistema"
+                  className="w-full px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs flex items-center justify-center gap-2 transition-colors"
+                  title="Abrir proyecto"
                 >
                   <FolderOpen className="w-3 h-3" />
-                  Seleccionar Proyecto
+                  <span>Nuevo Proyecto</span>
                 </button>
-                <p className="text-xs mt-3 text-gray-400 dark:text-gray-500">
-                  También puedes abrir proyectos desde Visual Code usando /visual code
-                </p>
               </div>
-            ) : (
-              <div className="space-y-1">
-                {projects.map((project) => (
-                  <div
-                    key={project.id}
-                    className="w-full px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors group border border-transparent hover:border-blue-200 dark:hover:border-blue-800"
-                  >
-                    <div className="flex items-center gap-2 mb-2">
+              <div className="p-2">
+                {loadingProjects ? (
+                  <div className="text-center text-sm py-4" style={{ color: sidebarStyles.textColor }}>
+                    <Loader className="w-5 h-5 animate-spin mx-auto mb-2" style={{ color: sidebarStyles.textColor }} />
+                    Cargando proyectos...
+                  </div>
+                ) : projects.length === 0 ? (
+                  <div className="text-center text-sm py-4" style={{ color: sidebarStyles.textColor }}>
+                    <FileCode className="w-8 h-8 mx-auto mb-2 opacity-50" style={{ color: sidebarStyles.textColor }} />
+                    <p className="font-medium mb-1" style={{ color: sidebarStyles.textColor }}>
+                      No hay proyectos guardados
+                    </p>
+                    <p className="text-xs mb-3 opacity-70" style={{ color: sidebarStyles.textColor }}>
+                      Selecciona una carpeta para crear un proyecto
+                    </p>
+                    <button
+                      onClick={handleSelectProject}
+                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs flex items-center gap-2 mx-auto transition-colors"
+                      title="Seleccionar carpeta del proyecto desde tu sistema"
+                    >
+                      <FolderOpen className="w-3 h-3" />
+                      Seleccionar Proyecto
+                    </button>
+                    <p className="text-xs mt-3 opacity-60" style={{ color: sidebarStyles.textColor }}>
+                      También puedes abrir proyectos desde Visual Code usando /visual code
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    {projects.map((project) => (
                       <div
-                        className="w-3 h-3 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: project.color }}
-                        title={`Color del proyecto: ${project.color}`}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-                          {project.name}
+                        key={project.id}
+                        className="w-full px-3 py-2 rounded-lg transition-colors group border border-transparent hover:border-blue-200 dark:hover:border-blue-800"
+                        style={{
+                          backgroundColor: 'transparent',
+                          borderColor: 'transparent'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = window.matchMedia('(prefers-color-scheme: dark)').matches 
+                            ? 'rgba(55, 65, 81, 0.5)' 
+                            : 'rgba(243, 244, 246, 0.8)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = 'transparent';
+                        }}
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <div
+                            className="w-3 h-3 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: project.color }}
+                            title={`Color del proyecto: ${project.color}`}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium truncate" style={{ color: sidebarStyles.textColor }}>
+                              {project.name}
+                            </div>
+                            <div className="text-xs truncate opacity-70" style={{ color: sidebarStyles.textColor }} title={project.path}>
+                              {project.path?.split(/[/\\]/).pop() || 'Sin ruta'}
+                            </div>
+                          </div>
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              deleteProject(project.id, project.name || project.title);
+                            }}
+                            className="p-1.5 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors opacity-0 group-hover:opacity-100"
+                            style={{ color: sidebarStyles.textColor }}
+                            title="Eliminar proyecto de la lista"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400 truncate" title={project.path}>
-                          {project.path?.split(/[/\\]/).pop() || 'Sin ruta'}
+                        <div className="flex flex-col gap-2 mt-2">
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setShowOpenProjectModal(project.id);
+                            }}
+                            className="w-full px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs flex items-center justify-center gap-2 transition-colors font-medium"
+                            title="Abrir proyecto en Visual Code"
+                          >
+                            <Code className="w-4 h-4" />
+                            <span>Abrir en Visual Code</span>
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              console.log('[CentroEjecucionPage] Cambiando directorio de terminal a:', project.path);
+                              changeTerminalDirectory(project.path);
+                            }}
+                            className="w-full px-3 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded text-xs flex items-center justify-center gap-2 transition-colors font-medium"
+                            title="Usar esta carpeta como directorio de trabajo en la terminal activa"
+                          >
+                            <FolderOpen className="w-4 h-4" />
+                            <span>Usar en Terminal</span>
+                          </button>
                         </div>
                       </div>
-                    </div>
-                    <div className="flex flex-col gap-2 mt-2">
-                      <button
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          console.log('[CentroEjecucionPage] Abriendo proyecto en Visual Code:', project);
-                          openProjectInVisualCode(project);
-                        }}
-                        className="w-full px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs flex items-center justify-center gap-2 transition-colors font-medium"
-                        title="Abrir proyecto en Visual Code (se creará un bloque en la página actual)"
-                      >
-                        <Code className="w-4 h-4" />
-                        <span>Abrir en Visual Code</span>
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          console.log('[CentroEjecucionPage] Cambiando directorio de terminal a:', project.path);
-                          changeTerminalDirectory(project.path);
-                        }}
-                        className="w-full px-3 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded text-xs flex items-center justify-center gap-2 transition-colors font-medium"
-                        title="Usar esta carpeta como directorio de trabajo en la terminal activa"
-                      >
-                        <FolderOpen className="w-4 h-4" />
-                        <span>Usar en Terminal</span>
-                      </button>
-                    </div>
+                    ))}
                   </div>
-                ))}
+                )}
               </div>
+            </>
+          )}
+        </div>
+
+        {/* Main - Pestañas unificadas (Terminales y Visual Code) */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Pestañas unificadas */}
+          <div className="flex items-center gap-1 px-2 py-1 bg-gray-800 border-b border-gray-700 overflow-x-auto">
+            {/* Pestañas de Terminales */}
+            {terminals.map(terminal => (
+              <button
+                key={terminal.id}
+                onClick={() => {
+                  setActiveTerminalId(terminal.id);
+                  setActiveTabType('terminal');
+                }}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-t transition-colors text-sm ${
+                  activeTabType === 'terminal' && terminal.id === activeTerminalId
+                    ? 'bg-gray-900 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+              >
+                <Terminal className="w-3 h-3" />
+                <span>{terminal.name}</span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSettingsTerminal(terminal);
+                    setShowTerminalSettings(true);
+                  }}
+                  className="hover:bg-gray-600 rounded p-0.5 ml-1"
+                  title="Configurar terminal"
+                >
+                  <Settings className="w-3 h-3" />
+                </button>
+                {terminals.length > 1 && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeTerminal(terminal.id);
+                    }}
+                    className="hover:bg-gray-600 rounded p-0.5"
+                    title="Cerrar terminal"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </button>
+            ))}
+            
+            {/* Pestañas de Visual Code */}
+            {visualCodeTabs.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => {
+                  setActiveVisualCodeId(tab.id);
+                  setActiveTabType('visualcode');
+                }}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-t transition-colors text-sm ${
+                  activeTabType === 'visualcode' && tab.id === activeVisualCodeId
+                    ? 'bg-gray-900 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+              >
+                <FileCode className="w-3 h-3" />
+                <span>{tab.name}</span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const updated = visualCodeTabs.filter(t => t.id !== tab.id);
+                    setVisualCodeTabs(updated);
+                    if (tab.id === activeVisualCodeId) {
+                      if (updated.length > 0) {
+                        setActiveVisualCodeId(updated[0].id);
+                        setActiveTabType('visualcode');
+                      } else if (terminals.length > 0) {
+                        setActiveTerminalId(terminals[0].id);
+                        setActiveTabType('terminal');
+                      }
+                    }
+                  }}
+                  className="hover:bg-gray-600 rounded p-0.5 ml-1"
+                  title="Cerrar pestaña"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </button>
+            ))}
+            
+            {/* Botón para agregar terminal */}
+            <button
+              onClick={() => {
+                const isWindows = typeof window !== 'undefined' && window.electronAPI?.platform === 'win32';
+                const newTerminal = {
+                  id: `terminal-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                  name: `Terminal ${terminals.length + 1}`,
+                  shell: isWindows ? 'cmd' : 'bash',
+                  currentDirectory: '~',
+                  output: '',
+                  history: [],
+                  styles: {
+                    backgroundColor: '#1e1e1e',
+                    textColor: '#d4d4d4',
+                    promptColor: '#4ec9b0',
+                    errorColor: '#f48771'
+                  },
+                  createdAt: new Date().toISOString()
+                };
+                setTerminals(prev => [...prev, newTerminal]);
+                setActiveTerminalId(newTerminal.id);
+                setActiveTabType('terminal');
+              }}
+              className="px-2 py-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
+              title="Nueva terminal"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Contenido de las pestañas */}
+          <div className="flex-1 overflow-hidden">
+            {activeTabType === 'terminal' ? (
+              <MultiTerminalView
+                terminals={terminals}
+                activeTerminalId={activeTerminalId}
+                onUpdateTerminals={(updated) => {
+                  setTerminals(updated);
+                }}
+                onUpdateActiveTerminal={(id) => {
+                  setActiveTerminalId(id);
+                }}
+                hideTabs={true}
+              />
+            ) : (
+              activeVisualCodeId && visualCodeTabs.find(tab => tab.id === activeVisualCodeId) && (
+                <VisualCodeTab
+                  project={visualCodeTabs.find(tab => tab.id === activeVisualCodeId)}
+                  isActive={true}
+                  onClose={() => {
+                    const updated = visualCodeTabs.filter(t => t.id !== activeVisualCodeId);
+                    setVisualCodeTabs(updated);
+                    if (updated.length > 0) {
+                      setActiveVisualCodeId(updated[0].id);
+                    } else if (terminals.length > 0) {
+                      setActiveTerminalId(terminals[0].id);
+                      setActiveTabType('terminal');
+                    }
+                  }}
+                  onUpdateProject={(updatedProject) => {
+                    setVisualCodeTabs(prev => prev.map(tab => 
+                      tab.id === updatedProject.id ? updatedProject : tab
+                    ));
+                  }}
+                />
+              )
             )}
           </div>
         </div>
-
-        {/* Main - Terminales */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <MultiTerminalView
-            terminals={terminals}
-            activeTerminalId={activeTerminalId}
-            onUpdateTerminals={(updated) => {
-              setTerminals(updated);
-            }}
-            onUpdateActiveTerminal={(id) => {
-              setActiveTerminalId(id);
-            }}
-          />
-        </div>
       </div>
+
+      {/* Modal para seleccionar cómo abrir el proyecto */}
+      {showOpenProjectModal && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-[60001] flex items-center justify-center p-4"
+          onClick={() => setShowOpenProjectModal(null)}
+        >
+          <div 
+            className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md border border-gray-200 dark:border-gray-700"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                ¿Cómo deseas abrir el proyecto?
+              </h3>
+              <button
+                onClick={() => setShowOpenProjectModal(null)}
+                className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-4 space-y-2">
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const project = projects.find(p => p.id === showOpenProjectModal);
+                  if (project) {
+                    openProjectInVisualCode(project, 'tab');
+                  }
+                }}
+                className="w-full px-4 py-4 text-left hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors rounded-lg flex items-center gap-4 border border-gray-200 dark:border-gray-700"
+              >
+                <div className="w-12 h-12 rounded-lg bg-blue-100 dark:bg-blue-900 flex items-center justify-center flex-shrink-0">
+                  <FileCode className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div className="flex-1">
+                  <div className="font-semibold text-gray-900 dark:text-gray-100 mb-1">En pestaña</div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">Dentro del panel del Centro de Ejecución</div>
+                </div>
+              </button>
+              
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const project = projects.find(p => p.id === showOpenProjectModal);
+                  if (project) {
+                    openProjectInVisualCode(project, 'page');
+                  }
+                }}
+                className="w-full px-4 py-4 text-left hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors rounded-lg flex items-center gap-4 border border-gray-200 dark:border-gray-700"
+              >
+                <div className="w-12 h-12 rounded-lg bg-green-100 dark:bg-green-900 flex items-center justify-center flex-shrink-0">
+                  <Code className="w-6 h-6 text-green-600 dark:text-green-400" />
+                </div>
+                <div className="flex-1">
+                  <div className="font-semibold text-gray-900 dark:text-gray-100 mb-1">En página</div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">Como bloque en la página actual</div>
+                </div>
+              </button>
+              
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const project = projects.find(p => p.id === showOpenProjectModal);
+                  if (project) {
+                    openProjectInVisualCode(project, 'fullscreen');
+                  }
+                }}
+                className="w-full px-4 py-4 text-left hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors rounded-lg flex items-center gap-4 border border-gray-200 dark:border-gray-700"
+              >
+                <div className="w-12 h-12 rounded-lg bg-purple-100 dark:bg-purple-900 flex items-center justify-center flex-shrink-0">
+                  <Maximize2 className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+                </div>
+                <div className="flex-1">
+                  <div className="font-semibold text-gray-900 dark:text-gray-100 mb-1">Por fuera grande</div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">Bloque expandido en la página</div>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de configuración de terminal */}
+      <TerminalSettingsModal
+        isOpen={showTerminalSettings}
+        onClose={() => {
+          setShowTerminalSettings(false);
+          setSettingsTerminal(null);
+        }}
+        terminal={settingsTerminal}
+        onSave={(updatedTerminal) => {
+          updateTerminal(updatedTerminal);
+          setShowTerminalSettings(false);
+          setSettingsTerminal(null);
+        }}
+      />
+
+      {/* Modal de configuración del sidebar */}
+      {showSidebarSettings && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-[60002] flex items-center justify-center p-4"
+          onClick={() => setShowSidebarSettings(false)}
+        >
+          <div 
+            className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md border border-gray-200 dark:border-gray-700"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Settings className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                  Configurar Sidebar
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowSidebarSettings(false)}
+                className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+              {/* Ancho del sidebar */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                  <Type className="w-4 h-4" />
+                  Ancho del Sidebar (px)
+                </label>
+                <input
+                  type="number"
+                  min="200"
+                  max="500"
+                  value={sidebarStyles.width}
+                  onChange={(e) => setSidebarStyles(prev => ({ ...prev, width: parseInt(e.target.value) || 256 }))}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                />
+              </div>
+
+              {/* Ancho colapsado */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Ancho Colapsado (px)
+                </label>
+                <input
+                  type="number"
+                  min="40"
+                  max="100"
+                  value={sidebarStyles.collapsedWidth}
+                  onChange={(e) => setSidebarStyles(prev => ({ ...prev, collapsedWidth: parseInt(e.target.value) || 48 }))}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                />
+              </div>
+
+              {/* Color de fondo */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                  <Palette className="w-4 h-4" />
+                  Color de Fondo
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="color"
+                    value={sidebarStyles.backgroundColor}
+                    onChange={(e) => setSidebarStyles(prev => ({ ...prev, backgroundColor: e.target.value }))}
+                    className="w-16 h-10 rounded border border-gray-300 dark:border-gray-600 cursor-pointer"
+                  />
+                  <input
+                    type="text"
+                    value={sidebarStyles.backgroundColor}
+                    onChange={(e) => setSidebarStyles(prev => ({ ...prev, backgroundColor: e.target.value }))}
+                    className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-sm"
+                    placeholder="#ffffff"
+                  />
+                </div>
+              </div>
+
+              {/* Color de texto */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Color de Texto
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="color"
+                    value={sidebarStyles.textColor}
+                    onChange={(e) => setSidebarStyles(prev => ({ ...prev, textColor: e.target.value }))}
+                    className="w-16 h-10 rounded border border-gray-300 dark:border-gray-600 cursor-pointer"
+                  />
+                  <input
+                    type="text"
+                    value={sidebarStyles.textColor}
+                    onChange={(e) => setSidebarStyles(prev => ({ ...prev, textColor: e.target.value }))}
+                    className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-sm"
+                    placeholder="#111827"
+                  />
+                </div>
+              </div>
+
+              {/* Color de borde */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Color de Borde
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="color"
+                    value={sidebarStyles.borderColor}
+                    onChange={(e) => setSidebarStyles(prev => ({ ...prev, borderColor: e.target.value }))}
+                    className="w-16 h-10 rounded border border-gray-300 dark:border-gray-600 cursor-pointer"
+                  />
+                  <input
+                    type="text"
+                    value={sidebarStyles.borderColor}
+                    onChange={(e) => setSidebarStyles(prev => ({ ...prev, borderColor: e.target.value }))}
+                    className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-sm"
+                    placeholder="#e5e7eb"
+                  />
+                </div>
+              </div>
+
+              {/* Presets */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Temas Predefinidos
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setSidebarStyles({
+                      width: 256,
+                      backgroundColor: '#ffffff',
+                      textColor: '#111827',
+                      borderColor: '#e5e7eb',
+                      collapsedWidth: 48
+                    })}
+                    className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left"
+                  >
+                    <div className="font-medium">Claro</div>
+                    <div className="text-xs text-gray-500">Blanco</div>
+                  </button>
+                  <button
+                    onClick={() => setSidebarStyles({
+                      width: 256,
+                      backgroundColor: '#1f2937',
+                      textColor: '#f9fafb',
+                      borderColor: '#374151',
+                      collapsedWidth: 48
+                    })}
+                    className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left"
+                  >
+                    <div className="font-medium">Oscuro</div>
+                    <div className="text-xs text-gray-500">Gris oscuro</div>
+                  </button>
+                  <button
+                    onClick={() => setSidebarStyles({
+                      width: 256,
+                      backgroundColor: '#111827',
+                      textColor: '#ffffff',
+                      borderColor: '#374151',
+                      collapsedWidth: 48
+                    })}
+                    className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left"
+                  >
+                    <div className="font-medium">Negro</div>
+                    <div className="text-xs text-gray-500">Negro puro</div>
+                  </button>
+                  <button
+                    onClick={() => setSidebarStyles({
+                      width: 256,
+                      backgroundColor: '#f3f4f6',
+                      textColor: '#1f2937',
+                      borderColor: '#d1d5db',
+                      collapsedWidth: 48
+                    })}
+                    className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left"
+                  >
+                    <div className="font-medium">Gris Claro</div>
+                    <div className="text-xs text-gray-500">Gris suave</div>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+              <button
+                onClick={() => setShowSidebarSettings(false)}
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors font-medium"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback, startTransition } from "react";
+import { createPortal } from "react-dom";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Heading from "@tiptap/extension-heading";
@@ -30,7 +31,7 @@ import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import { Toggle } from "../extensions/Toggle";
 import { Comment } from "../extensions/Comment";
-import { Settings, Plus, Image as ImageIcon, Paperclip, Download, Trash2, Tag as TagIcon, FileText, Save, Clock, MessageSquare, MoreVertical, Database, Zap } from "lucide-react";
+import { Settings, Plus, Image as ImageIcon, Paperclip, Download, Trash2, Tag as TagIcon, FileText, Save, Clock, MessageSquare, MoreVertical, Database, Zap, FolderOpen, X, Minimize2 } from "lucide-react";
 import LocalStorageService from "../services/LocalStorageService";
 import Modal from "./Modal";
 import ConfigModal from "./ConfigModal";
@@ -61,6 +62,7 @@ import SQLFileManager from "./SQLFileManager";
 import SQLFileService from "../services/SQLFileService";
 import PageSQLScriptsModal from "./PageSQLScriptsModal";
 import PageIndexService from "../services/PageIndexService";
+import VisualCodeFullscreenModal from "./VisualCodeFullscreenModal";
 
 export default function LocalEditor({ onShowConfig }) {
   // Función helper para extraer emoji del título
@@ -142,6 +144,8 @@ export default function LocalEditor({ onShowConfig }) {
   const [showConsole, setShowConsole] = useState(false);
   const [showCentroEjecucion, setShowCentroEjecucion] = useState(false);
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
+  // Múltiples modales de Visual Code fullscreen
+  const [visualCodeFullscreenModals, setVisualCodeFullscreenModals] = useState([]);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [emojiPickerPosition, setEmojiPickerPosition] = useState({ top: 0, left: 0 });
   const [emojiPickerToggleId, setEmojiPickerToggleId] = useState(null);
@@ -154,6 +158,7 @@ export default function LocalEditor({ onShowConfig }) {
   const ultimoContenidoGuardadoRef = useRef(null);
   const checkingSQLScriptsRef = useRef(new Set()); // Para evitar verificaciones duplicadas
   const checkPageSQLScriptsRef = useRef(null); // Ref para checkPageSQLScripts
+  const crearPaginaRef = useRef(null); // Ref para crearPagina
   const guardarContenidoRef = useRef(null); // Ref para guardarContenido
   const [favoritos, setFavoritos] = useState(() => {
     try {
@@ -544,16 +549,26 @@ export default function LocalEditor({ onShowConfig }) {
         // Verificar configuración y handle
         const config = LocalStorageService.config;
         const hasHandle = !!LocalStorageService.baseDirectoryHandle;
+        const isElectron = typeof window !== 'undefined' && window.electronAPI;
         
-        if (config.useLocalStorage && !hasHandle) {
+        // En Electron, si hay basePath, podemos cargar páginas aunque no haya handle
+        // En navegador, necesitamos handle para usar File System Access API
+        if (config.useLocalStorage && !hasHandle && !isElectron) {
           // No intentar cargar desde localStorage si hay configuración de almacenamiento local
+          // pero no hay handle Y no es Electron (en navegador necesitamos handle)
+          setPaginas([]);
+          return;
+        }
+        
+        // En Electron sin basePath, no intentar cargar
+        if (config.useLocalStorage && isElectron && !config.basePath) {
           setPaginas([]);
           return;
         }
         
         const files = await LocalStorageService.listFiles('data');
         
-        if (files.length === 0 && config.useLocalStorage && !hasHandle) {
+        if (files.length === 0) {
           setPaginas([]);
           return;
         }
@@ -1195,25 +1210,87 @@ export default function LocalEditor({ onShowConfig }) {
 
   // Escuchar evento para abrir el centro de ejecución
   useEffect(() => {
-    const handleOpenCentroEjecucion = (e) => {
+    const handleOpenCentroEjecucion = async (e) => {
       e.preventDefault();
       e.stopPropagation();
-      setShowCentroEjecucion(true);
+      
+      // Buscar la página "Centro de Ejecución" o "⚡ Centro de Ejecución"
+      const paginaCentro = paginas.find(p => 
+        p.titulo === 'Centro de Ejecución' || 
+        p.titulo === '⚡ Centro de Ejecución' ||
+        (p.titulo && p.titulo.includes('Centro de Ejecución'))
+      );
+      
+      if (paginaCentro) {
+        // Si existe, seleccionarla
+        console.log('[LocalEditor] Página Centro de Ejecución encontrada, seleccionando...', paginaCentro.id);
+        if (seleccionarPaginaRef.current) {
+          seleccionarPaginaRef.current(paginaCentro.id);
+        }
+        setShowCentroEjecucion(true);
+      } else {
+        // Si no existe, crearla y luego seleccionarla
+        console.log('[LocalEditor] Página Centro de Ejecución no existe, creándola...');
+        const contenido = {
+          type: "doc",
+          content: [
+            {
+              type: "heading",
+              attrs: { level: 1 },
+              content: [{ type: "text", text: "⚡ Centro de Ejecución" }]
+            },
+            {
+              type: "paragraph",
+              content: [
+                { type: "text", text: "Esta es tu página centralizada para gestionar terminales, proyectos y servicios de ejecución." }
+              ]
+            },
+            {
+              type: "paragraph",
+              content: [
+                { type: "text", text: "Escribe " },
+                { type: "text", marks: [{ type: "code" }], text: "/centro ejecucion" },
+                { type: "text", text: " o usa el botón flotante para abrir el Centro de Ejecución." }
+              ]
+            },
+            {
+              type: "paragraph"
+            },
+            {
+              type: "paragraph",
+              content: [
+                { type: "text", marks: [{ type: "code" }], text: "/centro ejecucion" }
+              ]
+            }
+          ]
+        };
+        
+        const nuevaPaginaId = crearPaginaRef.current 
+          ? await crearPaginaRef.current('⚡ Centro de Ejecución', '⚡', null, [], contenido)
+          : null;
+        // Esperar un momento para que se cree y luego seleccionarla
+        setTimeout(() => {
+          if (nuevaPaginaId && seleccionarPaginaRef.current) {
+            seleccionarPaginaRef.current(nuevaPaginaId);
+          }
+          setShowCentroEjecucion(true);
+        }, 500);
+      }
     };
 
     window.addEventListener('open-centro-ejecucion', handleOpenCentroEjecucion);
     return () => {
       window.removeEventListener('open-centro-ejecucion', handleOpenCentroEjecucion);
     };
-  }, []);
+  }, [paginas]);
 
   // Escuchar evento para abrir Visual Code con un proyecto
   useEffect(() => {
-    const handleOpenVisualCode = (e) => {
+    const handleOpenVisualCode = async (e) => {
       console.log('[LocalEditor] Evento open-visual-code recibido:', e.detail);
       e.preventDefault();
       e.stopPropagation();
-      const { projectPath, projectTitle, projectColor, theme, fontSize, extensions } = e.detail || {};
+      const { projectPath, projectTitle, projectColor, theme, fontSize, extensions, openMode } = e.detail || {};
       
       if (!projectPath) {
         console.error('[LocalEditor] No se recibió projectPath en el evento');
@@ -1221,22 +1298,186 @@ export default function LocalEditor({ onShowConfig }) {
         return;
       }
       
-      if (!editor) {
-        console.error('[LocalEditor] Editor no está disponible');
-        alert('Error: El editor no está disponible. Asegúrate de estar en una página.');
+      // Si el modo es 'fullscreen', abrir en modal independiente
+      if (openMode === 'fullscreen') {
+        console.log('[LocalEditor] Abriendo Visual Code en modo fullscreen independiente');
+        
+        // Verificar si ya existe un modal para este proyecto
+        const existingModalIndex = visualCodeFullscreenModals.findIndex(
+          m => m.projectPath === projectPath
+        );
+        
+        if (existingModalIndex >= 0) {
+          // Si existe, restaurarlo y traerlo al frente
+          setVisualCodeFullscreenModals(prev => {
+            const updated = [...prev];
+            updated[existingModalIndex] = {
+              ...updated[existingModalIndex],
+              isMinimized: false,
+              zIndex: Math.max(...prev.map(m => m.zIndex || 70000), 70000) + 1
+            };
+            return updated;
+          });
+        } else {
+          // Si no existe, crear uno nuevo
+          const newModal = {
+            id: `visual-code-${Date.now()}-${Math.random()}`,
+            projectPath,
+            projectTitle,
+            projectColor,
+            theme,
+            fontSize,
+            extensions,
+            isMinimized: false,
+            zIndex: Math.max(...visualCodeFullscreenModals.map(m => m.zIndex || 70000), 70000) + 1
+          };
+          setVisualCodeFullscreenModals(prev => [...prev, newModal]);
+        }
         return;
       }
       
-      console.log('[LocalEditor] Insertando bloque Visual Code con:', {
-        projectPath,
-        projectTitle,
-        projectColor,
-        theme,
-        fontSize
-      });
+      // Si el editor no está disponible, buscar/seleccionar la página "Centro de Ejecución"
+      if (!editor) {
+        console.warn('[LocalEditor] Editor no está disponible, buscando página Centro de Ejecución...');
+        
+        // Buscar la página "Centro de Ejecución"
+        const paginaCentro = paginas.find(p => 
+          p.titulo === 'Centro de Ejecución' || 
+          p.titulo === '⚡ Centro de Ejecución' ||
+          (p.titulo && p.titulo.includes('Centro de Ejecución'))
+        );
+        
+        if (paginaCentro) {
+          // Si existe, seleccionarla y esperar a que se cargue
+          console.log('[LocalEditor] Página Centro de Ejecución encontrada, seleccionando...', paginaCentro.id);
+          if (seleccionarPaginaRef.current) {
+            seleccionarPaginaRef.current(paginaCentro.id);
+          }
+          setTimeout(() => {
+            if (editor) {
+              console.log('[LocalEditor] Página cargada, procesando Visual Code...');
+              window.dispatchEvent(new CustomEvent('open-visual-code', { 
+                detail: e.detail,
+                bubbles: true,
+                cancelable: true
+              }));
+            } else {
+              console.error('[LocalEditor] Editor aún no disponible después de seleccionar página');
+              alert('⚠️ El editor no está disponible.\n\n' +
+                    'Por favor, espera un momento y vuelve a intentar abrir el proyecto.');
+            }
+          }, 1000);
+          return;
+        } else {
+          // Si no existe, crearla
+          console.log('[LocalEditor] Página Centro de Ejecución no existe, creándola...');
+          const contenido = {
+            type: "doc",
+            content: [
+              {
+                type: "heading",
+                attrs: { level: 1 },
+                content: [{ type: "text", text: "⚡ Centro de Ejecución" }]
+              },
+              {
+                type: "paragraph",
+                content: [
+                  { type: "text", text: "Esta es tu página centralizada para gestionar terminales, proyectos y servicios de ejecución." }
+                ]
+              }
+            ]
+          };
+          
+          const nuevaPaginaId = crearPaginaRef.current 
+            ? await crearPaginaRef.current('⚡ Centro de Ejecución', '⚡', null, [], contenido)
+            : null;
+          // Esperar a que se cree y seleccione la página
+          setTimeout(() => {
+            if (nuevaPaginaId && seleccionarPaginaRef.current) {
+              seleccionarPaginaRef.current(nuevaPaginaId);
+            }
+            // Esperar un poco más para que el editor esté listo
+            setTimeout(() => {
+              if (editor) {
+                console.log('[LocalEditor] Página creada, procesando Visual Code...');
+                window.dispatchEvent(new CustomEvent('open-visual-code', { 
+                  detail: e.detail,
+                  bubbles: true,
+                  cancelable: true
+                }));
+              } else {
+                alert('⚠️ No se pudo crear la página. Por favor, crea una página manualmente y vuelve a intentar.');
+              }
+            }, 500);
+          }, 500);
+          return;
+        }
+      }
       
-      // Insertar bloque Visual Code con el proyecto seleccionado
       try {
+        // 1) Intentar reutilizar un bloque Visual Code existente con el mismo projectPath
+        let existingPos = null;
+        let existingNode = null;
+
+        editor.state.doc.descendants((node, pos) => {
+          if (node.type?.name === 'visualCodeBlock' && node.attrs?.projectPath === projectPath) {
+            existingPos = pos;
+            existingNode = node;
+            return false; // detener búsqueda
+          }
+          return true;
+        });
+
+        if (existingPos !== null) {
+          console.log('[LocalEditor] Reutilizando bloque Visual Code existente en pos:', existingPos);
+
+          // Actualizar atributos principales si llegan desde el Centro (sin tocar archivos abiertos/contenidos)
+          const nextAttrs = {
+            ...existingNode.attrs,
+            projectPath: projectPath || existingNode.attrs.projectPath,
+            fontSize: (fontSize || parseInt(existingNode.attrs.fontSize) || 14).toString(),
+            theme: theme || existingNode.attrs.theme || 'oneDark',
+            projectTitle: projectTitle ?? existingNode.attrs.projectTitle,
+            projectColor: projectColor ?? existingNode.attrs.projectColor,
+            extensions: extensions
+              ? JSON.stringify(extensions)
+              : existingNode.attrs.extensions,
+          };
+
+          editor
+            .chain()
+            .focus()
+            .command(({ tr }) => {
+              tr.setNodeMarkup(existingPos, undefined, nextAttrs);
+              return true;
+            })
+            .setNodeSelection(existingPos)
+            .scrollIntoView()
+            .run();
+
+          // Pedirle al bloque que abra el explorador / panel de archivos
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('focus-visual-code', {
+              detail: {
+                projectPath,
+                openExplorer: true,
+                openMode: openMode || 'page', // 'page' o 'fullscreen'
+              }
+            }));
+          }, 50);
+
+          return;
+        }
+
+        // 2) Si no existe, insertar bloque Visual Code nuevo
+        console.log('[LocalEditor] Insertando nuevo bloque Visual Code con:', {
+          projectPath,
+          projectTitle,
+          projectColor,
+          theme,
+          fontSize
+        });
+
         // Obtener la posición actual del cursor
         const { from } = editor.state.selection;
         
@@ -1250,7 +1491,7 @@ export default function LocalEditor({ onShowConfig }) {
               activeFile: '',
               fileContents: '{}',
               fontSize: (fontSize || 14).toString(),
-              theme: theme || 'notion',
+              theme: theme || 'oneDark',
               projectTitle: projectTitle || '',
               projectColor: projectColor || '#1e1e1e',
               extensions: extensions ? JSON.stringify(extensions) : JSON.stringify({
@@ -1270,16 +1511,26 @@ export default function LocalEditor({ onShowConfig }) {
         
         console.log('[LocalEditor] Bloque Visual Code insertado exitosamente');
         
-        // Scroll al bloque insertado
+        // Scroll al bloque insertado y disparar evento para abrir explorador
         setTimeout(() => {
           const visualCodeBlocks = document.querySelectorAll('visual-code-block');
           if (visualCodeBlocks.length > 0) {
-            visualCodeBlocks[visualCodeBlocks.length - 1].scrollIntoView({ 
+            const lastBlock = visualCodeBlocks[visualCodeBlocks.length - 1];
+            lastBlock.scrollIntoView({ 
               behavior: 'smooth', 
               block: 'center' 
             });
+            
+            // Disparar evento para abrir explorador en el nuevo bloque
+            window.dispatchEvent(new CustomEvent('focus-visual-code', {
+              detail: {
+                projectPath,
+                openExplorer: true,
+                openMode: openMode || 'page', // 'page' o 'fullscreen'
+              }
+            }));
           }
-        }, 100);
+        }, 200);
       } catch (error) {
         console.error('[LocalEditor] Error insertando bloque Visual Code:', error);
         alert('Error al insertar bloque Visual Code: ' + error.message);
@@ -1343,7 +1594,7 @@ export default function LocalEditor({ onShowConfig }) {
     setShowTemplateSelectorForSlash(false);
   };
 
-  const crearPagina = async (titulo, emoji = null, parentId = null, tags = [], templateContent = null) => {
+  const crearPagina = useCallback(async (titulo, emoji = null, parentId = null, tags = [], templateContent = null) => {
     if (!titulo || !titulo.trim()) return;
 
     // Extraer emoji si no se pasó explícitamente
@@ -1405,15 +1656,20 @@ export default function LocalEditor({ onShowConfig }) {
       editor?.commands.setContent(contenido);
       
       // Verificar scripts SQL asociados
-      checkPageSQLScripts(id);
+      if (checkPageSQLScriptsRef.current) {
+        checkPageSQLScriptsRef.current(id);
+      }
+      
+      return id; // Devolver el ID de la página creada
     } catch (error) {
       setModalError({ 
         isOpen: true, 
         message: `No se pudo crear la página. Error: ${error.message}. Verifica la consola para más detalles.`, 
         title: "Error al crear página" 
       });
+      return null;
     }
-  };
+  }, [paginas, editor, extraerEmojiDelTitulo, quitarEmojiDelTitulo, setPaginas, setPaginaSeleccionada, setTitulo, setTituloPaginaActual, setModalError]);
 
   // Crear página de Centro de Ejecución automáticamente si no existe
   useEffect(() => {
@@ -1484,7 +1740,9 @@ export default function LocalEditor({ onShowConfig }) {
           };
 
           // Usar crearPagina que ya está definida en el componente
-          await crearPagina('⚡ Centro de Ejecución', '⚡', null, [], contenido);
+          if (crearPaginaRef.current) {
+            await crearPaginaRef.current('⚡ Centro de Ejecución', '⚡', null, [], contenido);
+          }
         }
       } catch (error) {
         console.error('Error creando página de Centro de Ejecución:', error);
@@ -1747,6 +2005,11 @@ export default function LocalEditor({ onShowConfig }) {
     checkPageSQLScriptsRef.current = checkPageSQLScripts;
   }, [checkPageSQLScripts]);
   
+  // Mantener el ref de crearPagina actualizado
+  useEffect(() => {
+    crearPaginaRef.current = crearPagina;
+  }, [crearPagina]);
+  
   // Configurar manejo de clics en enlaces internos
   useEffect(() => {
     if (!editor) return;
@@ -1975,6 +2238,7 @@ export default function LocalEditor({ onShowConfig }) {
       let paginasEliminadas = 0;
       
       // Eliminar todas las páginas (padre e hijas)
+      const errores = [];
       for (const pagina of todasLasPaginasAEliminar) {
         try {
           // Cargar el contenido de la página para extraer archivos asociados
@@ -1989,16 +2253,30 @@ export default function LocalEditor({ onShowConfig }) {
               const eliminado = await LocalStorageService.deleteBinaryFile(filename, 'files');
               if (eliminado) archivosEliminados++;
             } catch (error) {
-              // Error eliminando archivo
+              console.warn(`[LocalEditor] Error eliminando archivo ${filename}:`, error);
             }
           }
           
           // Eliminar el archivo JSON de la página
-          await LocalStorageService.deleteJSONFile(`${pagina.id}.json`, 'data');
-          paginasEliminadas++;
+          const eliminado = await LocalStorageService.deleteJSONFile(`${pagina.id}.json`, 'data');
+          if (eliminado) {
+            paginasEliminadas++;
+            console.log(`[LocalEditor] Página ${pagina.id} eliminada exitosamente`);
+          } else {
+            const errorMsg = `No se pudo eliminar el archivo de la página ${pagina.id}`;
+            console.error(`[LocalEditor] Error: ${errorMsg}`);
+            errores.push(errorMsg);
+          }
         } catch (error) {
-          // Error eliminando página
+          const errorMsg = `Error eliminando página ${pagina.id}: ${error.message}`;
+          console.error(`[LocalEditor] ${errorMsg}`);
+          errores.push(errorMsg);
         }
+      }
+      
+      // Si hubo errores, lanzar excepción
+      if (errores.length > 0) {
+        throw new Error(`Errores al eliminar: ${errores.join('; ')}`);
       }
       
       // Actualizar la lista de páginas (eliminar todas las páginas eliminadas)
@@ -2833,7 +3111,9 @@ export default function LocalEditor({ onShowConfig }) {
           setPaginaPadreParaNueva(null);
         }}
         onCreate={(titulo, emoji, tags, templateContent) => {
-          crearPagina(titulo, emoji, paginaPadreParaNueva, tags, templateContent);
+          if (crearPaginaRef.current) {
+            crearPaginaRef.current(titulo, emoji, paginaPadreParaNueva, tags, templateContent);
+          }
           setPaginaPadreParaNueva(null);
         }}
       />
@@ -3119,6 +3399,166 @@ export default function LocalEditor({ onShowConfig }) {
         <div className="fixed bottom-4 left-4 z-50 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 text-sm">
           <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
           <span>Guardando...</span>
+        </div>
+      )}
+
+      {/* Visual Code Fullscreen Modals - Múltiples instancias independientes */}
+      {visualCodeFullscreenModals.map((modalData) => (
+        <VisualCodeFullscreenModal
+          key={modalData.id}
+          isOpen={true}
+          isMinimized={modalData.isMinimized}
+          zIndex={modalData.zIndex}
+          onMinimize={() => {
+            setVisualCodeFullscreenModals(prev =>
+              prev.map(m =>
+                m.id === modalData.id
+                  ? { ...m, isMinimized: true }
+                  : m
+              )
+            );
+          }}
+          onRestore={() => {
+            setVisualCodeFullscreenModals(prev =>
+              prev.map(m =>
+                m.id === modalData.id
+                  ? { ...m, isMinimized: false, zIndex: Math.max(...prev.map(m => m.zIndex || 70000), 70000) + 1 }
+                  : m
+              )
+            );
+          }}
+          onFocus={() => {
+            setVisualCodeFullscreenModals(prev =>
+              prev.map(m =>
+                m.id === modalData.id
+                  ? { ...m, zIndex: Math.max(...prev.map(m => m.zIndex || 70000), 70000) + 1 }
+                  : m
+              )
+            );
+          }}
+          onClose={() => {
+            setVisualCodeFullscreenModals(prev => prev.filter(m => m.id !== modalData.id));
+          }}
+          projectPath={modalData.projectPath}
+          projectTitle={modalData.projectTitle}
+          projectColor={modalData.projectColor}
+          theme={modalData.theme}
+          fontSize={modalData.fontSize}
+          extensions={modalData.extensions}
+          onUpdateProject={(updates) => {
+            setVisualCodeFullscreenModals(prev =>
+              prev.map(m =>
+                m.id === modalData.id
+                  ? { ...m, ...updates }
+                  : m
+              )
+            );
+          }}
+        />
+      ))}
+
+      {/* Barra de tareas para proyectos Visual Code (abiertos y minimizados) */}
+      {visualCodeFullscreenModals.length > 0 && (
+        <div className="fixed bottom-4 right-4 z-[60000] bg-[#1e1e1e] border border-[#3e3e42] rounded-lg shadow-2xl overflow-hidden">
+          {/* Header de la barra de tareas */}
+          <div className="px-3 py-2 bg-[#252526] border-b border-[#3e3e42] flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <FolderOpen className="w-4 h-4 text-[#4ec9b0]" />
+              <span className="text-[#cccccc] text-[12px] font-medium">
+                Visual Code ({visualCodeFullscreenModals.length})
+              </span>
+            </div>
+            {visualCodeFullscreenModals.filter(m => m.isMinimized).length > 0 && (
+              <span className="text-[#858585] text-[10px]">
+                {visualCodeFullscreenModals.filter(m => m.isMinimized).length} minimizado(s)
+              </span>
+            )}
+          </div>
+          
+          {/* Lista de proyectos */}
+          <div className="max-h-[400px] overflow-y-auto">
+            {visualCodeFullscreenModals.map((modalData) => {
+              const projectName = modalData.projectTitle || modalData.projectPath.split(/[/\\]/).pop() || 'Proyecto';
+              const isMinimized = modalData.isMinimized;
+              const isActive = !isMinimized && modalData.zIndex === Math.max(...visualCodeFullscreenModals.map(m => m.zIndex || 70000));
+              
+              return (
+                <div
+                  key={modalData.id}
+                  className={`px-3 py-2 flex items-center gap-2 group border-b border-[#2d2d30] last:border-b-0 transition-colors ${
+                    isActive 
+                      ? 'bg-[#094771] hover:bg-[#0a5a8a]' 
+                      : isMinimized
+                      ? 'bg-[#2d2d30] hover:bg-[#37373d]'
+                      : 'bg-[#1e1e1e] hover:bg-[#2d2d30]'
+                  }`}
+                >
+                  <FolderOpen className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-[#4ec9b0]' : 'text-[#858585]'}`} />
+                  <button
+                    onClick={() => {
+                      if (isMinimized) {
+                        setVisualCodeFullscreenModals(prev =>
+                          prev.map(m =>
+                            m.id === modalData.id
+                              ? { ...m, isMinimized: false, zIndex: Math.max(...prev.map(m => m.zIndex || 70000), 70000) + 1 }
+                              : m
+                          )
+                        );
+                      } else {
+                        // Si ya está abierto, traerlo al frente
+                        setVisualCodeFullscreenModals(prev =>
+                          prev.map(m =>
+                            m.id === modalData.id
+                              ? { ...m, zIndex: Math.max(...prev.map(m => m.zIndex || 70000), 70000) + 1 }
+                              : m
+                          )
+                        );
+                      }
+                    }}
+                    className="flex-1 text-left min-w-0"
+                    title={isMinimized ? `Restaurar: ${projectName}` : `Enfocar: ${projectName}`}
+                  >
+                    <span className={`truncate block text-sm ${isActive ? 'text-white font-medium' : 'text-[#cccccc]'}`}>
+                      {projectName}
+                    </span>
+                    {isMinimized && (
+                      <span className="text-[10px] text-[#858585]">Minimizado</span>
+                    )}
+                  </button>
+                  <div className="flex items-center gap-1">
+                    {!isMinimized && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setVisualCodeFullscreenModals(prev =>
+                            prev.map(m =>
+                              m.id === modalData.id
+                                ? { ...m, isMinimized: true }
+                                : m
+                            )
+                          );
+                        }}
+                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-[#3e3e42] rounded transition-opacity"
+                        title="Minimizar"
+                      >
+                        <Minimize2 className="w-3.5 h-3.5 text-[#858585] hover:text-[#cccccc]" />
+                      </button>
+                    )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setVisualCodeFullscreenModals(prev => prev.filter(m => m.id !== modalData.id));
+                      }}
+                      className="opacity-0 group-hover:opacity-100 p-1 hover:bg-[#3e3e42] rounded transition-opacity"
+                      title="Cerrar proyecto"
+                    >
+                      <X className="w-3.5 h-3.5 text-[#858585] hover:text-[#f48771]" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
