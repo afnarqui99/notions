@@ -241,16 +241,35 @@ class LocalStorageService {
 
   // Guardar archivo JSON
   async saveJSONFile(filename, data, subdirectory = 'data') {
-    // Si hay configuración de almacenamiento local pero no hay handle,
+    // Si no hay configuración de almacenamiento local, usar localStorage
+    if (!this.config.useLocalStorage) {
+      return this.saveToBrowserStorage(filename, data);
+    }
+
+    // En Electron, usar siempre la API de Electron si hay basePath
+    if (typeof window !== 'undefined' && window.electronAPI && window.electronAPI.writeFile && 
+        this.config.useLocalStorage && this.config.basePath) {
+      try {
+        // Construir la ruta manualmente (sin require para evitar problemas en el navegador)
+        const separator = this.config.basePath.includes('\\') ? '\\' : '/';
+        const fullPath = `${this.config.basePath}${separator}${subdirectory}${separator}${filename}`;
+        const content = JSON.stringify(data, null, 2);
+        const result = await window.electronAPI.writeFile(fullPath, content);
+        if (result.error) {
+          throw new Error(result.error);
+        }
+        return true;
+      } catch (error) {
+        console.error('[LocalStorageService] Error guardando archivo en Electron:', error);
+        throw error;
+      }
+    }
+
+    // Si hay configuración de almacenamiento local pero no hay handle (y no es Electron),
     // NO usar localStorage como fallback - lanzar error
     if (this.config.useLocalStorage && !this.baseDirectoryHandle) {
       const error = new Error('No hay baseDirectoryHandle. Por favor, selecciona la carpeta nuevamente en Configuración.');
       throw error;
-    }
-    
-    // Si no hay configuración de almacenamiento local, usar localStorage
-    if (!this.config.useLocalStorage) {
-      return this.saveToBrowserStorage(filename, data);
     }
 
     try {
@@ -271,15 +290,36 @@ class LocalStorageService {
 
   // Leer archivo JSON
   async readJSONFile(filename, subdirectory = 'data') {
-    // Si hay configuración de almacenamiento local pero no hay handle,
-    // NO usar localStorage como fallback - los archivos están en el sistema de archivos
-    if (this.config.useLocalStorage && !this.baseDirectoryHandle) {
-      return null; // Retornar null en lugar de leer desde localStorage
-    }
-    
     // Si no hay configuración de almacenamiento local, usar localStorage
     if (!this.config.useLocalStorage) {
       return this.readFromBrowserStorage(filename);
+    }
+
+    // En Electron, usar siempre la API de Electron si hay basePath
+    if (typeof window !== 'undefined' && window.electronAPI && window.electronAPI.readFile && 
+        this.config.useLocalStorage && this.config.basePath) {
+      try {
+        // Construir la ruta manualmente (sin require para evitar problemas en el navegador)
+        const separator = this.config.basePath.includes('\\') ? '\\' : '/';
+        const fullPath = `${this.config.basePath}${separator}${subdirectory}${separator}${filename}`;
+        const result = await window.electronAPI.readFile(fullPath);
+        if (result.error) {
+          return null;
+        }
+        if (result.content) {
+          return JSON.parse(result.content);
+        }
+        return null;
+      } catch (error) {
+        console.error('[LocalStorageService] Error leyendo archivo en Electron:', error);
+        return null;
+      }
+    }
+
+    // Si hay configuración de almacenamiento local pero no hay handle (y no es Electron),
+    // NO usar localStorage como fallback - los archivos están en el sistema de archivos
+    if (this.config.useLocalStorage && !this.baseDirectoryHandle) {
+      return null; // Retornar null en lugar de leer desde localStorage
     }
 
     try {
@@ -299,15 +339,39 @@ class LocalStorageService {
 
   // Listar archivos en un directorio
   async listFiles(subdirectory = 'data') {
-    // Si hay configuración de almacenamiento local pero no hay handle,
-    // NO usar localStorage como fallback - los archivos están en el sistema de archivos
-    if (this.config.useLocalStorage && !this.baseDirectoryHandle) {
-      return []; // Retornar array vacío en lugar de leer desde localStorage
-    }
-    
     // Si no hay configuración de almacenamiento local, usar localStorage
     if (!this.config.useLocalStorage) {
       return this.listFromBrowserStorage();
+    }
+
+    // En Electron, usar siempre la API de Electron si hay basePath
+    if (typeof window !== 'undefined' && window.electronAPI && window.electronAPI.listDirectory && 
+        this.config.useLocalStorage && this.config.basePath) {
+      try {
+        // Construir la ruta manualmente
+        const separator = this.config.basePath.includes('\\') ? '\\' : '/';
+        const fullPath = `${this.config.basePath}${separator}${subdirectory}`;
+        const result = await window.electronAPI.listDirectory(fullPath);
+        if (result.error) {
+          return [];
+        }
+        if (result.files) {
+          // Filtrar solo archivos (no carpetas) y retornar solo los nombres
+          return result.files
+            .filter(item => item.type === 'file')
+            .map(item => item.name);
+        }
+        return [];
+      } catch (error) {
+        console.error('[LocalStorageService] Error listando archivos en Electron:', error);
+        return [];
+      }
+    }
+
+    // Si hay configuración de almacenamiento local pero no hay handle (y no es Electron),
+    // NO usar localStorage como fallback - los archivos están en el sistema de archivos
+    if (this.config.useLocalStorage && !this.baseDirectoryHandle) {
+      return []; // Retornar array vacío en lugar de leer desde localStorage
     }
 
     try {
@@ -463,6 +527,35 @@ class LocalStorageService {
 
   // Eliminar archivo JSON
   async deleteJSONFile(filename, subdirectory = 'data') {
+    // En Electron, usar la API de Electron para eliminar archivos
+    if (typeof window !== 'undefined' && window.electronAPI && window.electronAPI.deleteFile && 
+        this.config.useLocalStorage && this.config.basePath) {
+      try {
+        // Construir la ruta manualmente
+        const separator = this.config.basePath.includes('\\') ? '\\' : '/';
+        const fullPath = `${this.config.basePath}${separator}${subdirectory}${separator}${filename}`;
+        console.log('[LocalStorageService] Intentando eliminar archivo:', fullPath);
+        const result = await window.electronAPI.deleteFile(fullPath);
+        console.log('[LocalStorageService] Resultado de deleteFile:', result);
+        
+        if (result && result.error) {
+          console.error('[LocalStorageService] Error eliminando archivo en Electron:', result.error);
+          return false;
+        }
+        // Verificar que result.success sea true
+        if (result && result.success === true) {
+          console.log('[LocalStorageService] Archivo eliminado exitosamente:', fullPath);
+          return true;
+        }
+        // Si no hay error pero tampoco success, asumir que falló
+        console.error('[LocalStorageService] Error: deleteFile no retornó success=true. Result:', result);
+        return false;
+      } catch (error) {
+        console.error('[LocalStorageService] Error eliminando archivo en Electron:', error);
+        return false;
+      }
+    }
+
     if (!this.config.useLocalStorage || !this.baseDirectoryHandle) {
       // Eliminar de localStorage
       try {
@@ -535,10 +628,17 @@ class LocalStorageService {
 
   // Verificar si hay acceso persistente al directorio
   async verifyDirectoryAccess() {
-    if (!this.config.lastSelectedPath) {
+    if (!this.config.lastSelectedPath && !this.config.basePath) {
       return false;
     }
 
+    // En Electron, si hay path en la configuración, consideramos que hay acceso
+    // (Electron no necesita baseDirectoryHandle, usa el sistema de archivos directamente)
+    if (typeof window !== 'undefined' && window.electronAPI) {
+      return !!(this.config.basePath || this.config.lastSelectedPath);
+    }
+
+    // En navegador, verificar handle
     // Si ya hay handle, verificar que sigue siendo válido
     if (this.baseDirectoryHandle) {
       try {

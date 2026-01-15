@@ -7,8 +7,58 @@ export default function MultiTerminalView({
   terminals = [], 
   activeTerminalId = '', 
   onUpdateTerminals,
-  onUpdateActiveTerminal 
+  onUpdateActiveTerminal,
+  hideTabs = false // Opción para ocultar las pestañas cuando se manejan externamente
 }) {
+  // Configurar listeners para output en tiempo real
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.electronAPI && window.electronAPI.onTerminalOutput) {
+      const handleOutput = (data) => {
+        onUpdateTerminals(prev => prev.map(t => {
+          if (t.id === data.terminalId) {
+            const currentOutput = t.output || '';
+            return {
+              ...t,
+              output: currentOutput + data.data
+            };
+          }
+          return t;
+        }));
+      };
+
+      const handleProcessClosed = (data) => {
+        onUpdateTerminals(prev => prev.map(t => {
+          if (t.id === data.terminalId) {
+            const currentOutput = t.output || '';
+            const closedMessage = `\n\n[Proceso terminado con código ${data.exitCode}]\n`;
+            return {
+              ...t,
+              output: currentOutput + closedMessage
+            };
+          }
+          return t;
+        }));
+        
+        // Notificar que el proceso terminó (para actualizar el estado de isProcessRunning)
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('terminal-process-status-changed', {
+            terminalId: data.terminalId,
+            running: false
+          });
+        }
+      };
+
+      window.electronAPI.onTerminalOutput(handleOutput);
+      window.electronAPI.onTerminalProcessClosed(handleProcessClosed);
+
+      return () => {
+        if (window.electronAPI && window.electronAPI.removeTerminalListeners) {
+          window.electronAPI.removeTerminalListeners();
+        }
+      };
+    }
+  }, [onUpdateTerminals]);
+
   const [localTerminals, setLocalTerminals] = useState(() => {
     try {
       if (terminals.length > 0) {
@@ -256,20 +306,78 @@ export default function MultiTerminalView({
               : terminal.currentDirectory + separator + newDir;
           }
           
-          // Verificar si el directorio existe
-          const exists = await window.electronAPI.pathExists(targetPath);
-          if (exists) {
-            updatedTerminal = {
-              ...updatedTerminal,
-              currentDirectory: targetPath
-            };
-            updateTerminal(updatedTerminal);
-            return;
-          } else {
+          // Verificar si la ruta existe y es un directorio
+          const pathInfo = await window.electronAPI.isDirectory(targetPath);
+          if (!pathInfo.exists) {
             const errorOutput = `\ncd: no such file or directory: ${newDir}\n`;
             updatedTerminal = {
               ...updatedTerminal,
               output: newOutput + errorOutput
+            };
+            updateTerminal(updatedTerminal);
+            return;
+          } else if (!pathInfo.isDirectory) {
+            // Es un archivo, no un directorio
+            const errorOutput = `\ncd: not a directory: ${newDir}\n`;
+            updatedTerminal = {
+              ...updatedTerminal,
+              output: newOutput + errorOutput
+            };
+            updateTerminal(updatedTerminal);
+            return;
+          } else {
+            // Es un directorio válido - normalizar la ruta para evitar rutas raras
+            let normalizedPath = targetPath;
+            try {
+              // Usar el handler normalize-path de Electron si está disponible
+              if (window.electronAPI && window.electronAPI.normalizePath) {
+                normalizedPath = await window.electronAPI.normalizePath(targetPath);
+              } else {
+                // Fallback: normalizar manualmente usando path.resolve lógica
+                const separator = window.electronAPI?.platform === 'win32' ? '\\' : '/';
+                const isAbsolute = /^[A-Za-z]:/.test(targetPath) || targetPath.startsWith('/');
+                let drive = '';
+                let pathWithoutDrive = targetPath;
+                
+                // Extraer unidad en Windows
+                if (window.electronAPI?.platform === 'win32' && /^[A-Za-z]:/.test(targetPath)) {
+                  drive = targetPath.substring(0, 2); // C:
+                  pathWithoutDrive = targetPath.substring(2);
+                }
+                
+                // Dividir en partes y filtrar vacíos y puntos simples
+                const parts = pathWithoutDrive.split(/[/\\]+/).filter(p => p && p !== '.');
+                const resolved = [];
+                
+                for (const part of parts) {
+                  if (part === '..') {
+                    if (resolved.length > 0 && resolved[resolved.length - 1] !== '..') {
+                      resolved.pop();
+                    } else if (!isAbsolute) {
+                      // Solo agregar .. si no es absoluta
+                      resolved.push(part);
+                    }
+                  } else {
+                    resolved.push(part);
+                  }
+                }
+                
+                // Reconstruir la ruta
+                if (isAbsolute) {
+                  normalizedPath = drive + separator + resolved.join(separator);
+                } else {
+                  normalizedPath = resolved.length > 0 ? resolved.join(separator) : '.';
+                }
+              }
+            } catch (error) {
+              console.warn('[MultiTerminalView] Error normalizando ruta, usando ruta original:', error);
+              // Si falla la normalización, usar la ruta original
+              normalizedPath = targetPath;
+            }
+            
+            updatedTerminal = {
+              ...updatedTerminal,
+              currentDirectory: normalizedPath
             };
             updateTerminal(updatedTerminal);
             return;
@@ -315,17 +423,66 @@ export default function MultiTerminalView({
         const result = await window.electronAPI.executeCommand(
           command, 
           terminal.shell, 
-          terminal.currentDirectory === '~' ? undefined : terminal.currentDirectory
+          terminal.currentDirectory === '~' ? undefined : terminal.currentDirectory,
+          terminal.id // Pasar terminalId para procesos de larga duración
         );
 
-        // Actualizar output con resultado
-        const resultOutput = result.error 
-          ? `\n${result.error}\n`
-          : `\n${result.output || ''}\n`;
+        // Si el comando está en modo streaming, no agregar output aquí (se maneja en tiempo real)
+        if (result.streaming) {
+          // El output se manejará en tiempo real a través de los listeners
+          // Solo actualizar el directorio si cambió
+          if (result.currentDirectory) {
+            let normalizedDir = result.currentDirectory;
+            if (window.electronAPI && window.electronAPI.normalizePath) {
+              try {
+                normalizedDir = await window.electronAPI.normalizePath(result.currentDirectory);
+              } catch (error) {
+                console.warn('[MultiTerminalView] Error normalizando directorio:', error);
+              }
+            }
+            updatedTerminal.currentDirectory = normalizedDir;
+          }
+          updateTerminal(updatedTerminal);
+          return;
+        }
+
+        // Para comandos normales, mostrar output como antes
+        let resultOutput = '';
         
-        // Actualizar directorio actual si cambió
+        // Si hay output, mostrarlo primero
+        if (result.output) {
+          resultOutput = result.output;
+          // Si el output no termina con nueva línea, agregarla
+          if (!resultOutput.endsWith('\n')) {
+            resultOutput += '\n';
+          }
+        }
+        
+        // Si hay error, agregarlo después del output
+        if (result.error) {
+          resultOutput += result.error;
+          if (!result.error.endsWith('\n')) {
+            resultOutput += '\n';
+          }
+        }
+        
+        // Si no hay output ni error, mostrar una línea vacía
+        if (!resultOutput && !result.error) {
+          resultOutput = '\n';
+        }
+        
+        // Actualizar directorio actual si cambió y normalizarlo
         if (result.currentDirectory) {
-          updatedTerminal.currentDirectory = result.currentDirectory;
+          let normalizedDir = result.currentDirectory;
+          // Normalizar la ruta si está disponible
+          if (window.electronAPI && window.electronAPI.normalizePath) {
+            try {
+              normalizedDir = await window.electronAPI.normalizePath(result.currentDirectory);
+            } catch (error) {
+              console.warn('[MultiTerminalView] Error normalizando directorio después de comando:', error);
+            }
+          }
+          updatedTerminal.currentDirectory = normalizedDir;
         }
 
         updatedTerminal = {
@@ -393,56 +550,58 @@ Para comandos completos del sistema, usa la versión Electron de la aplicación.
 
   return (
     <div className="flex flex-col h-full bg-gray-900">
-      {/* Tabs */}
-      <div className="flex items-center gap-1 px-2 py-1 bg-gray-800 border-b border-gray-700 overflow-x-auto">
-        {localTerminals.map(terminal => (
-          <button
-            key={terminal.id}
-            onClick={() => {
-              setLocalActiveId(terminal.id);
-              onUpdateActiveTerminal(terminal.id);
-            }}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-t transition-colors text-sm ${
-              terminal.id === localActiveId
-                ? 'bg-gray-900 text-white'
-                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-            }`}
-          >
-            <Terminal className="w-3 h-3" />
-            <span>{terminal.name}</span>
+      {/* Tabs - Solo mostrar si no están ocultas */}
+      {!hideTabs && (
+        <div className="flex items-center gap-1 px-2 py-1 bg-gray-800 border-b border-gray-700 overflow-x-auto">
+          {localTerminals.map(terminal => (
             <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setSettingsTerminal(terminal);
-                setShowSettings(true);
+              key={terminal.id}
+              onClick={() => {
+                setLocalActiveId(terminal.id);
+                onUpdateActiveTerminal(terminal.id);
               }}
-              className="hover:bg-gray-600 rounded p-0.5 ml-1"
-              title="Configurar terminal"
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-t transition-colors text-sm ${
+                terminal.id === localActiveId
+                  ? 'bg-gray-900 text-white'
+                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              }`}
             >
-              <Settings className="w-3 h-3" />
-            </button>
-            {localTerminals.length > 1 && (
+              <Terminal className="w-3 h-3" />
+              <span>{terminal.name}</span>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  removeTerminal(terminal.id);
+                  setSettingsTerminal(terminal);
+                  setShowSettings(true);
                 }}
-                className="hover:bg-gray-600 rounded p-0.5"
-                title="Cerrar terminal"
+                className="hover:bg-gray-600 rounded p-0.5 ml-1"
+                title="Configurar terminal"
               >
-                <X className="w-3 h-3" />
+                <Settings className="w-3 h-3" />
               </button>
-            )}
+              {localTerminals.length > 1 && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeTerminal(terminal.id);
+                  }}
+                  className="hover:bg-gray-600 rounded p-0.5"
+                  title="Cerrar terminal"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </button>
+          ))}
+          <button
+            onClick={addTerminal}
+            className="px-2 py-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
+            title="Nueva terminal"
+          >
+            <Plus className="w-4 h-4" />
           </button>
-        ))}
-        <button
-          onClick={addTerminal}
-          className="px-2 py-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
-          title="Nueva terminal"
-        >
-          <Plus className="w-4 h-4" />
-        </button>
-      </div>
+        </div>
+      )}
 
       {/* Terminal content */}
       <div className="flex-1 overflow-hidden">

@@ -1265,26 +1265,11 @@ ${code}
 
   return (
     <>
-    <div 
-      className={`fixed inset-0 bg-black/50 z-[60000] flex items-center justify-center p-4 ${
-        isFullscreen ? '' : ''
-      }`}
-      style={{ zIndex: 60000 }}
-      onClick={(e) => {
-        // Solo cerrar si se hace clic en el backdrop, no en el contenido
-        if (!isFullscreen && e.target === e.currentTarget) {
-          onClose();
-          setShowProjectMenu(false);
-        }
-      }}
-    >
+    {isFullscreen ? (
+      // En modo fullscreen, renderizar directamente sin overlay para no bloquear eventos
       <div 
-        className={`bg-white dark:bg-gray-800 rounded-2xl shadow-2xl transition-all ${
-          isFullscreen 
-            ? 'w-full h-full max-w-none max-h-none rounded-none' 
-            : 'w-full max-w-6xl h-[95vh] max-h-[95vh]'
-        } overflow-hidden flex flex-col`}
-        onClick={(e) => e.stopPropagation()}
+        className="fixed inset-0 bg-white dark:bg-gray-800 z-[60000] overflow-hidden flex flex-col"
+        style={{ zIndex: 60000 }}
       >
         {/* Header */}
         <div className="bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800 px-3 py-2 flex items-center justify-between">
@@ -2106,9 +2091,397 @@ ${code}
           )}
         </div>
       </div>
+    ) : (
+      // Modo normal (no fullscreen) con overlay
+      <div 
+        className="fixed inset-0 bg-black/50 z-[60000] flex items-center justify-center p-4"
+        style={{ zIndex: 60000 }}
+        onClick={(e) => {
+          // Solo cerrar si se hace clic en el backdrop, no en el contenido
+          if (e.target === e.currentTarget) {
+            onClose();
+            setShowProjectMenu(false);
+          }
+        }}
+      >
+        <div 
+          className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-6xl h-[95vh] max-h-[95vh] overflow-hidden flex flex-col transition-all"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800 px-3 py-2 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Terminal className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            </div>
+            <div className="flex items-center gap-2">
+              {/* Botón para insertar consola en la página */}
+              {editor && (
+                <>
+                  <button
+                    onClick={() => {
+                      if (editor) {
+                        // Insertar bloque de consola en la página
+                        editor.chain().focus().insertContent({
+                          type: 'consoleBlock',
+                          attrs: {
+                            code: code,
+                            language: language,
+                            output: output,
+                            terminalMode: terminalMode,
+                            terminals: JSON.stringify(terminals),
+                            activeTerminalId: activeTerminalId,
+                          },
+                        }).run();
+                        // NO cerrar el modal para mantener las funcionalidades disponibles
+                      }
+                    }}
+                    className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded transition-colors text-xs flex items-center gap-1"
+                    title="Insertar consola en la página (se guarda en el documento). El modal permanece abierto para mantener todas las funcionalidades."
+                  >
+                    <FilePlus className="w-3 h-3" />
+                    Insertar en página
+                  </button>
+                  <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1" />
+                </>
+              )}
+              {/* Selector de lenguaje y botón ejecutar */}
+              <select
+                value={language}
+                onChange={(e) => setLanguage(e.target.value)}
+                className="px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              >
+                <option value="nodejs">Node.js</option>
+                <option value="python">Python</option>
+                <option value="dotnet">.NET</option>
+                <option value="java">Java</option>
+                <option value="sqlite">SQLite</option>
+              </select>
+              <button
+                onClick={handleExecute}
+                disabled={isExecuting || !code.trim()}
+                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded transition-colors text-xs flex items-center gap-1"
+                title="Ejecutar código (Ctrl+Enter)"
+              >
+                <Play className="w-3 h-3" />
+                Ejecutar
+              </button>
+              <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1" />
+              <button
+                onClick={() => setShowHelp(true)}
+                className="p-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                title="Ayuda y ejemplos"
+              >
+                <Settings className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => setIsFullscreen(!isFullscreen)}
+                className="p-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                title={isFullscreen ? "Salir de pantalla completa" : "Pantalla completa"}
+              >
+                {isFullscreen ? (
+                  <Minimize2 className="w-5 h-5" />
+                ) : (
+                  <Maximize2 className="w-5 h-5" />
+                )}
+              </button>
+              <button
+                onClick={onClose}
+                className="p-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
 
-      {/* Modal de Ayuda */}
-      {showHelp && (
+          {/* Content - Mismo contenido que en fullscreen */}
+          <div className="flex-1 flex overflow-hidden">
+            {/* Terminales múltiples */}
+            {terminalMode ? (
+              <div className="flex-1 flex flex-col overflow-hidden">
+                <MultiTerminalView
+                  terminals={terminals}
+                  activeTerminalId={activeTerminalId}
+                  onUpdateTerminals={(updated) => {
+                    setTerminals(updated);
+                  }}
+                  onUpdateActiveTerminal={(id) => {
+                    setActiveTerminalId(id);
+                  }}
+                />
+              </div>
+            ) : (
+              <>
+                {/* File Explorer Sidebar */}
+                {showFileExplorer && (
+                  <div className="w-64 flex-shrink-0 border-r border-gray-200 dark:border-gray-700 h-full">
+                    <FileExplorer
+                      isOpen={showFileExplorer}
+                      onClose={() => setShowFileExplorer(false)}
+                      projectPath={explorerProjectPath}
+                      onFileSelect={async (filePath, content) => {
+                        setCode(content);
+                        
+                        // Detectar si el archivo pertenece a un proyecto Angular/React
+                        // Extraer el directorio del proyecto desde la ruta del archivo
+                        const pathParts = filePath.split(/[/\\]/);
+                        let projectDir = pathParts.slice(0, -1).join(/[/\\]/.test(filePath) ? (filePath.includes('/') ? '/' : '\\') : '/');
+                        
+                        // Intentar detectar el directorio raíz del proyecto (donde está package.json o angular.json)
+                        if (window.electronAPI && window.electronAPI.detectProjectType) {
+                          // Buscar desde el directorio del archivo hacia arriba hasta encontrar un proyecto
+                          let currentDir = projectDir;
+                          let found = false;
+                          for (let i = 0; i < 5 && currentDir; i++) { // Buscar hasta 5 niveles arriba
+                            try {
+                              const detection = await window.electronAPI.detectProjectType(currentDir);
+                              if (detection && detection.type) {
+                                setProjectPath(currentDir);
+                                setExplorerProjectPath(currentDir);
+                                setDetectedProjectType(detection);
+                                found = true;
+                                break;
+                              }
+                            } catch (error) {
+                              // Continuar buscando
+                            }
+                            // Subir un nivel
+                            const parts = currentDir.split(/[/\\]/);
+                            parts.pop();
+                            currentDir = parts.join(/[/\\]/.test(currentDir) ? (currentDir.includes('/') ? '/' : '\\') : '/');
+                          }
+                        }
+                        
+                        // Detectar lenguaje por extensión
+                        const ext = filePath.split('.').pop()?.toLowerCase();
+                        const langMap = {
+                          'js': 'nodejs',
+                          'jsx': 'nodejs',
+                          'ts': 'nodejs',
+                          'tsx': 'nodejs',
+                          'py': 'python',
+                          'cs': 'dotnet',
+                          'java': 'java',
+                          'sql': 'sqlite',
+                          'html': 'nodejs',
+                          'css': 'nodejs'
+                        };
+                        if (langMap[ext]) {
+                          setLanguage(langMap[ext]);
+                        }
+                      }}
+                      onProjectPathChange={(path) => {
+                        setExplorerProjectPath(path);
+                        setProjectPath(path); // También actualizar la ruta del proyecto
+                      }}
+                      onProjectHandleChange={(handle) => {
+                        setProjectHandle(handle); // Guardar el handle del proyecto para uso en navegador
+                      }}
+                    />
+                  </div>
+                )}
+                
+                {/* Main Content */}
+                <div className="flex-1 flex flex-col overflow-hidden p-3 gap-2" ref={resizeRef}>
+                  {/* Editor de código y Preview - Área redimensionable */}
+                  <div 
+                    className="flex flex-col min-h-0 overflow-hidden"
+                    style={{ height: `${codeAreaHeight}%` }}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Código:
+                        </label>
+                        {plugins.syntaxValidation && (
+                          <span className="text-xs px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded">
+                            ✓ Validación activa
+                          </span>
+                        )}
+                        {plugins.autocomplete && (
+                          <span className="text-xs px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 rounded">
+                            ✨ Autocompletado activo
+                          </span>
+                        )}
+                        {plugins.snippets && (
+                          <span className="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded">
+                            📝 Snippets activo
+                          </span>
+                        )}
+                      </div>
+                      {isHTMLCode && (
+                        <div className="flex items-center gap-1 border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden">
+                          <button
+                            onClick={() => setPreviewMode('code')}
+                            className={`px-3 py-1.5 text-sm transition-colors flex items-center gap-2 ${
+                              previewMode === 'code'
+                                ? 'bg-blue-600 text-white'
+                                : 'text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700'
+                            }`}
+                            title="Ver solo código"
+                          >
+                            <Code className="w-4 h-4" />
+                            <span className="hidden sm:inline">Código</span>
+                          </button>
+                          <button
+                            onClick={() => setPreviewMode('split')}
+                            className={`px-3 py-1.5 text-sm transition-colors flex items-center gap-2 border-l border-r border-gray-300 dark:border-gray-600 ${
+                              previewMode === 'split'
+                                ? 'bg-blue-600 text-white'
+                                : 'text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700'
+                            }`}
+                            title="Ver código y preview juntos (split view)"
+                          >
+                            <Split className="w-4 h-4" />
+                            <span className="hidden sm:inline">Split</span>
+                          </button>
+                          <button
+                            onClick={() => setPreviewMode('preview')}
+                            className={`px-3 py-1.5 text-sm transition-colors flex items-center gap-2 ${
+                              previewMode === 'preview'
+                                ? 'bg-blue-600 text-white'
+                                : 'text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700'
+                            }`}
+                            title="Ver solo preview"
+                          >
+                            <Eye className="w-4 h-4" />
+                            <span className="hidden sm:inline">Preview</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Vista dividida (Split) */}
+                    {previewMode === 'split' && isHTMLCode ? (
+                      <div className="flex-1 flex min-h-0 gap-2" data-split-container>
+                        {/* Panel de código - izquierda */}
+                        <div 
+                          className="relative min-h-0 border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden bg-gray-900 console-code-highlight flex-shrink-0"
+                          style={{ width: `${previewSplitWidth}%`, minWidth: '200px' }}
+                        >
+                          {/* Código resaltado (fondo) */}
+                          <pre
+                            ref={codeHighlightRef}
+                            className="absolute inset-0 m-0 p-4 overflow-auto font-mono text-sm whitespace-pre-wrap break-words pointer-events-none"
+                            style={{ 
+                              zIndex: 1,
+                              background: '#111827',
+                              lineHeight: '1.5rem',
+                              color: 'transparent',
+                              WebkitTextFillColor: 'transparent'
+                            }}
+                          />
+                          {/* Textarea visible (encima) */}
+                          <textarea
+                            ref={codeTextareaRef}
+                            value={code}
+                            onChange={handleCodeChange}
+                            onScroll={handleCodeScroll}
+                            onKeyDown={handleKeyDownWithPlugins}
+                            placeholder={getPlaceholderText()}
+                            className="console-code-editor relative w-full h-full px-4 py-3 border-0 focus:outline-none font-mono text-sm resize-none min-h-0"
+                            style={{ 
+                              zIndex: 10,
+                              caretColor: '#4ade80',
+                              background: 'transparent',
+                              lineHeight: '1.5rem',
+                              color: '#e5e7eb'
+                            }}
+                          />
+                        </div>
+                        
+                        {/* Resizer para split view */}
+                        <div
+                          className="w-1 bg-gray-300 dark:bg-gray-600 cursor-col-resize hover:bg-blue-500 transition-colors flex-shrink-0"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            setIsResizingPreview(true);
+                          }}
+                        />
+                        
+                        {/* Panel de preview - derecha */}
+                        <div 
+                          className="relative min-h-0 border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden bg-white dark:bg-gray-800 flex-1"
+                          style={{ minWidth: '200px' }}
+                        >
+                          <iframe
+                            ref={previewIframeRef}
+                            className="w-full h-full border-0"
+                            title="Preview"
+                            sandbox="allow-scripts allow-same-origin"
+                          />
+                        </div>
+                      </div>
+                    ) : previewMode === 'preview' && isHTMLCode ? (
+                      // Solo preview
+                      <div className="relative min-h-0 border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden bg-white dark:bg-gray-800 flex-1">
+                        <iframe
+                          ref={previewIframeRef}
+                          className="w-full h-full border-0"
+                          title="Preview"
+                          sandbox="allow-scripts allow-same-origin"
+                        />
+                      </div>
+                    ) : (
+                      // Solo código (default)
+                      <div className="relative min-h-0 border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden bg-gray-900 console-code-highlight">
+                        {/* Código resaltado (fondo) */}
+                        <pre
+                          ref={codeHighlightRef}
+                          className="absolute inset-0 m-0 p-4 overflow-auto font-mono text-sm whitespace-pre-wrap break-words pointer-events-none"
+                          style={{ 
+                            zIndex: 1,
+                            background: '#111827',
+                            lineHeight: '1.5rem',
+                            color: 'transparent',
+                            WebkitTextFillColor: 'transparent'
+                          }}
+                        />
+                        {/* Textarea visible (encima) */}
+                        <textarea
+                          ref={codeTextareaRef}
+                          value={code}
+                          onChange={handleCodeChange}
+                          onScroll={handleCodeScroll}
+                          onKeyDown={handleKeyDownWithPlugins}
+                          placeholder={getPlaceholderText()}
+                          className="console-code-editor relative w-full h-full px-4 py-3 border-0 focus:outline-none font-mono text-sm resize-none min-h-0"
+                          style={{ 
+                            zIndex: 10,
+                            caretColor: '#4ade80',
+                            background: 'transparent',
+                            lineHeight: '1.5rem',
+                            color: '#e5e7eb'
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Output - Área redimensionable */}
+                  <div 
+                    className="flex flex-col min-h-0 overflow-hidden"
+                    style={{ height: `${100 - codeAreaHeight}%` }}
+                  >
+                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Salida:
+                    </label>
+                    <div
+                      ref={outputRef}
+                      className="flex-1 w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-900 text-green-400 font-mono text-sm overflow-auto min-h-0 whitespace-pre-wrap"
+                    >
+                      {output || <span className="text-gray-500">La salida aparecerá aquí...</span>}
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Modal de Ayuda */}
+    {showHelp && (
         <div 
           className="fixed inset-0 bg-black/50 z-[60001] flex items-center justify-center p-4"
           style={{ zIndex: 60001 }}
@@ -2589,7 +2962,6 @@ ${code}
           </div>
         </div>
       )}
-    </div>
 
     {/* Modal de Plugins */}
     <ConsolePluginsModal

@@ -1,32 +1,92 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { FolderOpen, CheckCircle, AlertCircle, X, Loader, Info } from 'lucide-react';
 import LocalStorageService from '../services/LocalStorageService';
 import Modal from './Modal';
 
-export default function DirectorySelectorModal({ isOpen, onClose, onDirectorySelected }) {
+export default function DirectorySelectorModal({ isOpen, onClose, onDirectorySelected, autoOpen = false }) {
   const [isSelecting, setIsSelecting] = useState(false);
   const [error, setError] = useState('');
   const [selectedPath, setSelectedPath] = useState('');
-  const [showInfoModal, setShowInfoModal] = useState(false);
 
-  const handleSelectDirectory = () => {
-    // Mostrar modal informativo primero
-    setShowInfoModal(true);
-  };
+  // Si autoOpen es true, abrir el selector automáticamente cuando se monta
+  useEffect(() => {
+    if (isOpen && autoOpen && !selectedPath && !isSelecting) {
+      // Usar un pequeño delay para asegurar que el modal esté completamente montado
+      const timer = setTimeout(() => {
+        handleSelectDirectory();
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, autoOpen]);
 
-  const handleConfirmInfo = async () => {
-    setShowInfoModal(false);
+  const handleSelectDirectory = async () => {
+    console.log('[DirectorySelectorModal] Iniciando selección de directorio, autoOpen:', autoOpen);
     setIsSelecting(true);
     setError('');
     setSelectedPath('');
 
     try {
-      const handle = await LocalStorageService.requestDirectoryAccess();
-      if (handle) {
-        setSelectedPath(handle.name);
-        LocalStorageService.baseDirectoryHandle = handle;
+      let selectedPathResult = null;
+      
+      // En Electron, usar la API de Electron
+      if (typeof window !== 'undefined' && window.electronAPI && window.electronAPI.selectDirectory) {
+        console.log('[DirectorySelectorModal] Usando API de Electron');
+        selectedPathResult = await window.electronAPI.selectDirectory();
+        console.log('[DirectorySelectorModal] Resultado de selectDirectory:', selectedPathResult);
+        
+        if (selectedPathResult) {
+          console.log('[DirectorySelectorModal] Carpeta seleccionada:', selectedPathResult);
+          
+          // En Electron, guardar la configuración directamente
+          LocalStorageService.saveConfig({
+            useLocalStorage: true,
+            basePath: selectedPathResult,
+            lastSelectedPath: selectedPathResult
+          });
+          console.log('[DirectorySelectorModal] Configuración guardada');
+          
+          setSelectedPath(selectedPathResult);
+          
+          // Disparar evento para notificar que el handle cambió
+          window.dispatchEvent(new CustomEvent('directoryHandleChanged', { 
+            detail: { path: selectedPathResult } 
+          }));
+          
+          // Si autoOpen está activado, cerrar automáticamente
+          if (autoOpen) {
+            console.log('[DirectorySelectorModal] autoOpen activado, cerrando modal...');
+            // Pequeño delay para asegurar que el estado se actualice
+            setTimeout(() => {
+              console.log('[DirectorySelectorModal] Llamando onDirectorySelected con:', selectedPathResult);
+              if (onDirectorySelected) {
+                onDirectorySelected(selectedPathResult);
+              }
+              console.log('[DirectorySelectorModal] Llamando onClose');
+              onClose();
+            }, 200);
+            return;
+          }
+        } else {
+          console.log('[DirectorySelectorModal] Selección cancelada por el usuario');
+          setError('Selección cancelada');
+          setIsSelecting(false);
+        }
       } else {
-        setError('Selección cancelada');
+        // En navegador, usar File System Access API
+        const handle = await LocalStorageService.requestDirectoryAccess();
+        if (handle) {
+          const pathName = handle.name || 'Carpeta seleccionada';
+          setSelectedPath(pathName);
+          LocalStorageService.baseDirectoryHandle = handle;
+          
+          // Si autoOpen está activado, guardar y cerrar automáticamente
+          if (autoOpen) {
+            await handleConfirm();
+          }
+        } else {
+          setError('Selección cancelada');
+        }
       }
     } catch (error) {
       if (error.name === 'AbortError') {
@@ -40,19 +100,23 @@ export default function DirectorySelectorModal({ isOpen, onClose, onDirectorySel
   };
 
   const handleConfirm = async () => {
-    if (selectedPath) {
+    if (selectedPath || LocalStorageService.baseDirectoryHandle) {
+      const pathToSave = selectedPath || LocalStorageService.baseDirectoryHandle?.name || 'Carpeta seleccionada';
+      
       LocalStorageService.saveConfig({
         useLocalStorage: true,
-        basePath: selectedPath,
-        lastSelectedPath: selectedPath
+        basePath: pathToSave,
+        lastSelectedPath: pathToSave
       });
       
       // Disparar evento para notificar que el handle cambió
       window.dispatchEvent(new CustomEvent('directoryHandleChanged', { 
-        detail: { path: selectedPath } 
+        detail: { path: pathToSave } 
       }));
       
-      onDirectorySelected(selectedPath);
+      if (onDirectorySelected) {
+        onDirectorySelected(pathToSave);
+      }
       onClose();
     }
   };
@@ -118,23 +182,32 @@ export default function DirectorySelectorModal({ isOpen, onClose, onDirectorySel
 
           {/* Botón seleccionar */}
           <div className="space-y-3">
-            <button
-              onClick={handleSelectDirectory}
-              disabled={isSelecting}
-              className="w-full px-4 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium transition-all shadow-md hover:shadow-lg transform hover:scale-[1.02] disabled:transform-none"
-            >
-              {isSelecting ? (
-                <>
-                  <Loader className="w-5 h-5 animate-spin" />
-                  <span>Abriendo selector de carpetas...</span>
-                </>
-              ) : (
-                <>
-                  <FolderOpen className="w-5 h-5" />
-                  <span>Seleccionar Carpeta</span>
-                </>
-              )}
-            </button>
+            {!autoOpen && (
+              <button
+                onClick={handleSelectDirectory}
+                disabled={isSelecting}
+                className="w-full px-4 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium transition-all shadow-md hover:shadow-lg transform hover:scale-[1.02] disabled:transform-none"
+              >
+                {isSelecting ? (
+                  <>
+                    <Loader className="w-5 h-5 animate-spin" />
+                    <span>Abriendo selector de carpetas...</span>
+                  </>
+                ) : (
+                  <>
+                    <FolderOpen className="w-5 h-5" />
+                    <span>Seleccionar Carpeta</span>
+                  </>
+                )}
+              </button>
+            )}
+            
+            {autoOpen && isSelecting && (
+              <div className="w-full px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-center gap-2">
+                <Loader className="w-5 h-5 animate-spin text-blue-600" />
+                <span className="text-blue-800">Abriendo selector de carpetas...</span>
+              </div>
+            )}
 
             {/* Carpeta seleccionada */}
             {selectedPath && (
@@ -204,56 +277,6 @@ export default function DirectorySelectorModal({ isOpen, onClose, onDirectorySel
         </div>
       </div>
 
-      {/* Modal informativo antes de abrir el selector nativo */}
-      <Modal
-        isOpen={showInfoModal}
-        onClose={() => setShowInfoModal(false)}
-        title="Selección de Carpeta"
-        type="info"
-      >
-        <div className="space-y-4">
-          <p className="text-gray-700">
-            Al hacer clic en "Continuar", se abrirá un <strong>diálogo del navegador</strong> 
-            donde podrás seleccionar la carpeta donde se guardarán tus archivos.
-          </p>
-          
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-            <p className="text-sm text-blue-900 font-semibold mb-2">📋 Pasos a seguir:</p>
-            <ol className="text-xs text-blue-800 space-y-1 list-decimal list-inside">
-              <li>Se abrirá un diálogo del navegador (no podemos personalizarlo)</li>
-              <li>Navega y selecciona la carpeta que deseas usar</li>
-              <li>Haz clic en "Permitir" o "Seleccionar carpeta" en el diálogo</li>
-              <li>La carpeta seleccionada aparecerá aquí</li>
-            </ol>
-          </div>
-
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-            <p className="text-xs text-yellow-800 flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-              <span>
-                <strong>Importante:</strong> El diálogo que verás es del navegador y no se puede personalizar. 
-                Es seguro y solo permite acceso a la carpeta que tú elijas.
-              </span>
-            </p>
-          </div>
-
-          <div className="flex justify-end gap-3 pt-2">
-            <button
-              onClick={() => setShowInfoModal(false)}
-              className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors font-medium"
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={handleConfirmInfo}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2"
-            >
-              <FolderOpen className="w-4 h-4" />
-              Continuar
-            </button>
-          </div>
-        </div>
-      </Modal>
     </div>
   );
 }

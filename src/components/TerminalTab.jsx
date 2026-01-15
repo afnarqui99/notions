@@ -1,8 +1,39 @@
 import { useState, useRef, useEffect } from 'react';
-import { X, Terminal, Settings, Copy, Check, Edit, Search, Replace, Clock, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, Terminal, Settings, Copy, Check, Edit, Search, Replace, Clock, ChevronDown, ChevronUp, Trash2, Square, RotateCw, Network } from 'lucide-react';
 import terminalCommandService from '../services/TerminalCommandService';
 
-// Importar Settings si no está
+// Función para limpiar códigos ANSI del output
+const stripAnsiCodes = (text) => {
+  if (!text) return text;
+  // Eliminar códigos ANSI: [\x1b\x9b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]
+  return text.replace(/\x1b\[[0-9;]*m/g, '').replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');
+};
+
+// Helper para manejar rutas (compatible con navegador y Electron)
+const pathHelper = {
+  join: (...parts) => {
+    const filtered = parts.filter(p => p && p !== '.');
+    if (typeof window !== 'undefined' && window.electronAPI) {
+      const sep = window.electronAPI.platform === 'win32' ? '\\' : '/';
+      return filtered.join(sep);
+    }
+    return filtered.join('/');
+  },
+  isAbsolute: (p) => {
+    if (typeof window !== 'undefined' && window.electronAPI) {
+      return window.electronAPI.platform === 'win32' 
+        ? /^[a-zA-Z]:/.test(p) || p.startsWith('\\\\')
+        : p.startsWith('/');
+    }
+    return p.startsWith('/');
+  },
+  dirname: (p) => {
+    const sep = typeof window !== 'undefined' && window.electronAPI && window.electronAPI.platform === 'win32' ? '\\' : '/';
+    const parts = p.split(sep);
+    parts.pop();
+    return parts.join(sep) || sep;
+  }
+};
 
 export default function TerminalTab({ 
   terminal, 
@@ -36,6 +67,11 @@ export default function TerminalTab({
   const [frequentCommands, setFrequentCommands] = useState([]);
   const [showFrequentCommands, setShowFrequentCommands] = useState(false);
   const [showAllCommands, setShowAllCommands] = useState(false);
+  const [isProcessRunning, setIsProcessRunning] = useState(false);
+  const [lastCommand, setLastCommand] = useState('');
+  const [showPortManager, setShowPortManager] = useState(false);
+  const [portToCheck, setPortToCheck] = useState('');
+  const [portProcesses, setPortProcesses] = useState([]);
   const inputRef = useRef(null);
   const outputRef = useRef(null);
 
@@ -82,6 +118,41 @@ export default function TerminalTab({
     }
   }, [terminal]);
 
+  // Verificar si hay un proceso corriendo y escuchar cambios
+  useEffect(() => {
+    const checkRunningProcess = async () => {
+      if (typeof window !== 'undefined' && window.electronAPI && window.electronAPI.hasRunningProcess) {
+        try {
+          const running = await window.electronAPI.hasRunningProcess(terminal.id);
+          setIsProcessRunning(running);
+        } catch (error) {
+          console.error('Error verificando proceso:', error);
+        }
+      }
+    };
+    
+    checkRunningProcess();
+    // Verificar cada 2 segundos
+    const interval = setInterval(checkRunningProcess, 2000);
+    
+    // Escuchar cuando el proceso se cierra
+    if (window.electronAPI && window.electronAPI.onTerminalProcessClosed) {
+      const handleProcessClosed = (data) => {
+        if (data.terminalId === terminal.id) {
+          setIsProcessRunning(false);
+        }
+      };
+      window.electronAPI.onTerminalProcessClosed(handleProcessClosed);
+      
+      return () => {
+        clearInterval(interval);
+        // El listener se limpia automáticamente cuando el componente se desmonta
+      };
+    }
+    
+    return () => clearInterval(interval);
+  }, [terminal.id]);
+
   // Auto-scroll en output
   useEffect(() => {
     if (outputRef.current && isActive) {
@@ -89,24 +160,32 @@ export default function TerminalTab({
     }
   }, [terminal.output, isActive]);
 
-  // Enfocar input cuando se activa
+  // Enfocar input cuando se activa o cuando cambia el terminal
   useEffect(() => {
     if (isActive && inputRef.current) {
-      setTimeout(() => {
-        inputRef.current?.focus();
-      }, 100);
+      // Usar un timeout más largo para asegurar que el DOM esté listo
+      const timeoutId = setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+        }
+      }, 200);
+      return () => clearTimeout(timeoutId);
     }
-  }, [isActive]);
+  }, [isActive, terminal.id]); // Agregar terminal.id para que se enfoque cuando cambia el terminal
 
   const handleExecute = async () => {
     if (!command.trim()) return;
 
-    const newHistory = [...commandHistory, command];
+    const commandToExecute = command.trim();
+    const newHistory = [...commandHistory, commandToExecute];
     setCommandHistory(newHistory);
     setHistoryIndex(-1);
     
     // Guardar comando en servicio de comandos frecuentes
-    await terminalCommandService.saveCommand(terminal.id, command);
+    await terminalCommandService.saveCommand(terminal.id, commandToExecute);
+    
+    // Guardar el último comando para poder reiniciarlo
+    setLastCommand(commandToExecute);
     
     // Actualizar historial en el terminal
     const updatedTerminal = {
@@ -116,35 +195,508 @@ export default function TerminalTab({
     onUpdateTerminal(updatedTerminal);
 
     // Ejecutar comando
-    await onExecuteCommand(terminal.id, command);
+    await onExecuteCommand(terminal.id, commandToExecute);
+    
+    // Detectar si es un comando de larga duración (cualquier tipo)
+    // npm/yarn/pnpm: dev, start, serve, watch
+    // python: servidores con dev, start, serve, runserver
+    // node: servidores con dev, start, serve
+    // Otros: cualquier comando que típicamente corre servidores
+    const isLongRunning = /^(npm|yarn|pnpm)\s+(run\s+)?(dev|start|serve|watch)/i.test(commandToExecute) ||
+                          /^(python|python3|py)\s+.*(dev|start|serve|runserver|app\.py|main\.py|server\.py)/i.test(commandToExecute) ||
+                          /^(node|nodemon|ts-node|tsx)\s+.*(dev|start|serve|watch)/i.test(commandToExecute) ||
+                          /^(uvicorn|gunicorn|flask|django)\s+/i.test(commandToExecute) ||
+                          /^(dotnet|java|mvn|gradle)\s+.*(run|start)/i.test(commandToExecute);
+    if (isLongRunning) {
+      setIsProcessRunning(true);
+    }
     
     setCommand('');
     setShowFrequentCommands(false);
   };
 
+  // Detener proceso actual
+  const handleStopProcess = async () => {
+    if (typeof window !== 'undefined' && window.electronAPI && window.electronAPI.stopTerminalProcess) {
+      try {
+        // Detener el proceso
+        await window.electronAPI.stopTerminalProcess(terminal.id);
+        
+        // Verificar que el proceso esté muerto
+        let attempts = 0;
+        const maxAttempts = 10; // 5 segundos máximo
+        while (attempts < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          if (window.electronAPI.isProcessDead) {
+            const isDead = await window.electronAPI.isProcessDead(terminal.id);
+            if (isDead) {
+              break; // El proceso está muerto
+            }
+          } else {
+            // Si no hay API disponible, solo esperar
+            break;
+          }
+          
+          attempts++;
+        }
+        
+        setIsProcessRunning(false);
+        // Agregar mensaje al output
+        const updatedTerminal = {
+          ...terminal,
+          output: (terminal.output || '') + '\n\n[Proceso detenido por el usuario]\n'
+        };
+        onUpdateTerminal(updatedTerminal);
+      } catch (error) {
+        console.error('Error deteniendo proceso:', error);
+        // Aún así, marcar como no corriendo
+        setIsProcessRunning(false);
+      }
+    }
+  };
+
+  // Extraer puerto del output del terminal (buscar URLs como localhost:5187)
+  const extractPortFromOutput = (output) => {
+    if (!output) return null;
+    
+    // Buscar patrones como "localhost:5187" o "http://localhost:5187"
+    const portMatch = output.match(/(?:localhost|127\.0\.0\.1|:\/\/[^:]+):(\d+)/);
+    if (portMatch) {
+      return parseInt(portMatch[1]);
+    }
+    
+    // Buscar patrones como "Port 5187" o "puerto 5187"
+    const portMatch2 = output.match(/(?:port|puerto)\s+(\d+)/i);
+    if (portMatch2) {
+      return parseInt(portMatch2[1]);
+    }
+    
+    return null;
+  };
+
+  // Reiniciar proceso (detener y volver a ejecutar) - Funciona con cualquier comando
+  const handleRestartProcess = async () => {
+    // Obtener el último comando ejecutado (puede ser npm, python, node, etc.)
+    const commandToRestart = lastCommand || commandHistory[commandHistory.length - 1];
+    
+    if (!commandToRestart) {
+      console.warn('No hay comando para reiniciar');
+      return;
+    }
+    
+    // Extraer puerto del output si está disponible
+    const port = extractPortFromOutput(terminal.output);
+    
+    // Agregar mensaje de reinicio al output
+    const updatedTerminal = {
+      ...terminal,
+      output: (terminal.output || '') + `\n\n[Reiniciando: ${commandToRestart}...]\n`
+    };
+    onUpdateTerminal(updatedTerminal);
+    
+    // Detener proceso actual
+    if (typeof window !== 'undefined' && window.electronAPI && window.electronAPI.stopTerminalProcess) {
+      try {
+        await window.electronAPI.stopTerminalProcess(terminal.id);
+      } catch (error) {
+        console.error('Error deteniendo proceso para reiniciar:', error);
+      }
+    }
+    
+    // Si hay un puerto detectado, matar todos los procesos usando ese puerto
+    if (port && window.electronAPI && window.electronAPI.killProcessesByPort) {
+      try {
+        const result = await window.electronAPI.killProcessesByPort(port);
+        if (result.success) {
+          const updatedTerminal2 = {
+            ...terminal,
+            output: (terminal.output || '') + `[Puerto ${port} liberado: ${result.message}]\n`
+          };
+          onUpdateTerminal(updatedTerminal2);
+        }
+      } catch (error) {
+        console.error('Error matando procesos del puerto:', error);
+      }
+    }
+    
+    // Esperar mínimo 3 segundos para asegurar que el puerto se libere
+    const minWaitTime = 3000; // 3 segundos mínimo
+    const startTime = Date.now();
+    
+    let attempts = 0;
+    const maxAttempts = 10; // 5 segundos máximo adicionales
+    
+    while (attempts < maxAttempts) {
+      const elapsed = Date.now() - startTime;
+      const remainingWait = Math.max(0, minWaitTime - elapsed);
+      
+      if (remainingWait > 0) {
+        await new Promise(resolve => setTimeout(resolve, remainingWait));
+      } else {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+      
+      // Verificar que el proceso esté muerto
+      if (window.electronAPI && window.electronAPI.isProcessDead) {
+        const isDead = await window.electronAPI.isProcessDead(terminal.id);
+        if (isDead && elapsed >= minWaitTime) {
+          // El proceso está muerto y hemos esperado al menos 3 segundos
+          break;
+        }
+      } else {
+        // Si no hay API disponible, solo esperar el tiempo mínimo
+        if (elapsed >= minWaitTime) {
+          break;
+        }
+      }
+      
+      attempts++;
+    }
+    
+    // Actualizar estado
+    setIsProcessRunning(false);
+    
+    // Ejecutar el comando nuevamente automáticamente (cualquier tipo de comando)
+    const commandToExecute = commandToRestart;
+    
+    // Actualizar historial
+    const newHistory = [...commandHistory, commandToExecute];
+    setCommandHistory(newHistory);
+    setHistoryIndex(-1);
+    
+    // Guardar comando en servicio de comandos frecuentes
+    await terminalCommandService.saveCommand(terminal.id, commandToExecute);
+    
+    // Actualizar el último comando guardado
+    setLastCommand(commandToExecute);
+    
+    // Actualizar historial en el terminal
+    const updatedTerminal3 = {
+      ...terminal,
+      history: newHistory
+    };
+    onUpdateTerminal(updatedTerminal3);
+    
+    // Ejecutar el comando directamente
+    await onExecuteCommand(terminal.id, commandToExecute);
+    
+    // Detectar si es un comando de larga duración (cualquier tipo)
+    // npm/yarn/pnpm: dev, start, serve, watch
+    // python: servidores con dev, start, serve, runserver
+    // node: servidores con dev, start, serve
+    // Otros: cualquier comando que típicamente corre servidores
+    const isLongRunning = /^(npm|yarn|pnpm)\s+(run\s+)?(dev|start|serve|watch)/i.test(commandToExecute) ||
+                          /^(python|python3|py)\s+.*(dev|start|serve|runserver|app\.py|main\.py|server\.py)/i.test(commandToExecute) ||
+                          /^(node|nodemon|ts-node|tsx)\s+.*(dev|start|serve|watch)/i.test(commandToExecute) ||
+                          /^(uvicorn|gunicorn|flask|django)\s+/i.test(commandToExecute) ||
+                          /^(dotnet|java|mvn|gradle)\s+.*(run|start)/i.test(commandToExecute);
+    
+    if (isLongRunning) {
+      setIsProcessRunning(true);
+    }
+  };
+
+  // Verificar procesos usando un puerto
+  const handleCheckPort = async () => {
+    if (!portToCheck || !portToCheck.trim()) {
+      alert('Por favor ingresa un número de puerto');
+      return;
+    }
+    
+    const port = parseInt(portToCheck.trim());
+    if (isNaN(port) || port < 1 || port > 65535) {
+      alert('Por favor ingresa un número de puerto válido (1-65535)');
+      return;
+    }
+    
+    if (window.electronAPI && window.electronAPI.getProcessesByPort) {
+      try {
+        const processes = await window.electronAPI.getProcessesByPort(port);
+        setPortProcesses(processes);
+      } catch (error) {
+        console.error('Error obteniendo procesos del puerto:', error);
+        alert('Error al obtener procesos del puerto');
+      }
+    }
+  };
+
+  // Matar proceso por PID
+  const handleKillProcess = async (pid) => {
+    if (!window.confirm(`¿Matar el proceso ${pid}?`)) {
+      return;
+    }
+    
+    if (window.electronAPI && window.electronAPI.killProcessByPid) {
+      try {
+        const result = await window.electronAPI.killProcessByPid(pid);
+        if (result.success) {
+          // Recargar la lista de procesos
+          await handleCheckPort();
+          alert(`Proceso ${pid} terminado exitosamente`);
+        } else {
+          alert(`Error al terminar proceso: ${result.error || 'Error desconocido'}`);
+        }
+      } catch (error) {
+        console.error('Error matando proceso:', error);
+        alert('Error al matar el proceso');
+      }
+    }
+  };
+
+  // Matar todos los procesos usando un puerto
+  const handleKillAllPortProcesses = async () => {
+    if (!portToCheck || !portToCheck.trim()) {
+      alert('Por favor ingresa un número de puerto');
+      return;
+    }
+    
+    const port = parseInt(portToCheck.trim());
+    if (isNaN(port) || port < 1 || port > 65535) {
+      alert('Por favor ingresa un número de puerto válido (1-65535)');
+      return;
+    }
+    
+    if (!window.confirm(`¿Matar todos los procesos usando el puerto ${port}?`)) {
+      return;
+    }
+    
+    if (window.electronAPI && window.electronAPI.killProcessesByPort) {
+      try {
+        const result = await window.electronAPI.killProcessesByPort(port);
+        if (result.success) {
+          alert(result.message || `Se mataron ${result.killed} procesos`);
+          // Recargar la lista de procesos
+          await handleCheckPort();
+        } else {
+          alert(`Error: ${result.error || 'Error desconocido'}`);
+        }
+      } catch (error) {
+        console.error('Error matando procesos del puerto:', error);
+        alert('Error al matar procesos del puerto');
+      }
+    }
+  };
+
+  // Función para recargar comandos frecuentes
+  const loadFrequentCommands = async () => {
+    if (command.trim()) {
+      // Si hay texto, buscar coincidencias (sin límite para poder expandir)
+      const matching = await terminalCommandService.getMatchingCommands(terminal.id, command, 50);
+      setFrequentCommands(matching);
+      setShowFrequentCommands(matching.length > 0);
+    } else {
+      // Si no hay texto, mostrar los más frecuentes (sin límite para poder expandir)
+      const frequent = await terminalCommandService.getFrequentCommands(terminal.id, 50);
+      setFrequentCommands(frequent);
+      setShowFrequentCommands(frequent.length > 0);
+    }
+    // Resetear el estado de "mostrar todos" cuando cambia el comando
+    setShowAllCommands(false);
+  };
+
+  // Función para eliminar un comando
+  const handleDeleteCommand = async (e, commandToDelete) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Prevenir que el onBlur cierre el dropdown
+    const wasShowing = showFrequentCommands;
+    
+    if (window.confirm(`¿Eliminar el comando "${commandToDelete}" de la lista de frecuentes?`)) {
+      await terminalCommandService.deleteCommand(terminal.id, commandToDelete);
+      // Recargar la lista de comandos
+      await loadFrequentCommands();
+      
+      // Recargar comandos y restaurar el estado
+      const updatedCommands = await terminalCommandService.getFrequentCommands(terminal.id, 50);
+      setFrequentCommands(updatedCommands);
+      
+      // Restaurar el focus al input y mantener el dropdown abierto
+      setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+        }
+        // Mantener el dropdown abierto si hay comandos disponibles
+        if (updatedCommands.length > 0) {
+          setShowFrequentCommands(true);
+        } else {
+          setShowFrequentCommands(false);
+        }
+      }, 150);
+    } else {
+      // Si canceló, restaurar el focus de todas formas
+      setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+        }
+      }, 100);
+    }
+  };
+
   // Cargar comandos frecuentes cuando cambia el comando
   useEffect(() => {
-    const loadFrequentCommands = async () => {
-      if (command.trim()) {
-        // Si hay texto, buscar coincidencias (sin límite para poder expandir)
-        const matching = await terminalCommandService.getMatchingCommands(terminal.id, command, 50);
-        setFrequentCommands(matching);
-        setShowFrequentCommands(matching.length > 0);
-      } else {
-        // Si no hay texto, mostrar los más frecuentes (sin límite para poder expandir)
-        const frequent = await terminalCommandService.getFrequentCommands(terminal.id, 50);
-        setFrequentCommands(frequent);
-        setShowFrequentCommands(frequent.length > 0);
-      }
-      // Resetear el estado de "mostrar todos" cuando cambia el comando
-      setShowAllCommands(false);
-    };
-
     const timeoutId = setTimeout(loadFrequentCommands, 300);
     return () => clearTimeout(timeoutId);
   }, [command, terminal.id]);
 
+  // Función para autocompletar con Tab
+  const handleTabCompletion = async (e) => {
+    e.preventDefault();
+    
+    if (!command.trim()) return;
+    
+    const cursorPos = inputRef.current?.selectionStart || command.length;
+    const textBeforeCursor = command.substring(0, cursorPos);
+    const textAfterCursor = command.substring(cursorPos);
+    
+    // Encontrar la última palabra/token antes del cursor
+    const tokens = textBeforeCursor.trim().split(/\s+/);
+    const lastToken = tokens[tokens.length - 1] || '';
+    
+    if (!lastToken) return;
+    
+    try {
+      // Si el token parece una ruta (contiene / o \ o empieza con ./ o ../)
+      if (lastToken.includes('/') || lastToken.includes('\\') || lastToken.startsWith('./') || lastToken.startsWith('../')) {
+        // Autocompletar archivos/carpetas
+        const sep = typeof window !== 'undefined' && window.electronAPI && window.electronAPI.platform === 'win32' ? '\\' : '/';
+        const pathParts = lastToken.split(/[/\\]/);
+        const fileName = pathParts[pathParts.length - 1];
+        const dirPath = pathParts.slice(0, -1).join(sep) || currentDirectory;
+        
+        // Resolver ruta relativa
+        let searchDir = dirPath;
+        if (dirPath.startsWith('./')) {
+          searchDir = pathHelper.join(currentDirectory, dirPath.substring(2));
+        } else if (dirPath.startsWith('../')) {
+          searchDir = pathHelper.join(currentDirectory, dirPath);
+        } else if (!pathHelper.isAbsolute(dirPath)) {
+          searchDir = pathHelper.join(currentDirectory, dirPath);
+        }
+        
+        // Normalizar currentDirectory si es ~
+        if (searchDir === '~' || (currentDirectory === '~' && !dirPath)) {
+          if (window.electronAPI && window.electronAPI.getCurrentDirectory) {
+            try {
+              searchDir = await window.electronAPI.getCurrentDirectory();
+            } catch {
+              searchDir = currentDirectory;
+            }
+          } else {
+            searchDir = currentDirectory;
+          }
+        }
+        
+        if (window.electronAPI && window.electronAPI.listDirectory && searchDir && searchDir !== '~') {
+          const result = await window.electronAPI.listDirectory(searchDir);
+          if (result.files && !result.error) {
+            // Buscar archivos/carpetas que empiecen con fileName
+            const matches = result.files.filter(item => 
+              item.name.toLowerCase().startsWith(fileName.toLowerCase())
+            );
+            
+            if (matches.length === 1) {
+              // Un solo match, completar
+              const match = matches[0];
+              const basePath = pathParts.slice(0, -1).join(sep);
+              const newPath = basePath ? `${basePath}${sep}${match.name}` : match.name;
+              const newCommand = textBeforeCursor.substring(0, textBeforeCursor.length - lastToken.length) + 
+                                newPath + (match.type === 'folder' ? sep : '') + 
+                                textAfterCursor;
+              setCommand(newCommand);
+              // Mover cursor al final del path completado
+              setTimeout(() => {
+                if (inputRef.current) {
+                  const newPos = textBeforeCursor.length - lastToken.length + newPath.length + (match.type === 'folder' ? 1 : 0);
+                  inputRef.current.setSelectionRange(newPos, newPos);
+                }
+              }, 0);
+            } else if (matches.length > 1) {
+              // Múltiples matches, mostrar en output
+              const matchNames = matches.map(m => m.name + (m.type === 'folder' ? '/' : '')).join('  ');
+              const updatedTerminal = {
+                ...terminal,
+                output: (terminal.output || '') + `\n${matchNames}\n`
+              };
+              onUpdateTerminal(updatedTerminal);
+            } else if (matches.length === 0 && fileName) {
+              // Si no hay matches exactos, buscar archivos similares (sin extensión o con extensión diferente)
+              const similarMatches = result.files.filter(item => {
+                const itemNameNoExt = item.name.replace(/\.[^.]+$/, '');
+                const fileNameNoExt = fileName.replace(/\.[^.]+$/, '');
+                // Buscar si el nombre sin extensión coincide
+                return itemNameNoExt.toLowerCase() === fileNameNoExt.toLowerCase() ||
+                       itemNameNoExt.toLowerCase().startsWith(fileNameNoExt.toLowerCase());
+              });
+              
+              if (similarMatches.length === 1) {
+                // Un solo match similar, completar
+                const match = similarMatches[0];
+                const basePath = pathParts.slice(0, -1).join(sep);
+                const newPath = basePath ? `${basePath}${sep}${match.name}` : match.name;
+                const newCommand = textBeforeCursor.substring(0, textBeforeCursor.length - lastToken.length) + 
+                                  newPath + (match.type === 'folder' ? sep : '') + 
+                                  textAfterCursor;
+                setCommand(newCommand);
+                setTimeout(() => {
+                  if (inputRef.current) {
+                    const newPos = textBeforeCursor.length - lastToken.length + newPath.length + (match.type === 'folder' ? 1 : 0);
+                    inputRef.current.setSelectionRange(newPos, newPos);
+                  }
+                }, 0);
+              } else if (similarMatches.length > 1) {
+                // Múltiples matches similares, mostrar en output
+                const matchNames = similarMatches.map(m => m.name + (m.type === 'folder' ? '/' : '')).join('  ');
+                const updatedTerminal = {
+                  ...terminal,
+                  output: (terminal.output || '') + `\nSugerencias: ${matchNames}\n`
+                };
+                onUpdateTerminal(updatedTerminal);
+              }
+            }
+          }
+        }
+      } else {
+        // Autocompletar comandos desde comandos frecuentes
+        const frequent = await terminalCommandService.getFrequentCommands(terminal.id, 50);
+        const matchingCommands = frequent.filter(cmd => 
+          cmd.command.toLowerCase().startsWith(lastToken.toLowerCase()) && 
+          cmd.command.toLowerCase() !== lastToken.toLowerCase()
+        );
+        
+        if (matchingCommands.length === 1) {
+          // Un solo match, completar
+          const match = matchingCommands[0].command;
+          const newCommand = textBeforeCursor.substring(0, textBeforeCursor.length - lastToken.length) + 
+                            match + ' ' + textAfterCursor;
+          setCommand(newCommand);
+          setTimeout(() => {
+            if (inputRef.current) {
+              const newPos = textBeforeCursor.length - lastToken.length + match.length + 1;
+              inputRef.current.setSelectionRange(newPos, newPos);
+            }
+          }, 0);
+        } else if (matchingCommands.length > 1) {
+          // Múltiples matches, mostrar en output
+          const matchNames = matchingCommands.slice(0, 10).map(c => c.command).join('  ');
+          const updatedTerminal = {
+            ...terminal,
+            output: (terminal.output || '') + `\n${matchNames}\n`
+          };
+          onUpdateTerminal(updatedTerminal);
+        }
+      }
+    } catch (error) {
+      console.error('[TerminalTab] Error en autocompletado:', error);
+    }
+  };
+
   const handleKeyDown = (e) => {
+    if (e.key === 'Tab' && !e.shiftKey) {
+      handleTabCompletion(e);
+      return;
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleExecute();
@@ -298,39 +850,82 @@ export default function TerminalTab({
           minHeight: '200px'
         }}
       >
-        {/* Botones de copiar y editar */}
-        {terminal.output && (
-          <div className="absolute top-2 right-2 flex gap-1 z-10">
-            <button
-              onClick={handleCopy}
-              className="p-2 rounded-lg transition-colors"
-              style={{
-                backgroundColor: copied ? 'rgba(34, 197, 94, 0.2)' : 'rgba(0, 0, 0, 0.3)',
-                color: copied ? '#22c55e' : terminalStyles.textColor,
-              }}
-              title={copied ? 'Copiado' : 'Copiar salida'}
-            >
-              {copied ? (
-                <Check className="w-4 h-4" />
-              ) : (
-                <Copy className="w-4 h-4" />
+        {/* Botones de control de proceso y acciones */}
+        <div className="absolute top-2 right-2 flex gap-1 z-10">
+          {/* Botones de control de proceso (si hay un proceso corriendo) */}
+          {isProcessRunning && (
+            <>
+              <button
+                onClick={handleStopProcess}
+                className="p-2 rounded-lg transition-colors hover:bg-red-500/20"
+                style={{
+                  backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                  color: '#ef4444',
+                }}
+                title="Detener proceso (Ctrl+C)"
+              >
+                <Square className="w-4 h-4" />
+              </button>
+              {(lastCommand || commandHistory.length > 0) && (
+                <button
+                  onClick={handleRestartProcess}
+                  className="p-2 rounded-lg transition-colors hover:bg-blue-500/20"
+                  style={{
+                    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                    color: '#3b82f6',
+                  }}
+                  title={`Reiniciar: ${lastCommand || commandHistory[commandHistory.length - 1] || 'último comando'}`}
+                >
+                  <RotateCw className="w-4 h-4" />
+                </button>
               )}
-            </button>
-            <button
-              onClick={handleOpenEditor}
-              className="p-2 rounded-lg transition-colors"
-              style={{
-                backgroundColor: 'rgba(0, 0, 0, 0.3)',
-                color: terminalStyles.textColor,
-              }}
-              title="Copiar y editar (buscar y reemplazar)"
-            >
-              <Edit className="w-4 h-4" />
-            </button>
-          </div>
-        )}
+              <button
+                onClick={() => setShowPortManager(true)}
+                className="p-2 rounded-lg transition-colors hover:bg-purple-500/20"
+                style={{
+                  backgroundColor: 'rgba(147, 51, 234, 0.2)',
+                  color: '#9333ea',
+                }}
+                title="Gestionar puertos"
+              >
+                <Network className="w-4 h-4" />
+              </button>
+            </>
+          )}
+          {/* Botones de copiar y editar */}
+          {terminal.output && (
+            <>
+              <button
+                onClick={handleCopy}
+                className="p-2 rounded-lg transition-colors"
+                style={{
+                  backgroundColor: copied ? 'rgba(34, 197, 94, 0.2)' : 'rgba(0, 0, 0, 0.3)',
+                  color: copied ? '#22c55e' : terminalStyles.textColor,
+                }}
+                title={copied ? 'Copiado' : 'Copiar salida'}
+              >
+                {copied ? (
+                  <Check className="w-4 h-4" />
+                ) : (
+                  <Copy className="w-4 h-4" />
+                )}
+              </button>
+              <button
+                onClick={handleOpenEditor}
+                className="p-2 rounded-lg transition-colors"
+                style={{
+                  backgroundColor: 'rgba(0, 0, 0, 0.3)',
+                  color: terminalStyles.textColor,
+                }}
+                title="Copiar y editar (buscar y reemplazar)"
+              >
+                <Edit className="w-4 h-4" />
+              </button>
+            </>
+          )}
+        </div>
         {terminal.output ? (
-          <pre className="whitespace-pre-wrap break-words" style={{ fontSize: `${terminalStyles.outputFontSize || terminalStyles.fontSize || 14}px` }}>{terminal.output}</pre>
+          <pre className="whitespace-pre-wrap break-words" style={{ fontSize: `${terminalStyles.outputFontSize || terminalStyles.fontSize || 14}px` }}>{stripAnsiCodes(terminal.output)}</pre>
         ) : (
           <div className="text-gray-500" style={{ fontSize: `${terminalStyles.outputFontSize || terminalStyles.fontSize || 14}px` }}>
             Terminal {terminal.name || terminal.id} listo. Escribe comandos para comenzar.
@@ -366,11 +961,56 @@ export default function TerminalTab({
                 return (
                   <button
                     key={index}
-                    onClick={() => {
-                      setCommand(item.command);
+                    onClick={async (e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      
+                      const commandToExecute = item.command;
+                      
+                      // Cerrar el dropdown primero
                       setShowFrequentCommands(false);
                       setShowAllCommands(false);
-                      inputRef.current?.focus();
+                      
+                      // Limpiar el input inmediatamente para que no parezca que no se ejecutó
+                      setCommand('');
+                      
+                      // Guardar el último comando para poder reiniciarlo
+                      setLastCommand(commandToExecute);
+                      
+                      // Actualizar historial
+                      const newHistory = [...commandHistory, commandToExecute];
+                      setCommandHistory(newHistory);
+                      setHistoryIndex(-1);
+                      
+                      // Guardar comando en servicio de comandos frecuentes
+                      await terminalCommandService.saveCommand(terminal.id, commandToExecute);
+                      
+                      // Actualizar historial en el terminal
+                      const updatedTerminal = {
+                        ...terminal,
+                        history: newHistory
+                      };
+                      onUpdateTerminal(updatedTerminal);
+                      
+                      // Ejecutar el comando directamente
+                      await onExecuteCommand(terminal.id, commandToExecute);
+                      
+                      // Detectar si es un comando de larga duración (cualquier tipo)
+                      const isLongRunning = /^(npm|yarn|pnpm)\s+(run\s+)?(dev|start|serve|watch)/i.test(commandToExecute) ||
+                                            /^(python|python3|py)\s+.*(dev|start|serve|runserver|app\.py|main\.py|server\.py)/i.test(commandToExecute) ||
+                                            /^(node|nodemon|ts-node|tsx)\s+.*(dev|start|serve|watch)/i.test(commandToExecute) ||
+                                            /^(uvicorn|gunicorn|flask|django)\s+/i.test(commandToExecute) ||
+                                            /^(dotnet|java|mvn|gradle)\s+.*(run|start)/i.test(commandToExecute);
+                      if (isLongRunning) {
+                        setIsProcessRunning(true);
+                      }
+                      
+                      // Enfocar el input después de un breve delay
+                      setTimeout(() => {
+                        if (inputRef.current) {
+                          inputRef.current.focus();
+                        }
+                      }, 100);
                     }}
                     className="w-full px-3 py-2 text-left hover:bg-gray-700 transition-colors flex items-center justify-between group"
                   >
@@ -388,6 +1028,17 @@ export default function TerminalTab({
                       <span className="text-xs text-gray-500">
                         {item.count}x
                       </span>
+                      <button
+                        onClick={(e) => handleDeleteCommand(e, item.command)}
+                        onMouseDown={(e) => {
+                          // Prevenir que el onBlur del textarea se active cuando se hace clic
+                          e.preventDefault();
+                        }}
+                        className="p-1 hover:bg-red-600 rounded transition-colors opacity-0 group-hover:opacity-100"
+                        title="Eliminar comando"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-gray-400 hover:text-red-400" />
+                      </button>
                     </div>
                   </button>
                 );
@@ -433,9 +1084,23 @@ export default function TerminalTab({
             onActivate();
             setShowFrequentCommands(true);
           }}
-          onBlur={() => {
-            // Delay para permitir clicks en la lista
-            setTimeout(() => setShowFrequentCommands(false), 200);
+          onBlur={(e) => {
+            // Delay para permitir clicks en la lista y botones
+            // Verificar si el elemento relacionado es parte del dropdown
+            const relatedTarget = e.relatedTarget;
+            const isClickOnDropdown = relatedTarget && (
+              relatedTarget.closest('.absolute.bottom-full') ||
+              relatedTarget.closest('button[title="Eliminar comando"]')
+            );
+            
+            if (!isClickOnDropdown) {
+              setTimeout(() => {
+                // Solo cerrar si el focus no está en el dropdown
+                if (document.activeElement && !document.activeElement.closest('.absolute.bottom-full')) {
+                  setShowFrequentCommands(false);
+                }
+              }, 200);
+            }
           }}
           className="flex-1 bg-transparent border-none outline-none font-mono resize-none"
           style={{ 
@@ -561,6 +1226,102 @@ export default function TerminalTab({
                 <Copy className="w-4 h-4" />
                 Copiar editado
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de gestión de puertos */}
+      {showPortManager && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-[60000] flex items-center justify-center p-4"
+          onClick={() => setShowPortManager(false)}
+        >
+          <div 
+            className="bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-gray-700 flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+                <Network className="w-5 h-5" />
+                Gestión de Puertos
+              </h2>
+              <button
+                onClick={() => setShowPortManager(false)}
+                className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+            
+            <div className="p-4 flex-1 overflow-y-auto">
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Número de puerto
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    value={portToCheck}
+                    onChange={(e) => setPortToCheck(e.target.value)}
+                    placeholder="Ej: 5187"
+                    className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    min="1"
+                    max="65535"
+                  />
+                  <button
+                    onClick={handleCheckPort}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                  >
+                    Verificar
+                  </button>
+                  {portToCheck && (
+                    <button
+                      onClick={handleKillAllPortProcesses}
+                      className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+                    >
+                      Matar Todos
+                    </button>
+                  )}
+                </div>
+              </div>
+              
+              {portProcesses.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-medium text-gray-300 mb-2">
+                    Procesos usando el puerto {portToCheck}:
+                  </h3>
+                  <div className="space-y-2">
+                    {portProcesses.map((proc, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center justify-between p-3 bg-gray-700 rounded-lg"
+                      >
+                        <div>
+                          <div className="text-white font-mono text-sm">
+                            PID: {proc.pid}
+                          </div>
+                          <div className="text-gray-400 text-xs">
+                            {proc.name || 'Proceso desconocido'}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleKillProcess(proc.pid)}
+                          className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded transition-colors text-sm"
+                        >
+                          Matar
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {portProcesses.length === 0 && portToCheck && (
+                <div className="text-center py-8 text-gray-400">
+                  No hay procesos usando el puerto {portToCheck}
+                </div>
+              )}
             </div>
           </div>
         </div>

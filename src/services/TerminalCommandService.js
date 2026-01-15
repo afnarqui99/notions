@@ -213,6 +213,25 @@ class TerminalCommandService {
     }
   }
 
+  // Eliminar un comando específico de un terminal
+  async deleteCommand(terminalId, command) {
+    await this.loadCommandsData();
+    
+    if (!this.commandsData[terminalId] || !this.commandsData[terminalId].commands) {
+      return false;
+    }
+
+    const trimmedCommand = command.trim();
+    if (this.commandsData[terminalId].commands[trimmedCommand]) {
+      delete this.commandsData[terminalId].commands[trimmedCommand];
+      this.commandsData[terminalId].lastUpdated = new Date().toISOString();
+      await this.saveCommandsData();
+      return true;
+    }
+
+    return false;
+  }
+
   // Limpiar comandos de un terminal
   async clearTerminalCommands(terminalId) {
     await this.loadCommandsData();
