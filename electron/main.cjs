@@ -739,11 +739,11 @@ function createWindow() {
   // Cargar la aplicación
   // isDev ya está definido arriba
   
-  // Asegurar que DevTools esté cerrado en producción (verificación extra)
-  if (!isDev) {
-    // Forzar cierre de DevTools si está abierto (por seguridad)
-    mainWindow.webContents.closeDevTools();
-  }
+  // Permitir DevTools en producción (F12 habilitado)
+  // Comentado para permitir F12 siempre
+  // if (!isDev) {
+  //   mainWindow.webContents.closeDevTools();
+  // }
   
   if (isDev) {
     // En desarrollo, cargar desde Vite
@@ -927,13 +927,14 @@ function createWindow() {
 
   // Mostrar ventana cuando esté lista
   mainWindow.once('ready-to-show', () => {
-    // Asegurar que DevTools esté cerrado en producción antes de mostrar
-    if (!isDev) {
-      if (mainWindow.webContents.isDevToolsOpened()) {
-        console.log('⚠️ DevTools detectado abierto antes de mostrar ventana, cerrando...');
-        mainWindow.webContents.closeDevTools();
-      }
-    }
+    // Permitir DevTools en producción (F12 habilitado)
+    // Comentado para permitir F12 siempre
+    // if (!isDev) {
+    //   if (mainWindow.webContents.isDevToolsOpened()) {
+    //     console.log('⚠️ DevTools detectado abierto antes de mostrar ventana, cerrando...');
+    //     mainWindow.webContents.closeDevTools();
+    //   }
+    // }
     
     mainWindow.show();
     
@@ -1016,6 +1017,20 @@ app.whenReady().then(() => {
   if (process.platform === 'win32') {
     app.setAppUserModelId('com.notionlocaleditor.app');
   }
+  
+  // Registrar atajo de teclado global para F12 (DevTools)
+  const { globalShortcut } = require('electron');
+  
+  // Registrar F12 para abrir/cerrar DevTools
+  globalShortcut.register('F12', () => {
+    if (mainWindow) {
+      if (mainWindow.webContents.isDevToolsOpened()) {
+        mainWindow.webContents.closeDevTools();
+      } else {
+        mainWindow.webContents.openDevTools();
+      }
+    }
+  });
   
   createWindow();
   createTray();
@@ -2168,6 +2183,9 @@ app.on('window-all-closed', () => {
   // NO cerrar la aplicación, mantenerla en segundo plano para notificaciones
   // Solo cerrar si isQuitting es true (usuario eligió "Salir" desde el menú)
   if (isQuitting) {
+    // Desregistrar atajos globales antes de cerrar
+    const { globalShortcut } = require('electron');
+    globalShortcut.unregisterAll();
     app.quit();
   }
   // En macOS, las aplicaciones normalmente permanecen activas

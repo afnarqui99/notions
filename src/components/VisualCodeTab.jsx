@@ -12,7 +12,9 @@ import {
   Check,
   Edit2,
   Type,
-  Sparkles
+  Sparkles,
+  Terminal,
+  GitBranch
 } from 'lucide-react';
 import { EditorView, basicSetup } from 'codemirror';
 import { closeBrackets } from '@codemirror/autocomplete';
@@ -25,6 +27,8 @@ import { oneDark } from '@codemirror/theme-one-dark';
 import FileExplorer from './FileExplorer';
 import LocalStorageService from '../services/LocalStorageService';
 import AIChatPanel from './AIChatPanel';
+import GitPanel from './GitPanel';
+import GitDiffView from './GitDiffView';
 
 // Panel de Extensiones - Estilo VS Code
 function ExtensionsPanel({ extensions, setExtensions }) {
@@ -153,10 +157,12 @@ export default function VisualCodeTab({
   const [openFiles, setOpenFiles] = useState([]);
   const [showFileExplorer, setShowFileExplorer] = useState(true);
   const [showExtensionsPanel, setShowExtensionsPanel] = useState(false);
+  const [showGitPanel, setShowGitPanel] = useState(false);
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showTitleEditor, setShowTitleEditor] = useState(false);
   const [showAIChat, setShowAIChat] = useState(false);
+  const [gitDiffFile, setGitDiffFile] = useState(null);
   const editorViewRef = useRef(null);
   const editorContainerRef = useRef(null);
   const [projectPath, setProjectPath] = useState(project?.path || '');
@@ -985,9 +991,12 @@ export default function VisualCodeTab({
             {/* Tabs del sidebar */}
             <div className="bg-[#2d2d30] border-b border-[#3e3e42] flex">
               <button
-                onClick={() => setShowExtensionsPanel(false)}
+                onClick={() => {
+                  setShowExtensionsPanel(false);
+                  setShowGitPanel(false);
+                }}
                 className={`px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide transition-colors ${
-                  !showExtensionsPanel 
+                  !showExtensionsPanel && !showGitPanel
                     ? 'bg-[#252526] text-[#ffffff] border-b-2 border-b-[#007acc]' 
                     : 'text-[#cccccc] hover:text-[#ffffff] hover:bg-[#2d2d30]'
                 }`}
@@ -995,9 +1004,25 @@ export default function VisualCodeTab({
                 EXPLORADOR
               </button>
               <button
-                onClick={() => setShowExtensionsPanel(true)}
+                onClick={() => {
+                  setShowExtensionsPanel(false);
+                  setShowGitPanel(true);
+                }}
                 className={`px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide transition-colors ${
-                  showExtensionsPanel 
+                  showGitPanel
+                    ? 'bg-[#252526] text-[#ffffff] border-b-2 border-b-[#007acc]' 
+                    : 'text-[#cccccc] hover:text-[#ffffff] hover:bg-[#2d2d30]'
+                }`}
+              >
+                GIT
+              </button>
+              <button
+                onClick={() => {
+                  setShowExtensionsPanel(true);
+                  setShowGitPanel(false);
+                }}
+                className={`px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide transition-colors ${
+                  showExtensionsPanel
                     ? 'bg-[#252526] text-[#ffffff] border-b-2 border-b-[#007acc]' 
                     : 'text-[#cccccc] hover:text-[#ffffff] hover:bg-[#2d2d30]'
                 }`}
@@ -1006,11 +1031,47 @@ export default function VisualCodeTab({
               </button>
             </div>
             
+            {/* Botón para abrir terminal */}
+            {!showExtensionsPanel && (
+              <div className="px-2 py-2 border-b border-[#3e3e42]">
+                <button
+                  onClick={() => {
+                    // Disparar evento personalizado para abrir terminal en CentroEjecucionPage
+                    const event = new CustomEvent('open-terminal-from-visualcode', {
+                      detail: {
+                        projectPath: projectPath || project?.path,
+                        projectName: projectTitle || project?.title || 'Proyecto'
+                      }
+                    });
+                    window.dispatchEvent(event);
+                  }}
+                  className="w-full px-3 py-2 text-left text-[12px] text-[#cccccc] hover:text-[#ffffff] hover:bg-[#2d2d30] rounded transition-colors flex items-center gap-2"
+                  title="Abrir terminal en una pestaña nueva con la ruta del proyecto"
+                >
+                  <Terminal className="w-4 h-4 flex-shrink-0" />
+                  <span>Abrir Terminal</span>
+                </button>
+              </div>
+            )}
+            
             {/* Contenido del sidebar */}
             {showExtensionsPanel ? (
               <ExtensionsPanel 
                 extensions={extensions} 
                 setExtensions={setExtensions}
+              />
+            ) : showGitPanel ? (
+              <GitPanel
+                projectPath={projectPath}
+                onFileSelect={(filePath) => {
+                  // Mostrar vista dividida cuando se selecciona desde Git
+                  if (filePath && projectPath) {
+                    const fullPath = filePath.startsWith(projectPath) 
+                      ? filePath 
+                      : `${projectPath}/${filePath}`.replace(/\/+/g, '/');
+                    setGitDiffFile(fullPath);
+                  }
+                }}
               />
             ) : (
               <div className="flex-1 overflow-y-auto">
@@ -1033,7 +1094,13 @@ export default function VisualCodeTab({
 
         {/* Editor */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          {activeFile ? (
+          {gitDiffFile ? (
+            <GitDiffView
+              projectPath={projectPath}
+              filePath={gitDiffFile}
+              onClose={() => setGitDiffFile(null)}
+            />
+          ) : activeFile ? (
             <div 
               ref={editorContainerRef} 
               className="flex-1 overflow-auto"

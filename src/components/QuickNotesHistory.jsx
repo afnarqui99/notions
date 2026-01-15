@@ -124,7 +124,7 @@ export default function QuickNotesHistory({ isOpen, onClose, onOpenNote }) {
   if (!isOpen) return null;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Notas Rápidas Guardadas">
+    <Modal isOpen={isOpen} onClose={onClose} title="Notas Rápidas Guardadas" size="5xl">
       <div className="flex gap-4 h-[600px]">
         {/* Lista de notas */}
         <div className={`w-1/3 border-r border-gray-200 dark:border-gray-700 pr-4 ${viewingNote ? '' : 'w-full'}`}>

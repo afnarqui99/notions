@@ -1,6 +1,45 @@
 import { useState, useRef, useEffect } from 'react';
-import { X, Terminal, Settings, Copy, Check, Edit, Search, Replace, Clock, ChevronDown, ChevronUp, Trash2, Square, RotateCw, Network } from 'lucide-react';
+import { X, Terminal, Settings, Copy, Check, Edit, Search, Replace, Clock, ChevronDown, ChevronUp, Trash2, Square, RotateCw, Network, Folder } from 'lucide-react';
 import terminalCommandService from '../services/TerminalCommandService';
+import TerminalCommandGroupsModal from './TerminalCommandGroupsModal';
+import gitService from '../services/GitService';
+
+// Componente para botón de grupo con contador
+function GroupButton({ groupId, group, terminalId, isSelected, onSelect }) {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    const loadCount = async () => {
+      const commands = await terminalCommandService.getFrequentCommands(terminalId, 1000, groupId);
+      setCount(commands.length);
+    };
+    loadCount();
+  }, [groupId, terminalId]);
+
+  return (
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        onSelect();
+      }}
+      className={`px-2 py-1 text-xs rounded transition-colors flex items-center gap-1 ${
+        isSelected
+          ? 'bg-blue-600 text-white'
+          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+      }`}
+      style={{
+        borderLeft: `3px solid ${group.color}`
+      }}
+    >
+      {group.name}
+      {count > 0 && (
+        <span className="text-[10px] opacity-75">
+          ({count})
+        </span>
+      )}
+    </button>
+  );
+}
 
 // Función para limpiar códigos ANSI del output
 const stripAnsiCodes = (text) => {
@@ -67,11 +106,15 @@ export default function TerminalTab({
   const [frequentCommands, setFrequentCommands] = useState([]);
   const [showFrequentCommands, setShowFrequentCommands] = useState(false);
   const [showAllCommands, setShowAllCommands] = useState(false);
+  const [groups, setGroups] = useState({});
+  const [selectedGroup, setSelectedGroup] = useState(null);
+  const [showGroupsModal, setShowGroupsModal] = useState(false);
   const [isProcessRunning, setIsProcessRunning] = useState(false);
   const [lastCommand, setLastCommand] = useState('');
   const [showPortManager, setShowPortManager] = useState(false);
   const [portToCheck, setPortToCheck] = useState('');
   const [portProcesses, setPortProcesses] = useState([]);
+  const [gitBranch, setGitBranch] = useState(null);
   const inputRef = useRef(null);
   const outputRef = useRef(null);
 
@@ -480,14 +523,18 @@ export default function TerminalTab({
 
   // Función para recargar comandos frecuentes
   const loadFrequentCommands = async () => {
+    // Cargar grupos
+    const groupsData = await terminalCommandService.getGroups(terminal.id);
+    setGroups(groupsData || {});
+
     if (command.trim()) {
       // Si hay texto, buscar coincidencias (sin límite para poder expandir)
-      const matching = await terminalCommandService.getMatchingCommands(terminal.id, command, 50);
+      const matching = await terminalCommandService.getMatchingCommands(terminal.id, command, 50, selectedGroup);
       setFrequentCommands(matching);
       setShowFrequentCommands(matching.length > 0);
     } else {
       // Si no hay texto, mostrar los más frecuentes (sin límite para poder expandir)
-      const frequent = await terminalCommandService.getFrequentCommands(terminal.id, 50);
+      const frequent = await terminalCommandService.getFrequentCommands(terminal.id, 50, selectedGroup);
       setFrequentCommands(frequent);
       setShowFrequentCommands(frequent.length > 0);
     }
@@ -534,11 +581,11 @@ export default function TerminalTab({
     }
   };
 
-  // Cargar comandos frecuentes cuando cambia el comando
+  // Cargar comandos frecuentes cuando cambia el comando o el grupo seleccionado
   useEffect(() => {
     const timeoutId = setTimeout(loadFrequentCommands, 300);
     return () => clearTimeout(timeoutId);
-  }, [command, terminal.id]);
+  }, [command, terminal.id, selectedGroup]);
 
   // Función para autocompletar con Tab
   const handleTabCompletion = async (e) => {
@@ -729,19 +776,45 @@ export default function TerminalTab({
     }
   };
 
+  // Cargar información de git cuando cambia el directorio
+  useEffect(() => {
+    const loadGitInfo = async () => {
+      if (!currentDirectory || currentDirectory === '~') {
+        setGitBranch(null);
+        return;
+      }
+
+      try {
+        const branch = await gitService.getCurrentBranch(currentDirectory);
+        setGitBranch(branch);
+      } catch (error) {
+        setGitBranch(null);
+      }
+    };
+
+    loadGitInfo();
+    
+    // Actualizar cada 2 segundos para detectar cambios de rama
+    const interval = setInterval(loadGitInfo, 2000);
+    return () => clearInterval(interval);
+  }, [currentDirectory]);
+
   const getPrompt = () => {
     const cwd = currentDirectory || '~';
     const shell = currentShell || 'bash';
     
     if (shell === 'powershell') {
-      return `PS ${cwd}> `;
+      const branchInfo = gitBranch ? ` [${gitBranch}]` : '';
+      return `PS ${cwd}${branchInfo}> `;
     } else if (shell === 'cmd') {
-      return `${cwd}>`;
+      const branchInfo = gitBranch ? ` [${gitBranch}]` : '';
+      return `${cwd}${branchInfo}>`;
     } else {
       // bash, sh, zsh
       const user = 'user';
       const host = 'localhost';
-      return `${user}@${host}:${cwd}$ `;
+      const branchInfo = gitBranch ? ` (${gitBranch})` : '';
+      return `${user}@${host}:${cwd}${branchInfo}$ `;
     }
   };
 
@@ -951,9 +1024,22 @@ export default function TerminalTab({
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-gray-400" />
                 <span className="text-xs font-semibold text-gray-300">
-                  Comandos frecuentes {frequentCommands.length > 7 && !showAllCommands ? `(${frequentCommands.length})` : ''}
+                  {selectedGroup && groups[selectedGroup] 
+                    ? `${groups[selectedGroup].name} (${frequentCommands.length})`
+                    : `Comandos frecuentes ${frequentCommands.length > 7 && !showAllCommands ? `(${frequentCommands.length})` : ''}`
+                  }
                 </span>
               </div>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowGroupsModal(true);
+                }}
+                className="p-1.5 text-gray-400 hover:text-gray-200 transition-colors"
+                title="Gestionar grupos"
+              >
+                <Folder className="w-4 h-4" />
+              </button>
             </div>
             <div className="py-1">
               {(showAllCommands ? frequentCommands : frequentCommands.slice(0, 7)).map((item, index) => {
@@ -1067,6 +1153,37 @@ export default function TerminalTab({
                 </button>
               )}
             </div>
+            
+            {/* Botones de grupos */}
+            {Object.keys(groups).length > 0 && (
+              <div className="px-3 py-2 border-t border-gray-700 bg-gray-900">
+                <div className="flex items-center gap-1 flex-wrap">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedGroup(null);
+                    }}
+                    className={`px-2 py-1 text-xs rounded transition-colors ${
+                      selectedGroup === null
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
+                  >
+                    Todos
+                  </button>
+                  {Object.entries(groups).map(([groupId, group]) => (
+                    <GroupButton
+                      key={groupId}
+                      groupId={groupId}
+                      group={group}
+                      terminalId={terminal.id}
+                      isSelected={selectedGroup === groupId}
+                      onSelect={() => setSelectedGroup(selectedGroup === groupId ? null : groupId)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
         <div className="font-mono" style={{ color: terminalStyles.promptColor, fontSize: `${terminalStyles.inputFontSize || terminalStyles.fontSize || 14}px` }}>
@@ -1326,6 +1443,16 @@ export default function TerminalTab({
           </div>
         </div>
       )}
+
+      {/* Modal de gestión de grupos */}
+      <TerminalCommandGroupsModal
+        isOpen={showGroupsModal}
+        onClose={() => {
+          setShowGroupsModal(false);
+          loadFrequentCommands(); // Recargar después de cerrar
+        }}
+        terminalId={terminal.id}
+      />
     </div>
   );
 }

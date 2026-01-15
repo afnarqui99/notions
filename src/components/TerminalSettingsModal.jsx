@@ -11,15 +11,17 @@ export default function TerminalSettingsModal({
   const [shell, setShell] = useState(terminal?.shell || 'bash');
   const [currentDirectory, setCurrentDirectory] = useState(terminal?.currentDirectory || '~');
   const [styles, setStyles] = useState(terminal?.styles || {
-    backgroundColor: '#1e1e1e',
-    textColor: '#d4d4d4',
-    promptColor: '#4ec9b0',
-    errorColor: '#f48771',
+    backgroundColor: '#1a0d2e', // Purple theme por defecto
+    textColor: '#e0b0ff',
+    promptColor: '#b794f6',
+    errorColor: '#fc8181',
     fontSize: 14, // Mantener para compatibilidad
     outputFontSize: 14,
-    inputFontSize: 14,
+    inputFontSize: 22, // Valor por defecto 22px
     outputHeight: 400,
-    inputHeight: 80
+    inputHeight: 220, // Valor por defecto 220px
+    headerBackgroundColor: '#1f2937', // Color de fondo del header por defecto
+    headerTextColor: '#ffffff' // Color de texto del header por defecto
   });
 
   useEffect(() => {
@@ -27,17 +29,29 @@ export default function TerminalSettingsModal({
       setName(terminal.name || '');
       setShell(terminal.shell || 'bash');
       setCurrentDirectory(terminal.currentDirectory || '~');
-      setStyles(terminal.styles || {
-        backgroundColor: '#1e1e1e',
-        textColor: '#d4d4d4',
-        promptColor: '#4ec9b0',
-        errorColor: '#f48771',
-        fontSize: 14, // Mantener para compatibilidad
-        outputFontSize: terminal.styles?.outputFontSize || terminal.styles?.fontSize || 14,
-        inputFontSize: terminal.styles?.inputFontSize || terminal.styles?.fontSize || 14,
-        outputHeight: 400,
-        inputHeight: 80
-      });
+      
+      // Si no tiene estilos o tiene el tema dark por defecto, aplicar Purple
+      if (!terminal.styles || terminal.styles.backgroundColor === '#1e1e1e') {
+        setStyles({
+          ...presetThemes.purple,
+          outputFontSize: terminal.styles?.outputFontSize || terminal.styles?.fontSize || 14,
+          inputFontSize: terminal.styles?.inputFontSize || terminal.styles?.fontSize || 22,
+          outputHeight: terminal.styles?.outputHeight || 400,
+          inputHeight: terminal.styles?.inputHeight || 220,
+          headerBackgroundColor: terminal.styles?.headerBackgroundColor || '#1f2937',
+          headerTextColor: terminal.styles?.headerTextColor || '#ffffff'
+        });
+      } else {
+        setStyles({
+          ...terminal.styles,
+          outputFontSize: terminal.styles.outputFontSize || terminal.styles.fontSize || 14,
+          inputFontSize: terminal.styles.inputFontSize || terminal.styles.fontSize || 22,
+          outputHeight: terminal.styles.outputHeight || 400,
+          inputHeight: terminal.styles.inputHeight || 220,
+          headerBackgroundColor: terminal.styles.headerBackgroundColor || '#1f2937',
+          headerTextColor: terminal.styles.headerTextColor || '#ffffff'
+        });
+      }
     }
   }, [terminal, isOpen]);
 
@@ -119,9 +133,11 @@ export default function TerminalSettingsModal({
       errorColor: '#fc8181',
       fontSize: 14,
       outputFontSize: 14,
-      inputFontSize: 14,
+      inputFontSize: 22,
       outputHeight: 400,
-      inputHeight: 80
+      inputHeight: 220,
+      headerBackgroundColor: '#1f2937',
+      headerTextColor: '#ffffff'
     }
   };
 
@@ -171,6 +187,7 @@ export default function TerminalSettingsModal({
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                onFocus={(e) => e.target.select()}
                 placeholder="Terminal 1"
                 className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
               />
@@ -445,6 +462,59 @@ export default function TerminalSettingsModal({
                     onChange={(e) => setStyles({ ...styles, errorColor: e.target.value })}
                     className="flex-1 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono"
                     placeholder="#f48771"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Colores del Header */}
+          <div>
+            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+              Colores del Header
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {/* Fondo del Header */}
+              <div>
+                <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">
+                  Fondo del Header
+                </label>
+                <div className="flex gap-1.5">
+                  <input
+                    type="color"
+                    value={styles.headerBackgroundColor || '#1f2937'}
+                    onChange={(e) => setStyles({ ...styles, headerBackgroundColor: e.target.value })}
+                    className="w-8 h-8 border border-gray-300 dark:border-gray-600 rounded cursor-pointer flex-shrink-0"
+                    title="Color de fondo del header"
+                  />
+                  <input
+                    type="text"
+                    value={styles.headerBackgroundColor || '#1f2937'}
+                    onChange={(e) => setStyles({ ...styles, headerBackgroundColor: e.target.value })}
+                    className="flex-1 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono"
+                    placeholder="#1f2937"
+                  />
+                </div>
+              </div>
+              {/* Texto del Header */}
+              <div>
+                <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">
+                  Texto del Header
+                </label>
+                <div className="flex gap-1.5">
+                  <input
+                    type="color"
+                    value={styles.headerTextColor || '#ffffff'}
+                    onChange={(e) => setStyles({ ...styles, headerTextColor: e.target.value })}
+                    className="w-8 h-8 border border-gray-300 dark:border-gray-600 rounded cursor-pointer flex-shrink-0"
+                    title="Color de texto del header"
+                  />
+                  <input
+                    type="text"
+                    value={styles.headerTextColor || '#ffffff'}
+                    onChange={(e) => setStyles({ ...styles, headerTextColor: e.target.value })}
+                    className="flex-1 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono"
+                    placeholder="#ffffff"
                   />
                 </div>
               </div>

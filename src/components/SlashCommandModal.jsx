@@ -11,6 +11,7 @@ export default function SlashCommandModal({
 }) {
   const [searchTerm, setSearchTerm] = useState(query);
   const [filteredItems, setFilteredItems] = useState([]);
+  const [allItems, setAllItems] = useState([]); // Guardar todos los items originales
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [draggedIndex, setDraggedIndex] = useState(null);
   const [dragOverIndex, setDragOverIndex] = useState(null);
@@ -22,15 +23,23 @@ export default function SlashCommandModal({
     const loadAndSort = async () => {
       if (!items || items.length === 0) {
         setFilteredItems([]);
+        setAllItems([]);
         return;
       }
 
-      let filtered = items;
+      // Guardar todos los items originales si cambian
+      if (JSON.stringify(items) !== JSON.stringify(allItems)) {
+        // Ordenar todos los items por uso o orden personalizado
+        const sortedAll = await commandUsageService.sortCommandsByUsage(items);
+        setAllItems(sortedAll);
+      }
+
+      let filtered = allItems.length > 0 ? allItems : items;
 
       // Filtrar por término de búsqueda
       if (searchTerm && searchTerm.trim()) {
         const term = searchTerm.toLowerCase().trim();
-        filtered = items.filter(item => {
+        filtered = filtered.filter(item => {
           const labelMatch = item.label?.toLowerCase().includes(term);
           const descMatch = item.description?.toLowerCase().includes(term);
           const keywordsMatch = item.keywords?.some(k => k.toLowerCase().includes(term));
@@ -38,14 +47,12 @@ export default function SlashCommandModal({
         });
       }
 
-      // Ordenar por uso (más usados primero) o por orden personalizado
-      const sorted = await commandUsageService.sortCommandsByUsage(filtered);
-      setFilteredItems(sorted);
+      setFilteredItems(filtered);
       setSelectedIndex(0);
     };
 
     loadAndSort();
-  }, [items, searchTerm]);
+  }, [items, searchTerm, allItems]);
 
   // Enfocar el input cuando se abre el modal
   useEffect(() => {
@@ -165,23 +172,47 @@ export default function SlashCommandModal({
       return;
     }
 
-    // Reordenar los items
-    const newItems = [...filteredItems];
-    const draggedItem = newItems[draggedIndex];
-    newItems.splice(draggedIndex, 1);
-    newItems.splice(dropIndex, 0, draggedItem);
+    // Reordenar los items filtrados (visual)
+    const newFilteredItems = [...filteredItems];
+    const draggedItem = newFilteredItems[draggedIndex];
+    newFilteredItems.splice(draggedIndex, 1);
+    newFilteredItems.splice(dropIndex, 0, draggedItem);
     
-    setFilteredItems(newItems);
-    setDraggedIndex(null);
-    setDragOverIndex(null);
+    setFilteredItems(newFilteredItems);
 
-    // Guardar el orden personalizado
-    // Si no hay búsqueda, guardar el orden de todos los items visibles
-    // Si hay búsqueda, no guardar (solo reordenar visualmente)
+    // Si no hay búsqueda, actualizar el orden de todos los items y guardar
     if (!searchTerm || !searchTerm.trim()) {
-      const newOrder = newItems.map(item => item.label);
+      // Crear un mapa del nuevo orden basado en filteredItems
+      const newOrderMap = new Map();
+      newFilteredItems.forEach((item, index) => {
+        newOrderMap.set(item.label, index);
+      });
+      
+      // Reordenar allItems manteniendo los que no están en filteredItems al final
+      const reorderedAllItems = [];
+      const itemsInFiltered = new Set(newFilteredItems.map(item => item.label));
+      
+      // Primero agregar los items en el orden de filteredItems
+      newFilteredItems.forEach(item => {
+        reorderedAllItems.push(item);
+      });
+      
+      // Luego agregar los items que no están en filteredItems (mantener su orden relativo)
+      allItems.forEach(item => {
+        if (!itemsInFiltered.has(item.label)) {
+          reorderedAllItems.push(item);
+        }
+      });
+      
+      setAllItems(reorderedAllItems);
+      
+      // Guardar el orden personalizado completo
+      const newOrder = reorderedAllItems.map(item => item.label);
       await commandUsageService.saveCustomOrder(newOrder);
     }
+    
+    setDraggedIndex(null);
+    setDragOverIndex(null);
   };
 
   if (!isOpen) return null;

@@ -11,6 +11,7 @@ import { json } from '@codemirror/lang-json';
 import { oneDark } from '@codemirror/theme-one-dark';
 import FileExplorer from './FileExplorer';
 import AIChatPanel from './AIChatPanel';
+import GitPanel from './GitPanel';
 
 export default function VisualCodeFullscreenModal({ 
   isOpen, 
@@ -33,6 +34,7 @@ export default function VisualCodeFullscreenModal({
   const [openFiles, setOpenFiles] = useState([]);
   const [fileContents, setFileContents] = useState({});
   const [showFileExplorer, setShowFileExplorer] = useState(true);
+  const [showGitPanel, setShowGitPanel] = useState(false);
   const [theme, setTheme] = useState(initialTheme || 'oneDark');
   const [fontSize, setFontSize] = useState(initialFontSize || 14);
   const [projectColorState, setProjectColorState] = useState(projectColor || '#1e1e1e');
@@ -619,18 +621,56 @@ export default function VisualCodeFullscreenModal({
         {/* File Explorer Sidebar */}
         {showFileExplorer && (
           <div className="w-64 flex-shrink-0 border-r border-[#3e3e42] bg-[#252526] overflow-hidden flex flex-col">
-            <FileExplorer
-              isOpen={showFileExplorer}
-              onClose={() => setShowFileExplorer(false)}
-              projectPath={projectPathState}
-              onFileSelect={(filePath, content) => {
-                loadFile(filePath, content);
-              }}
-              onProjectPathChange={setProjectPathState}
-              hideHeader={true}
-              vscodeStyle={true}
-              openFiles={openFiles}
-            />
+            {/* Tabs del sidebar */}
+            <div className="bg-[#2d2d30] border-b border-[#3e3e42] flex">
+              <button
+                onClick={() => setShowGitPanel(false)}
+                className={`px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide transition-colors ${
+                  !showGitPanel
+                    ? 'bg-[#252526] text-[#ffffff] border-b-2 border-b-[#007acc]' 
+                    : 'text-[#cccccc] hover:text-[#ffffff] hover:bg-[#2d2d30]'
+                }`}
+              >
+                EXPLORADOR
+              </button>
+              <button
+                onClick={() => setShowGitPanel(true)}
+                className={`px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide transition-colors ${
+                  showGitPanel
+                    ? 'bg-[#252526] text-[#ffffff] border-b-2 border-b-[#007acc]' 
+                    : 'text-[#cccccc] hover:text-[#ffffff] hover:bg-[#2d2d30]'
+                }`}
+              >
+                GIT
+              </button>
+            </div>
+            
+            {showGitPanel ? (
+              <GitPanel
+                projectPath={projectPathState}
+                onFileSelect={(filePath) => {
+                  if (filePath && projectPathState) {
+                    const fullPath = filePath.startsWith(projectPathState) 
+                      ? filePath 
+                      : `${projectPathState}/${filePath}`.replace(/\/+/g, '/');
+                    loadFile(fullPath, null);
+                  }
+                }}
+              />
+            ) : (
+              <FileExplorer
+                isOpen={showFileExplorer}
+                onClose={() => setShowFileExplorer(false)}
+                projectPath={projectPathState}
+                onFileSelect={(filePath, content) => {
+                  loadFile(filePath, content);
+                }}
+                onProjectPathChange={setProjectPathState}
+                hideHeader={true}
+                vscodeStyle={true}
+                openFiles={openFiles}
+              />
+            )}
           </div>
         )}
 

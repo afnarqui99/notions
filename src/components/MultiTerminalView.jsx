@@ -120,19 +120,25 @@ export default function MultiTerminalView({
   }, [activeTerminalId]);
 
   const createDefaultTerminal = (index = 0) => {
-    const isWindows = typeof window !== 'undefined' && window.electronAPI?.platform === 'win32';
     return {
       id: `terminal-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       name: `Terminal ${index + 1}`,
-      shell: isWindows ? 'cmd' : 'bash',
+      shell: 'bash', // Por defecto bash
       currentDirectory: '~',
       output: '',
       history: [],
       styles: {
-        backgroundColor: '#1e1e1e',
-        textColor: '#d4d4d4',
-        promptColor: '#4ec9b0',
-        errorColor: '#f48771'
+        backgroundColor: '#1a0d2e', // Purple theme por defecto
+        textColor: '#e0b0ff',
+        promptColor: '#b794f6',
+        errorColor: '#fc8181',
+        fontSize: 14,
+        outputFontSize: 14,
+        inputFontSize: 22, // Valor por defecto 22px
+        outputHeight: 400,
+        inputHeight: 220, // Valor por defecto 220px
+        headerBackgroundColor: '#1f2937', // Color de fondo del header por defecto
+        headerTextColor: '#ffffff' // Color de texto del header por defecto
       },
       createdAt: new Date().toISOString()
     };
@@ -552,47 +558,63 @@ Para comandos completos del sistema, usa la versión Electron de la aplicación.
     <div className="flex flex-col h-full bg-gray-900">
       {/* Tabs - Solo mostrar si no están ocultas */}
       {!hideTabs && (
-        <div className="flex items-center gap-1 px-2 py-1 bg-gray-800 border-b border-gray-700 overflow-x-auto">
-          {localTerminals.map(terminal => (
-            <button
-              key={terminal.id}
-              onClick={() => {
-                setLocalActiveId(terminal.id);
-                onUpdateActiveTerminal(terminal.id);
-              }}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-t transition-colors text-sm ${
-                terminal.id === localActiveId
-                  ? 'bg-gray-900 text-white'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
-            >
-              <Terminal className="w-3 h-3" />
-              <span>{terminal.name}</span>
+        <div 
+          className="flex items-center gap-1 px-2 py-1 border-b border-gray-700 overflow-x-auto"
+          style={{
+            backgroundColor: activeTerminal?.styles?.headerBackgroundColor || '#1f2937'
+          }}
+        >
+          {localTerminals.map(terminal => {
+            const isActive = terminal.id === localActiveId;
+            const headerBg = terminal.styles?.headerBackgroundColor || '#1f2937';
+            const headerText = terminal.styles?.headerTextColor || '#ffffff';
+            const inactiveBg = isActive ? headerBg : `${headerBg}80`; // 50% opacity para inactivas
+            const inactiveText = isActive ? headerText : `${headerText}80`;
+            
+            return (
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSettingsTerminal(terminal);
-                  setShowSettings(true);
+                key={terminal.id}
+                onClick={() => {
+                  setLocalActiveId(terminal.id);
+                  onUpdateActiveTerminal(terminal.id);
                 }}
-                className="hover:bg-gray-600 rounded p-0.5 ml-1"
-                title="Configurar terminal"
+                className="flex items-center gap-2 px-3 py-1.5 rounded-t transition-colors text-sm"
+                style={{
+                  backgroundColor: isActive ? headerBg : inactiveBg,
+                  color: isActive ? headerText : inactiveText
+                }}
               >
-                <Settings className="w-3 h-3" />
-              </button>
-              {localTerminals.length > 1 && (
+                <Terminal className="w-3 h-3" />
+                <span>{terminal.name}</span>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    removeTerminal(terminal.id);
+                    setSettingsTerminal(terminal);
+                    setShowSettings(true);
                   }}
-                  className="hover:bg-gray-600 rounded p-0.5"
-                  title="Cerrar terminal"
+                  className="rounded p-0.5 ml-1 opacity-70 hover:opacity-100 transition-opacity"
+                  style={{
+                    backgroundColor: isActive ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.05)'
+                  }}
+                  title="Configurar terminal"
                 >
-                  <X className="w-3 h-3" />
+                  <Settings className="w-3 h-3" />
                 </button>
-              )}
-            </button>
-          ))}
+                {localTerminals.length > 1 && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeTerminal(terminal.id);
+                    }}
+                    className="hover:bg-gray-600 rounded p-0.5"
+                    title="Cerrar terminal"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </button>
+            );
+          })}
           <button
             onClick={addTerminal}
             className="px-2 py-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
