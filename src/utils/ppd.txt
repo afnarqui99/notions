@@ -1,0 +1,215 @@
+/**
+ * Pruebas unitarias para parsePaymentDetail.js
+ * 
+ * Ejecutar con: npm test -- parsePaymentDetail.test.js --watchAll=false
+ * O con: react-scripts test --watchAll=false parsePaymentDetail.test.js
+ */
+
+import "@testing-library/jest-dom";
+import { parsePaymentDetail, findMasterInfo, filterAndParsePaymentDetails } from '../parsePaymentDetail';
+import { PREFIX_TRASLADO_A_FONDO, PAYMENT_TYPE_RECHAZO, PAYMENT_TYPE_DIVIDENDOS } from '../texts';
+
+afterAll(() => {
+  jest.resetAllMocks();
+});
+
+describe('parsePaymentDetail', () => {
+  test('debe retornar null si el detalle es null o undefined', () => {
+    expect(parsePaymentDetail(null)).toBeNull();
+    expect(parsePaymentDetail(undefined)).toBeNull();
+  });
+
+  test('debe retornar null si el detalle no es un string', () => {
+    expect(parsePaymentDetail(123)).toBeNull();
+    expect(parsePaymentDetail({})).toBeNull();
+    expect(parsePaymentDetail([])).toBeNull();
+  });
+
+  test('debe retornar null si no empieza con el prefijo correcto', () => {
+    expect(parsePaymentDetail('OTRO TEXTO')).toBeNull();
+    expect(parsePaymentDetail('traslado a fondo')).toBeNull();
+  });
+
+  test('debe parsear correctamente un detalle con paréntesis', () => {
+    const detalle = 'TRASLADO A FONDO LIQUIDEZ BTG(RECHAZO PAGO BTG)';
+    const result = parsePaymentDetail(detalle);
+    expect(result).toEqual({
+      fondo: 'LIQUIDEZ',
+      concepto: 'RECHAZO PAGO BTG'
+    });
+  });
+
+  test('debe parsear correctamente un detalle con paréntesis y múltiples espacios', () => {
+    const detalle = 'TRASLADO A FONDO LIQUIDEZ   BTG(RECHAZO PAGO BTG)';
+    const result = parsePaymentDetail(detalle);
+    expect(result).toEqual({
+      fondo: 'LIQUIDEZ',
+      concepto: 'RECHAZO PAGO BTG'
+    });
+  });
+
+  test('debe parsear correctamente un detalle sin paréntesis con múltiples palabras', () => {
+    const detalle = 'TRASLADO A FONDO LIQUIDEZ DIVIDENDOS';
+    const result = parsePaymentDetail(detalle);
+    expect(result).toEqual({
+      fondo: 'LIQUIDEZ',
+      concepto: 'DIVIDENDOS'
+    });
+  });
+
+  test('debe parsear correctamente un detalle sin paréntesis con una sola palabra', () => {
+    const detalle = 'TRASLADO A FONDO DEUDA';
+    const result = parsePaymentDetail(detalle);
+    expect(result).toEqual({
+      fondo: 'DEUDA',
+      concepto: 'DEUDA'
+    });
+  });
+
+  test('debe parsear correctamente un detalle en minúsculas', () => {
+    const detalle = 'traslado a fondo liquidez btg(rechazo pago btg)';
+    const result = parsePaymentDetail(detalle);
+    expect(result).toEqual({
+      fondo: 'LIQUIDEZ',
+      concepto: 'RECHAZO PAGO BTG'
+    });
+  });
+
+  test('debe retornar null si solo tiene el prefijo sin más contenido', () => {
+    expect(parsePaymentDetail('TRASLADO A FONDO')).toBeNull();
+    expect(parsePaymentDetail('TRASLADO A FONDO ')).toBeNull();
+  });
+});
+
+describe('findMasterInfo', () => {
+  const masterData = [
+    {
+      fondo: 'LIQUIDEZ',
+      concepto: 'RECHAZO PAGO BTG',
+      numeroCuenta: '123456',
+      tipoCuenta: 'AHORROS',
+      banco: 'BTG'
+    },
+    {
+      fondo: 'DEUDA',
+      concepto: 'DIVIDENDOS',
+      numeroCuenta: '789012',
+      tipoCuenta: 'CORRIENTE',
+      banco: 'BANCOLOMBIA'
+    },
+    {
+      fondo: 'PRIVADA',
+      concepto: 'OTRO CONCEPTO',
+      numeroCuenta: '345678',
+      tipoCuenta: 'AHORROS',
+      banco: 'DAVIVIENDA'
+    }
+  ];
+
+  test('debe retornar null si masterData es null o undefined', () => {
+    expect(findMasterInfo(null, 'LIQUIDEZ', 'RECHAZO PAGO BTG')).toBeNull();
+    expect(findMasterInfo(undefined, 'LIQUIDEZ', 'RECHAZO PAGO BTG')).toBeNull();
+  });
+
+  test('debe retornar null si masterData no es un array', () => {
+    expect(findMasterInfo({}, 'LIQUIDEZ', 'RECHAZO PAGO BTG')).toBeNull();
+    expect(findMasterInfo('string', 'LIQUIDEZ', 'RECHAZO PAGO BTG')).toBeNull();
+  });
+
+  test('debe encontrar coincidencia exacta por fondo y concepto', () => {
+    const result = findMasterInfo(masterData, 'LIQUIDEZ', 'RECHAZO PAGO BTG');
+    expect(result).toEqual(masterData[0]);
+  });
+
+  test('debe encontrar coincidencia solo por fondo si no hay coincidencia exacta', () => {
+    const result = findMasterInfo(masterData, 'LIQUIDEZ', 'OTRO CONCEPTO');
+    expect(result).toEqual(masterData[0]);
+  });
+
+  test('debe encontrar coincidencia solo por concepto si no hay coincidencia por fondo', () => {
+    const result = findMasterInfo(masterData, 'OTRO FONDO', 'DIVIDENDOS');
+    expect(result).toEqual(masterData[1]);
+  });
+
+  test('debe retornar null si no encuentra ninguna coincidencia', () => {
+    const result = findMasterInfo(masterData, 'FONDO INEXISTENTE', 'CONCEPTO INEXISTENTE');
+    expect(result).toBeNull();
+  });
+
+  test('debe ser case-insensitive en la búsqueda', () => {
+    const result = findMasterInfo(masterData, 'liquidez', 'rechazo pago btg');
+    expect(result).toEqual(masterData[0]);
+  });
+});
+
+describe('filterAndParsePaymentDetails', () => {
+  const masterData = [
+    {
+      fondo: 'LIQUIDEZ',
+      concepto: 'RECHAZO PAGO BTG',
+      numeroCuenta: '123456',
+      tipoCuenta: 'AHORROS',
+      banco: 'BTG',
+      tipoDocumento: 'CC',
+      numeroDocumento: '1234567890',
+      nombreTitular: 'Juan Pérez'
+    }
+  ];
+
+  test('debe retornar array vacío si rows es null o undefined', () => {
+    expect(filterAndParsePaymentDetails(null, masterData)).toEqual([]);
+    expect(filterAndParsePaymentDetails(undefined, masterData)).toEqual([]);
+  });
+
+  test('debe retornar array vacío si rows no es un array', () => {
+    expect(filterAndParsePaymentDetails({}, masterData)).toEqual([]);
+    expect(filterAndParsePaymentDetails('string', masterData)).toEqual([]);
+  });
+
+  test('debe filtrar solo las filas que empiecen con el prefijo', () => {
+    const rows = [
+      { detalle: 'TRASLADO A FONDO LIQUIDEZ BTG(RECHAZO PAGO BTG)', id: 1 },
+      { detalle: 'OTRO DETALLE', id: 2 },
+      { detalle: 'TRASLADO A FONDO DEUDA DIVIDENDOS', id: 3 },
+      { detalle: 'PAGO NORMAL', id: 4 }
+    ];
+    const result = filterAndParsePaymentDetails(rows, masterData);
+    expect(result).toHaveLength(2);
+    expect(result[0].id).toBe(1);
+    expect(result[1].id).toBe(3);
+  });
+
+  test('debe enriquecer las filas con información del maestro cuando encuentra coincidencia', () => {
+    const rows = [
+      { detalle: 'TRASLADO A FONDO LIQUIDEZ BTG(RECHAZO PAGO BTG)', id: 1 }
+    ];
+    const result = filterAndParsePaymentDetails(rows, masterData);
+    expect(result[0]).toMatchObject({
+      id: 1,
+      fondo: 'LIQUIDEZ',
+      concepto: 'RECHAZO PAGO BTG',
+      cuentaDestino: '123456',
+      tipoCuentaDestino: 'AHORROS',
+      bancoDestino: 'BTG',
+      tipoDocumentoDestino: 'CC',
+      numeroDocumentoDestino: '1234567890',
+      nombreTitularDestino: 'Juan Pérez'
+    });
+  });
+
+  test('debe retornar filas con datos parseados pero sin información del maestro si no encuentra coincidencia', () => {
+    const rows = [
+      { detalle: 'TRASLADO A FONDO FONDO_INEXISTENTE(CONCEPTO_INEXISTENTE)', id: 1 }
+    ];
+    const result = filterAndParsePaymentDetails(rows, masterData);
+    expect(result[0]).toMatchObject({
+      id: 1,
+      fondo: 'FONDO_INEXISTENTE',
+      concepto: 'CONCEPTO_INEXISTENTE',
+      cuentaDestino: null,
+      tipoCuentaDestino: null,
+      bancoDestino: null
+    });
+  });
+});
+

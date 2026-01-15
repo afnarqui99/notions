@@ -114,31 +114,61 @@ class TerminalCommandService {
     if (!this.commandsData[terminalId]) {
       this.commandsData[terminalId] = {
         commands: {},
+        groups: {}, // { groupId: { name, color, commandIds: [] } }
         lastUpdated: new Date().toISOString()
       };
     }
 
-    const trimmedCommand = command.trim();
-    if (!this.commandsData[terminalId].commands[trimmedCommand]) {
-      this.commandsData[terminalId].commands[trimmedCommand] = 0;
+    // Inicializar groups si no existe
+    if (!this.commandsData[terminalId].groups) {
+      this.commandsData[terminalId].groups = {};
     }
 
-    this.commandsData[terminalId].commands[trimmedCommand]++;
+    const trimmedCommand = command.trim();
+    if (!this.commandsData[terminalId].commands[trimmedCommand]) {
+      this.commandsData[terminalId].commands[trimmedCommand] = {
+        count: 0,
+        groupId: null // Por defecto sin grupo
+      };
+    }
+
+    // Si commands[command] es un número (formato antiguo), migrar a objeto
+    if (typeof this.commandsData[terminalId].commands[trimmedCommand] === 'number') {
+      this.commandsData[terminalId].commands[trimmedCommand] = {
+        count: this.commandsData[terminalId].commands[trimmedCommand],
+        groupId: null
+      };
+    }
+
+    this.commandsData[terminalId].commands[trimmedCommand].count++;
     this.commandsData[terminalId].lastUpdated = new Date().toISOString();
 
     await this.saveCommandsData();
   }
 
   // Obtener comandos más frecuentes para un terminal
-  async getFrequentCommands(terminalId, limit = 7) {
+  async getFrequentCommands(terminalId, limit = 7, groupId = null) {
     await this.loadCommandsData();
 
     if (!this.commandsData[terminalId] || !this.commandsData[terminalId].commands) {
       return [];
     }
 
-    const commands = Object.entries(this.commandsData[terminalId].commands)
-      .map(([command, count]) => ({ command, count }))
+    let commands = Object.entries(this.commandsData[terminalId].commands)
+      .map(([command, data]) => {
+        // Compatibilidad con formato antiguo (número)
+        const count = typeof data === 'number' ? data : data.count;
+        const cmdGroupId = typeof data === 'object' ? data.groupId : null;
+        return { command, count, groupId: cmdGroupId };
+      });
+
+    // Filtrar por grupo si se especifica
+    if (groupId) {
+      commands = commands.filter(cmd => cmd.groupId === groupId);
+    }
+
+    // Ordenar por frecuencia y limitar
+    commands = commands
       .sort((a, b) => b.count - a.count)
       .slice(0, limit);
 
@@ -146,9 +176,9 @@ class TerminalCommandService {
   }
 
   // Obtener comandos que coinciden con un prefijo
-  async getMatchingCommands(terminalId, prefix, limit = 7) {
+  async getMatchingCommands(terminalId, prefix, limit = 7, groupId = null) {
     if (!prefix || !prefix.trim()) {
-      return await this.getFrequentCommands(terminalId, limit);
+      return await this.getFrequentCommands(terminalId, limit, groupId);
     }
 
     await this.loadCommandsData();
@@ -158,9 +188,21 @@ class TerminalCommandService {
     }
 
     const prefixLower = prefix.toLowerCase().trim();
-    const matching = Object.entries(this.commandsData[terminalId].commands)
+    let matching = Object.entries(this.commandsData[terminalId].commands)
       .filter(([command]) => command.toLowerCase().startsWith(prefixLower))
-      .map(([command, count]) => ({ command, count }))
+      .map(([command, data]) => {
+        // Compatibilidad con formato antiguo
+        const count = typeof data === 'number' ? data : data.count;
+        const cmdGroupId = typeof data === 'object' ? data.groupId : null;
+        return { command, count, groupId: cmdGroupId };
+      });
+
+    // Filtrar por grupo si se especifica
+    if (groupId) {
+      matching = matching.filter(cmd => cmd.groupId === groupId);
+    }
+
+    matching = matching
       .sort((a, b) => {
         // Primero por si empieza exactamente con el prefijo
         const aExact = a.command.toLowerCase().startsWith(prefixLower);
@@ -255,17 +297,167 @@ class TerminalCommandService {
 
     const commands = this.commandsData[terminalId].commands;
     const entries = Object.entries(commands);
-    const totalCommands = entries.reduce((sum, [, count]) => sum + count, 0);
+    const totalCommands = entries.reduce((sum, [, data]) => {
+      const count = typeof data === 'number' ? data : data.count;
+      return sum + count;
+    }, 0);
     const uniqueCommands = entries.length;
     const mostUsed = entries.length > 0 
-      ? entries.sort((a, b) => b[1] - a[1])[0]
+      ? entries.sort((a, b) => {
+          const aCount = typeof a[1] === 'number' ? a[1] : a[1].count;
+          const bCount = typeof b[1] === 'number' ? b[1] : b[1].count;
+          return bCount - aCount;
+        })[0]
       : null;
 
     return {
       totalCommands,
       uniqueCommands,
-      mostUsed: mostUsed ? { command: mostUsed[0], count: mostUsed[1] } : null
+      mostUsed: mostUsed ? { 
+        command: mostUsed[0], 
+        count: typeof mostUsed[1] === 'number' ? mostUsed[1] : mostUsed[1].count 
+      } : null
     };
+  }
+
+  // Obtener todos los grupos de un terminal
+  async getGroups(terminalId) {
+    await this.loadCommandsData();
+    
+    if (!this.commandsData[terminalId] || !this.commandsData[terminalId].groups) {
+      return {};
+    }
+
+    return this.commandsData[terminalId].groups;
+  }
+
+  // Crear un nuevo grupo
+  async createGroup(terminalId, name, color = '#3b82f6') {
+    await this.loadCommandsData();
+
+    if (!this.commandsData[terminalId]) {
+      this.commandsData[terminalId] = {
+        commands: {},
+        groups: {},
+        lastUpdated: new Date().toISOString()
+      };
+    }
+
+    if (!this.commandsData[terminalId].groups) {
+      this.commandsData[terminalId].groups = {};
+    }
+
+    const groupId = `group-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    this.commandsData[terminalId].groups[groupId] = {
+      name: name.trim(),
+      color: color,
+      createdAt: new Date().toISOString()
+    };
+
+    this.commandsData[terminalId].lastUpdated = new Date().toISOString();
+    await this.saveCommandsData();
+
+    return groupId;
+  }
+
+  // Actualizar un grupo
+  async updateGroup(terminalId, groupId, updates) {
+    await this.loadCommandsData();
+
+    if (!this.commandsData[terminalId] || !this.commandsData[terminalId].groups || !this.commandsData[terminalId].groups[groupId]) {
+      return false;
+    }
+
+    this.commandsData[terminalId].groups[groupId] = {
+      ...this.commandsData[terminalId].groups[groupId],
+      ...updates,
+      updatedAt: new Date().toISOString()
+    };
+
+    this.commandsData[terminalId].lastUpdated = new Date().toISOString();
+    await this.saveCommandsData();
+
+    return true;
+  }
+
+  // Eliminar un grupo
+  async deleteGroup(terminalId, groupId) {
+    await this.loadCommandsData();
+
+    if (!this.commandsData[terminalId] || !this.commandsData[terminalId].groups || !this.commandsData[terminalId].groups[groupId]) {
+      return false;
+    }
+
+    // Desasignar comandos del grupo antes de eliminarlo
+    if (this.commandsData[terminalId].commands) {
+      Object.keys(this.commandsData[terminalId].commands).forEach(command => {
+        const cmdData = this.commandsData[terminalId].commands[command];
+        if (typeof cmdData === 'object' && cmdData.groupId === groupId) {
+          cmdData.groupId = null;
+        }
+      });
+    }
+
+    delete this.commandsData[terminalId].groups[groupId];
+    this.commandsData[terminalId].lastUpdated = new Date().toISOString();
+    await this.saveCommandsData();
+
+    return true;
+  }
+
+  // Asignar un comando a un grupo
+  async assignCommandToGroup(terminalId, command, groupId) {
+    await this.loadCommandsData();
+
+    if (!this.commandsData[terminalId] || !this.commandsData[terminalId].commands) {
+      return false;
+    }
+
+    const trimmedCommand = command.trim();
+    if (!this.commandsData[terminalId].commands[trimmedCommand]) {
+      return false;
+    }
+
+    // Migrar formato antiguo si es necesario
+    if (typeof this.commandsData[terminalId].commands[trimmedCommand] === 'number') {
+      this.commandsData[terminalId].commands[trimmedCommand] = {
+        count: this.commandsData[terminalId].commands[trimmedCommand],
+        groupId: groupId
+      };
+    } else {
+      this.commandsData[terminalId].commands[trimmedCommand].groupId = groupId;
+    }
+
+    this.commandsData[terminalId].lastUpdated = new Date().toISOString();
+    await this.saveCommandsData();
+
+    return true;
+  }
+
+  // Remover un comando de su grupo
+  async removeCommandFromGroup(terminalId, command) {
+    await this.loadCommandsData();
+
+    if (!this.commandsData[terminalId] || !this.commandsData[terminalId].commands) {
+      return false;
+    }
+
+    const trimmedCommand = command.trim();
+    if (!this.commandsData[terminalId].commands[trimmedCommand]) {
+      return false;
+    }
+
+    // Migrar formato antiguo si es necesario
+    if (typeof this.commandsData[terminalId].commands[trimmedCommand] === 'number') {
+      // Ya está sin grupo
+      return true;
+    }
+
+    this.commandsData[terminalId].commands[trimmedCommand].groupId = null;
+    this.commandsData[terminalId].lastUpdated = new Date().toISOString();
+    await this.saveCommandsData();
+
+    return true;
   }
 }
 

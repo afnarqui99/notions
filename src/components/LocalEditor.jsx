@@ -32,6 +32,7 @@ import TaskItem from "@tiptap/extension-task-item";
 import { Toggle } from "../extensions/Toggle";
 import { Comment } from "../extensions/Comment";
 import { Settings, Plus, Image as ImageIcon, Paperclip, Download, Trash2, Tag as TagIcon, FileText, Save, Clock, MessageSquare, MoreVertical, Database, Zap, FolderOpen, X, Minimize2 } from "lucide-react";
+import QuickScrollNavigation from "./QuickScrollNavigation";
 import LocalStorageService from "../services/LocalStorageService";
 import Modal from "./Modal";
 import ConfigModal from "./ConfigModal";
@@ -54,6 +55,7 @@ import VersionService from "../services/VersionService";
 import CommentPanel from "./CommentPanel";
 import QuickNote from "./QuickNote";
 import QuickNotesHistory from "./QuickNotesHistory";
+import GeneralNotesHistory from "./GeneralNotesHistory";
 import ConsolePanel from "./ConsolePanel";
 import CentroEjecucionPage from "./CentroEjecucionPage";
 import KeyboardShortcuts from "./KeyboardShortcuts";
@@ -104,6 +106,7 @@ export default function LocalEditor({ onShowConfig }) {
 
   const [titulo, setTitulo] = useState("");
   const editorRef = useRef(null);
+  const editorContainerRef = useRef(null);
   const intervaloRef = useRef(null);
   const lastHandleRef = useRef(!!LocalStorageService.baseDirectoryHandle);
   const [paginas, setPaginas] = useState([]);
@@ -140,7 +143,9 @@ export default function LocalEditor({ onShowConfig }) {
   const pendingReloadRef = useRef(false);
   const [showQuickNote, setShowQuickNote] = useState(false);
   const [showQuickNotesHistory, setShowQuickNotesHistory] = useState(false);
+  const [showGeneralNotesHistory, setShowGeneralNotesHistory] = useState(false);
   const [quickNoteToLoad, setQuickNoteToLoad] = useState(null);
+  const [generalNoteToEdit, setGeneralNoteToEdit] = useState(null);
   const [showConsole, setShowConsole] = useState(false);
   const [showCentroEjecucion, setShowCentroEjecucion] = useState(false);
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
@@ -1098,6 +1103,19 @@ export default function LocalEditor({ onShowConfig }) {
         setShowGlobalSearch(true);
         return;
       }
+      // Ctrl+G - Notas generales
+      if (e.ctrlKey && !e.metaKey && e.key.toLowerCase() === 'g' && !e.shiftKey) {
+        const target = e.target;
+        const isRealInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
+        if (!isRealInput) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (!showGeneralNotesHistory) {
+            setShowGeneralNotesHistory(true);
+          }
+        }
+      }
+      
       // Ctrl+Q - Nota rápida (solo Ctrl, no Cmd, para evitar conflictos en Mac)
       if (e.ctrlKey && !e.metaKey && e.key.toLowerCase() === 'q' && !e.shiftKey) {
         // Solo prevenir si no estamos en un input/textarea real (no el editor)
@@ -2607,6 +2625,7 @@ export default function LocalEditor({ onShowConfig }) {
           setQuickNoteToLoad(null);
         }}
         onShowHistory={() => setShowQuickNotesHistory(true)}
+        onShowGeneralNotes={() => setShowGeneralNotesHistory(true)}
         initialNote={quickNoteToLoad}
       />
 
@@ -2618,6 +2637,24 @@ export default function LocalEditor({ onShowConfig }) {
           setQuickNoteToLoad(note);
           setShowQuickNote(true);
         }}
+      />
+
+      {/* Historial de Notas Generales */}
+      <GeneralNotesHistory
+        isOpen={showGeneralNotesHistory}
+        onClose={() => {
+          setShowGeneralNotesHistory(false);
+          setGeneralNoteToEdit(null);
+        }}
+        onEditNote={(note) => {
+          setGeneralNoteToEdit(note);
+          setShowGeneralNotesHistory(false);
+          // Abrir modal de edición después de un momento
+          setTimeout(() => {
+            // Se abrirá desde GeneralNotesHistory
+          }, 100);
+        }}
+        initialNoteToEdit={generalNoteToEdit}
       />
 
       {/* Consola de Ejecución */}
@@ -2927,11 +2964,14 @@ export default function LocalEditor({ onShowConfig }) {
           </div>
 
           {/* Área de edición */}
-          <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-900 transition-colors">
+          <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-900 transition-colors" ref={editorContainerRef}>
             <div className="max-w-4xl mx-auto px-4 py-4">
               <EditorContent editor={editor} className="tiptap" ref={editorRef} />
             </div>
           </div>
+          
+          {/* Navegación rápida */}
+          <QuickScrollNavigation containerRef={editorContainerRef} />
         </div>
         ) : (
           <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900 transition-colors">

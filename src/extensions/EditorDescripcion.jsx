@@ -24,6 +24,7 @@ import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import { Toggle } from "./Toggle";
 import EmojiPicker from '../components/EmojiPicker';
+import QuickScrollNavigation from '../components/QuickScrollNavigation';
 
 export default function EditorDescripcion({ content, onChange, autoFocus = false }) {
   const isUpdatingFromEditor = useRef(false);
@@ -470,7 +471,7 @@ export default function EditorDescripcion({ content, onChange, autoFocus = false
   return (
     <div 
       ref={editorContainerRef}
-      className="w-full h-full px-4 py-6 overflow-y-auto flex flex-col" 
+      className="w-full h-full px-4 py-6 overflow-y-auto flex flex-col relative" 
       style={{ 
         position: 'relative',
         width: '100%',
@@ -539,6 +540,9 @@ export default function EditorDescripcion({ content, onChange, autoFocus = false
           />
         </div>
       )}
+      
+      {/* Navegación rápida */}
+      <QuickScrollNavigation containerRef={editorContainerRef} />
     </div>
   );
 }

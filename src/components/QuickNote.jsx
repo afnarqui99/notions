@@ -1,15 +1,19 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, Save, FileText, History } from 'lucide-react';
+import { X, Save, FileText, History, Tag } from 'lucide-react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import QuickNoteService from '../services/QuickNoteService';
+import GeneralNoteModal from './GeneralNoteModal';
+import GeneralNotesService from '../services/GeneralNotesService';
 
-export default function QuickNote({ isOpen, onClose, onShowHistory, initialNote = null }) {
+export default function QuickNote({ isOpen, onClose, onShowHistory, initialNote = null, onShowGeneralNotes }) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [currentNoteId, setCurrentNoteId] = useState(null);
   const [zIndex, setZIndex] = useState(10000);
+  const [showGeneralNoteModal, setShowGeneralNoteModal] = useState(false);
+  const [generalNoteContent, setGeneralNoteContent] = useState('');
   const saveTimeoutRef = useRef(null);
   const isSavingRef = useRef(false); // Ref para evitar guardados duplicados
 
@@ -21,13 +25,36 @@ export default function QuickNote({ isOpen, onClose, onShowHistory, initialNote 
     content: '',
     onUpdate: ({ editor }) => {
       setSaved(false);
+      
+      // Detectar /principal o /p
+      const text = editor.getText();
+      const lines = text.split('\n');
+      const lastLine = lines[lines.length - 1] || '';
+      
+      if (lastLine.trim() === '/principal' || lastLine.trim() === '/p') {
+        // Extraer el contenido antes del comando
+        const contentBefore = lines.slice(0, -1).join('\n');
+        setGeneralNoteContent(contentBefore);
+        setShowGeneralNoteModal(true);
+        // Remover el comando del editor
+        const currentContent = editor.getJSON();
+        if (currentContent && currentContent.content) {
+          // Remover el último párrafo que contiene /principal o /p
+          const newContent = {
+            ...currentContent,
+            content: currentContent.content.slice(0, -1)
+          };
+          editor.commands.setContent(newContent);
+        }
+        return;
+      }
+      
       // Auto-guardado después de 2 segundos de inactividad
       // Solo si hay contenido y no se está guardando ya
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
       }
       if (editor && !isSavingRef.current) {
-        const text = editor.getText();
         if (text.trim()) {
           saveTimeoutRef.current = setTimeout(() => {
             handleSave();
@@ -258,19 +285,34 @@ export default function QuickNote({ isOpen, onClose, onShowHistory, initialNote 
             <p className="text-xs text-gray-500 dark:text-gray-400">
               Se guarda automáticamente
             </p>
-            {onShowHistory && (
-              <button
-                onClick={() => {
-                  handleClose();
-                  setTimeout(() => onShowHistory(), 100);
-                }}
-                className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 flex items-center gap-1"
-                title="Ver notas guardadas"
-              >
-                <History className="w-3 h-3" />
-                Ver notas guardadas
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              {onShowHistory && (
+                <button
+                  onClick={() => {
+                    handleClose();
+                    setTimeout(() => onShowHistory(), 100);
+                  }}
+                  className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 flex items-center gap-1"
+                  title="Ver notas guardadas"
+                >
+                  <History className="w-3 h-3" />
+                  Ver notas guardadas
+                </button>
+              )}
+              {onShowGeneralNotes && (
+                <button
+                  onClick={() => {
+                    handleClose();
+                    setTimeout(() => onShowGeneralNotes(), 100);
+                  }}
+                  className="text-xs text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 flex items-center gap-1"
+                  title="Ver notas generales"
+                >
+                  <Tag className="w-3 h-3" />
+                  Ver notas generales
+                </button>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -290,6 +332,31 @@ export default function QuickNote({ isOpen, onClose, onShowHistory, initialNote 
           </div>
         </div>
       </div>
+
+      {/* Modal de nota general */}
+      <GeneralNoteModal
+        isOpen={showGeneralNoteModal}
+        onClose={() => {
+          setShowGeneralNoteModal(false);
+          setGeneralNoteContent('');
+        }}
+        initialContent={generalNoteContent}
+        onSave={() => {
+          // Recargar si es necesario
+        }}
+        onSaveAsQuickNote={async (content, text) => {
+          // Guardar también como nota rápida
+          try {
+            const noteData = {
+              content: content,
+              text: text,
+            };
+            await QuickNoteService.saveNote(noteData);
+          } catch (error) {
+            console.error('Error guardando como nota rápida:', error);
+          }
+        }}
+      />
     </div>
   );
 }

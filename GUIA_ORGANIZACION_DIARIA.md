@@ -1516,4 +1516,3 @@ npm run dev
 
 ---
 
-¡Listo! Con esta estructura tendrás todo organizado y fácil de acceder. 🎉

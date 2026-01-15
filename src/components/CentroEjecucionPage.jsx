@@ -242,6 +242,56 @@ export default function CentroEjecucionPage({ onClose }) {
     loadProjects();
   }, []);
 
+  // Escuchar evento para abrir terminal desde VisualCodeTab
+  useEffect(() => {
+    const handleOpenTerminalFromVisualCode = (event) => {
+      const { projectPath, projectName } = event.detail;
+      
+      if (!projectPath) {
+        console.warn('[CentroEjecucionPage] No se proporcionó projectPath para abrir terminal');
+        return;
+      }
+
+      // Crear nueva terminal con la ruta del proyecto
+      const isWindows = typeof window !== 'undefined' && window.electronAPI?.platform === 'win32';
+      const newTerminal = {
+        id: `terminal-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        name: `Terminal - ${projectName || 'Proyecto'}`,
+        shell: isWindows ? 'cmd' : 'bash',
+        currentDirectory: projectPath,
+        output: '',
+        history: [],
+        styles: {
+          backgroundColor: '#1e1e1e',
+          textColor: '#d4d4d4',
+          promptColor: '#4ec9b0',
+          errorColor: '#f48771'
+        },
+        createdAt: new Date().toISOString()
+      };
+      
+      // Agregar la terminal y activarla usando el estado actual
+      setTerminals(prev => {
+        const updated = [...prev, newTerminal];
+        setActiveTerminalId(newTerminal.id);
+        setActiveTabType('terminal');
+        return updated;
+      });
+      
+      console.log('[CentroEjecucionPage] Terminal abierta desde VisualCodeTab:', {
+        projectPath,
+        projectName,
+        terminalId: newTerminal.id
+      });
+    };
+
+    window.addEventListener('open-terminal-from-visualcode', handleOpenTerminalFromVisualCode);
+    
+    return () => {
+      window.removeEventListener('open-terminal-from-visualcode', handleOpenTerminalFromVisualCode);
+    };
+  }, []); // Sin dependencias - usamos setTerminals con función callback
+
   // Función para eliminar un proyecto
   const deleteProject = async (projectId, projectName) => {
     if (!window.confirm(`¿Estás seguro de que quieres eliminar el proyecto "${projectName || projectId}" de la lista?\n\nEsto no borrará los archivos de tu disco.`)) {
@@ -301,19 +351,25 @@ export default function CentroEjecucionPage({ onClose }) {
   };
 
   const createDefaultTerminal = () => {
-    const isWindows = typeof window !== 'undefined' && window.electronAPI?.platform === 'win32';
     return {
       id: `terminal-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       name: 'Terminal Principal',
-      shell: isWindows ? 'cmd' : 'bash',
+      shell: 'bash', // Por defecto bash
       currentDirectory: '~',
       output: '',
       history: [],
       styles: {
-        backgroundColor: '#1e1e1e',
-        textColor: '#d4d4d4',
-        promptColor: '#4ec9b0',
-        errorColor: '#f48771'
+        backgroundColor: '#1a0d2e', // Purple theme por defecto
+        textColor: '#e0b0ff',
+        promptColor: '#b794f6',
+        errorColor: '#fc8181',
+        fontSize: 14,
+        outputFontSize: 14,
+        inputFontSize: 22, // Valor por defecto 22px
+        outputHeight: 400,
+        inputHeight: 220, // Valor por defecto 220px
+        headerBackgroundColor: '#1f2937', // Color de fondo del header por defecto
+        headerTextColor: '#ffffff' // Color de texto del header por defecto
       },
       createdAt: new Date().toISOString()
     };

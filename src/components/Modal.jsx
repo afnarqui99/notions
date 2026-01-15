@@ -6,7 +6,8 @@ export default function Modal({
   title, 
   children, 
   type = 'info', // 'info', 'success', 'error', 'warning'
-  showCloseButton = true 
+  showCloseButton = true,
+  size = 'md' // 'sm', 'md', 'lg', 'xl', '2xl', 'full'
 }) {
   if (!isOpen) return null;
 
@@ -24,13 +25,27 @@ export default function Modal({
     info: 'bg-blue-50 border-blue-200'
   };
 
+  const sizeMap = {
+    sm: 'max-w-sm',
+    md: 'max-w-md',
+    lg: 'max-w-lg',
+    xl: 'max-w-xl',
+    '2xl': 'max-w-2xl',
+    '3xl': 'max-w-3xl',
+    '4xl': 'max-w-4xl',
+    '5xl': 'max-w-5xl',
+    '6xl': 'max-w-6xl',
+    '7xl': 'max-w-7xl',
+    full: 'max-w-full'
+  };
+
   return (
     <div 
       className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
       onClick={onClose}
     >
       <div 
-        className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-hidden transition-colors"
+        className={`bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full ${sizeMap[size] || sizeMap.md} max-h-[90vh] overflow-hidden transition-colors`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

@@ -1,0 +1,204 @@
+/**
+ * Pruebas unitarias para useParsePaymentDetail.js
+ * 
+ * Ejecutar con: npm test -- useParsePaymentDetail.test.js --watchAll=false
+ * O con: react-scripts test --watchAll=false useParsePaymentDetail.test.js
+ */
+
+import "@testing-library/jest-dom";
+import { renderHook } from '@testing-library/react';
+import { useParsePaymentDetail } from '../useParsePaymentDetail';
+import { PAYMENT_TYPE_RECHAZO, PAYMENT_TYPE_DIVIDENDOS } from '../../../utils/texts';
+
+afterAll(() => {
+  jest.resetAllMocks();
+});
+
+describe('useParsePaymentDetail', () => {
+  const masterData = [
+    {
+      fondo: 'LIQUIDEZ',
+      concepto: 'RECHAZO PAGO BTG',
+      numeroCuenta: '123456',
+      tipoCuenta: 'AHORROS',
+      banco: 'BTG',
+      tipoDocumento: 'CC',
+      numeroDocumento: '1234567890',
+      nombreTitular: 'Juan Pérez'
+    },
+    {
+      fondo: 'DEUDA',
+      concepto: 'DIVIDENDOS',
+      numeroCuenta: '789012',
+      tipoCuenta: 'CORRIENTE',
+      banco: 'BANCOLOMBIA',
+      tipoDocumento: 'NIT',
+      numeroDocumento: '9876543210',
+      nombreTitular: 'María García'
+    }
+  ];
+
+  test('debe retornar array vacío si rows es null o undefined', () => {
+    const { result } = renderHook(() => useParsePaymentDetail(null, masterData));
+    expect(result.current).toEqual([]);
+
+    const { result: result2 } = renderHook(() => useParsePaymentDetail(undefined, masterData));
+    expect(result2.current).toEqual([]);
+  });
+
+  test('debe retornar array vacío si rows no es un array', () => {
+    const { result } = renderHook(() => useParsePaymentDetail({}, masterData));
+    expect(result.current).toEqual([]);
+
+    const { result: result2 } = renderHook(() => useParsePaymentDetail('string', masterData));
+    expect(result2.current).toEqual([]);
+  });
+
+  test('debe retornar las filas tal como vienen si no cumplen el patrón', () => {
+    const rows = [
+      { detalle: 'OTRO DETALLE', id: 1 },
+      { detalle: 'PAGO NORMAL', id: 2 }
+    ];
+    const { result } = renderHook(() => useParsePaymentDetail(rows, masterData));
+    expect(result.current).toEqual(rows);
+  });
+
+  test('debe retornar las filas tal como vienen si cumplen el patrón pero no el tipo RECHAZO', () => {
+    const rows = [
+      { detalle: 'TRASLADO A FONDO LIQUIDEZ BTG(DIVIDENDOS)', id: 1 }
+    ];
+    const { result } = renderHook(() => useParsePaymentDetail(rows, masterData, PAYMENT_TYPE_RECHAZO));
+    expect(result.current).toEqual(rows);
+  });
+
+  test('debe retornar las filas tal como vienen si cumplen el patrón pero no el tipo DIVIDENDOS', () => {
+    const rows = [
+      { detalle: 'TRASLADO A FONDO LIQUIDEZ BTG(RECHAZO PAGO BTG)', id: 1 }
+    ];
+    const { result } = renderHook(() => useParsePaymentDetail(rows, masterData, PAYMENT_TYPE_DIVIDENDOS));
+    expect(result.current).toEqual(rows);
+  });
+
+  test('debe parsear y enriquecer filas de tipo RECHAZO con información del maestro', () => {
+    const rows = [
+      { detalle: 'TRASLADO A FONDO LIQUIDEZ BTG(RECHAZO PAGO BTG)', id: 1 }
+    ];
+    const { result } = renderHook(() => useParsePaymentDetail(rows, masterData, PAYMENT_TYPE_RECHAZO));
+    
+    expect(result.current).toHaveLength(1);
+    expect(result.current[0]).toMatchObject({
+      id: 1,
+      fondo: 'LIQUIDEZ',
+      concepto: 'RECHAZO PAGO BTG',
+      cuentaDestino: '123456',
+      tipoCuentaDestino: 'AHORROS',
+      bancoDestino: 'BTG',
+      tipoDocumentoDestino: 'CC',
+      numeroDocumentoDestino: '1234567890',
+      nombreTitularDestino: 'Juan Pérez',
+      type: PAYMENT_TYPE_RECHAZO
+    });
+  });
+
+  test('debe parsear y enriquecer filas de tipo DIVIDENDOS con información del maestro', () => {
+    const rows = [
+      { detalle: 'TRASLADO A FONDO DEUDA(DIVIDENDOS)', id: 1 }
+    ];
+    const { result } = renderHook(() => useParsePaymentDetail(rows, masterData, PAYMENT_TYPE_DIVIDENDOS));
+    
+    expect(result.current).toHaveLength(1);
+    expect(result.current[0]).toMatchObject({
+      id: 1,
+      fondo: 'DEUDA',
+      concepto: 'DIVIDENDOS',
+      cuentaDestino: '789012',
+      tipoCuentaDestino: 'CORRIENTE',
+      bancoDestino: 'BANCOLOMBIA',
+      tipoDocumentoDestino: 'NIT',
+      numeroDocumentoDestino: '9876543210',
+      nombreTitularDestino: 'María García',
+      type: PAYMENT_TYPE_DIVIDENDOS
+    });
+  });
+
+  test('debe parsear filas sin información del maestro cuando no encuentra coincidencia', () => {
+    const rows = [
+      { detalle: 'TRASLADO A FONDO FONDO_INEXISTENTE(RECHAZO PAGO BTG)', id: 1 }
+    ];
+    const { result } = renderHook(() => useParsePaymentDetail(rows, masterData, PAYMENT_TYPE_RECHAZO));
+    
+    expect(result.current).toHaveLength(1);
+    expect(result.current[0]).toMatchObject({
+      id: 1,
+      fondo: 'FONDO_INEXISTENTE',
+      concepto: 'RECHAZO PAGO BTG',
+      cuentaDestino: null,
+      tipoCuentaDestino: null,
+      bancoDestino: null,
+      tipoDocumentoDestino: null,
+      numeroDocumentoDestino: null,
+      nombreTitularDestino: null,
+      type: PAYMENT_TYPE_RECHAZO
+    });
+  });
+
+  test('debe usar PAYMENT_TYPE_RECHAZO por defecto si no se especifica tipo', () => {
+    const rows = [
+      { detalle: 'TRASLADO A FONDO LIQUIDEZ BTG(RECHAZO PAGO BTG)', id: 1 }
+    ];
+    const { result } = renderHook(() => useParsePaymentDetail(rows, masterData));
+    
+    expect(result.current[0].type).toBe(PAYMENT_TYPE_RECHAZO);
+  });
+
+  test('debe procesar múltiples filas correctamente', () => {
+    const rows = [
+      { detalle: 'TRASLADO A FONDO LIQUIDEZ BTG(RECHAZO PAGO BTG)', id: 1 },
+      { detalle: 'OTRO DETALLE', id: 2 },
+      { detalle: 'TRASLADO A FONDO DEUDA(DIVIDENDOS)', id: 3 }
+    ];
+    const { result } = renderHook(() => useParsePaymentDetail(rows, masterData, PAYMENT_TYPE_RECHAZO));
+    
+    expect(result.current).toHaveLength(3);
+    // Primera fila debe estar enriquecida
+    expect(result.current[0].fondo).toBe('LIQUIDEZ');
+    expect(result.current[0].cuentaDestino).toBe('123456');
+    // Segunda fila debe estar sin cambios
+    expect(result.current[1]).toEqual(rows[1]);
+    // Tercera fila debe estar sin cambios porque es DIVIDENDOS, no RECHAZO
+    expect(result.current[2]).toEqual(rows[2]);
+  });
+
+  test('debe ser case-insensitive en la búsqueda del tipo', () => {
+    const rows = [
+      { detalle: 'traslado a fondo liquidez btg(rechazo pago btg)', id: 1 }
+    ];
+    const { result } = renderHook(() => useParsePaymentDetail(rows, masterData, PAYMENT_TYPE_RECHAZO));
+    
+    expect(result.current[0].fondo).toBe('LIQUIDEZ');
+    expect(result.current[0].cuentaDestino).toBe('123456');
+  });
+
+  test('debe mantener las propiedades originales de la fila', () => {
+    const rows = [
+      { 
+        detalle: 'TRASLADO A FONDO LIQUIDEZ BTG(RECHAZO PAGO BTG)', 
+        id: 1,
+        fecha: '2024-01-01',
+        monto: 1000,
+        otroCampo: 'valor'
+      }
+    ];
+    const { result } = renderHook(() => useParsePaymentDetail(rows, masterData, PAYMENT_TYPE_RECHAZO));
+    
+    expect(result.current[0]).toMatchObject({
+      id: 1,
+      fecha: '2024-01-01',
+      monto: 1000,
+      otroCampo: 'valor',
+      fondo: 'LIQUIDEZ',
+      concepto: 'RECHAZO PAGO BTG'
+    });
+  });
+});
+

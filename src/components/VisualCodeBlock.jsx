@@ -35,6 +35,7 @@ import { oneDark } from '@codemirror/theme-one-dark';
 import FileExplorer from './FileExplorer';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
 import AIChatPanel from './AIChatPanel';
+import GitPanel from './GitPanel';
 
 // Panel de Extensiones - Estilo VS Code
 function ExtensionsPanel({ extensions, setExtensions }) {
@@ -176,6 +177,7 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
   const [isExpanded, setIsExpanded] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showFileExplorer, setShowFileExplorer] = useState(true);
+  const [showGitPanel, setShowGitPanel] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState(new Set());
   const [fileTree, setFileTree] = useState({});
@@ -1477,9 +1479,12 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
               {/* Tabs del sidebar - Estilo VS Code */}
               <div className="bg-[#2d2d30] border-b border-[#3e3e42] flex">
                 <button
-                  onClick={() => setShowExtensionsPanel(false)}
+                  onClick={() => {
+                    setShowExtensionsPanel(false);
+                    setShowGitPanel(false);
+                  }}
                   className={`px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide transition-colors ${
-                    !showExtensionsPanel 
+                    !showExtensionsPanel && !showGitPanel
                       ? 'bg-[#252526] text-[#ffffff] border-b-2 border-b-[#007acc]' 
                       : 'text-[#cccccc] hover:text-[#ffffff] hover:bg-[#2d2d30]'
                   }`}
@@ -1487,9 +1492,25 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
                   EXPLORADOR
                 </button>
                 <button
-                  onClick={() => setShowExtensionsPanel(true)}
+                  onClick={() => {
+                    setShowExtensionsPanel(false);
+                    setShowGitPanel(true);
+                  }}
                   className={`px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide transition-colors ${
-                    showExtensionsPanel 
+                    showGitPanel
+                      ? 'bg-[#252526] text-[#ffffff] border-b-2 border-b-[#007acc]' 
+                      : 'text-[#cccccc] hover:text-[#ffffff] hover:bg-[#2d2d30]'
+                  }`}
+                >
+                  GIT
+                </button>
+                <button
+                  onClick={() => {
+                    setShowExtensionsPanel(true);
+                    setShowGitPanel(false);
+                  }}
+                  className={`px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide transition-colors ${
+                    showExtensionsPanel
                       ? 'bg-[#252526] text-[#ffffff] border-b-2 border-b-[#007acc]' 
                       : 'text-[#cccccc] hover:text-[#ffffff] hover:bg-[#2d2d30]'
                   }`}
@@ -1503,6 +1524,19 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
                 <ExtensionsPanel 
                   extensions={extensions} 
                   setExtensions={setExtensions}
+                />
+              ) : showGitPanel ? (
+                <GitPanel
+                  projectPath={projectPath}
+                  onFileSelect={(filePath) => {
+                    // Cargar el archivo cuando se selecciona desde Git
+                    if (filePath && projectPath) {
+                      const fullPath = filePath.startsWith(projectPath) 
+                        ? filePath 
+                        : `${projectPath}/${filePath}`.replace(/\/+/g, '/');
+                      loadFile(fullPath);
+                    }
+                  }}
                 />
               ) : (
                 <>
