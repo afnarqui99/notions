@@ -118,14 +118,38 @@ export default function SlashCommandModal({
   }, [selectedIndex]);
 
   const handleSelectCommand = async (item) => {
-    // Registrar el uso del comando
-    await commandUsageService.recordUsage(item.label);
+    // Prevenir doble ejecución usando un ref local
+    const executingKey = `_executing_${item.label}`;
+    if (item[executingKey]) {
+      console.warn('[SlashCommandModal] Comando ya está ejecutándose, ignorando...');
+      return;
+    }
     
-    // Ejecutar el comando
-    onSelectCommand(item);
+    // Marcar como ejecutándose
+    item[executingKey] = true;
     
-    // Cerrar el modal
-    onClose();
+    try {
+      console.log('[SlashCommandModal] Ejecutando comando:', item.label);
+      
+      // Cerrar el modal PRIMERO para evitar que quede bloqueando
+      onClose();
+      
+      // Pequeño delay para asegurar que el modal se cierre completamente
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Registrar el uso del comando
+      await commandUsageService.recordUsage(item.label);
+      
+      // Ejecutar el comando
+      onSelectCommand(item);
+    } catch (error) {
+      console.error('[SlashCommandModal] Error ejecutando comando:', error);
+    } finally {
+      // Limpiar la marca después de un delay
+      setTimeout(() => {
+        delete item[executingKey];
+      }, 1000);
+    }
   };
 
   const handleSearchChange = (e) => {
@@ -215,21 +239,92 @@ export default function SlashCommandModal({
     setDragOverIndex(null);
   };
 
+  // Efecto para limpiar cuando el componente se desmonta o se cierra
+  useEffect(() => {
+    // Solo limpiar si isOpen cambia a false, no en cada render
+    if (!isOpen) {
+      console.log('[SlashCommandModal] isOpen es false, limpiando...');
+      // Si el modal se cierra, asegurar que no quede nada en el DOM
+      const container = document.getElementById('slash-command-modal-container');
+      if (container) {
+        console.log('[SlashCommandModal] Limpiando contenedor en useEffect (isOpen=false)');
+        try {
+          if (container._reactRoot) {
+            container._reactRoot.unmount();
+            delete container._reactRoot;
+          }
+          if (container.parentNode) {
+            container.parentNode.removeChild(container);
+            console.log('[SlashCommandModal] Contenedor removido del DOM');
+          }
+        } catch (e) {
+          console.warn('[SlashCommandModal] Error limpiando en useEffect:', e);
+        }
+      }
+      
+      // Limpiar SOLO overlays del slash command (con z-[70000])
+      const overlays = document.querySelectorAll('div.fixed.inset-0');
+      overlays.forEach(overlay => {
+        const hasModalContainer = overlay.querySelector('#slash-command-modal-container');
+        const zIndex = window.getComputedStyle(overlay).zIndex;
+        const isSlashCommandZIndex = zIndex === '70000' || overlay.className.includes('z-[70000]');
+        
+        // Solo remover si tiene el contenedor o tiene el z-index específico del slash command
+        if (hasModalContainer || (isSlashCommandZIndex && !overlay.id && !overlay.closest('[id]'))) {
+          try {
+            if (overlay.parentNode) {
+              overlay.parentNode.removeChild(overlay);
+              console.log('[SlashCommandModal] Overlay del slash command removido');
+            }
+          } catch (e) {
+            console.warn('[SlashCommandModal] Error removiendo overlay:', e);
+          }
+        }
+      });
+    }
+    
+    return () => {
+      // Solo limpiar en el cleanup si el componente se desmonta mientras está abierto
+      // No llamar onClose aquí porque puede causar bucles infinitos
+      console.log('[SlashCommandModal] Cleanup del useEffect');
+    };
+  }, [isOpen]); // Removido onClose de las dependencias para evitar bucles
+
   if (!isOpen) return null;
 
   return (
     <div
-      className="fixed inset-0 z-[50000] flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm"
-      onClick={(e) => {
+      className="fixed inset-0 z-[70000] flex items-center justify-center"
+      style={{
+        backgroundColor: 'rgba(0, 0, 0, 0.2)',
+        backdropFilter: 'blur(1px)',
+      }}
+      onMouseDown={(e) => {
+        // Solo cerrar si el mousedown fue directamente en el overlay (no en el modal)
         if (e.target === e.currentTarget) {
+          e.stopPropagation();
+          onClose();
+        }
+      }}
+      onClick={(e) => {
+        // Solo cerrar si el click fue directamente en el overlay (no en el modal)
+        if (e.target === e.currentTarget) {
+          e.stopPropagation();
           onClose();
         }
       }}
     >
       <div
         ref={modalRef}
-        className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
+        className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden relative z-[70001]"
+        onMouseDown={(e) => {
+          // Prevenir que el mousedown en el modal se propague al overlay
+          e.stopPropagation();
+        }}
+        onClick={(e) => {
+          // Prevenir que el click en el modal se propague al overlay
+          e.stopPropagation();
+        }}
       >
         {/* Header con búsqueda */}
         <div className="p-4 border-b border-gray-200 dark:border-gray-700">

@@ -25,13 +25,13 @@ import TableHeader from "@tiptap/extension-table-header";
 import { ImageExtended } from "../extensions/ImageExtended";
 import Placeholder from "@tiptap/extension-placeholder";
 import lowlight from "../extensions/lowlightInstance";
-import { SlashCommand } from "../extensions/SlashCommand";
+// SlashCommand removido - causa problemas de bloqueo
 import Link from "@tiptap/extension-link";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import { Toggle } from "../extensions/Toggle";
 import { Comment } from "../extensions/Comment";
-import { Settings, Plus, Image as ImageIcon, Paperclip, Download, Trash2, Tag as TagIcon, FileText, Save, Clock, MessageSquare, MoreVertical, Database, Zap, FolderOpen, X, Minimize2 } from "lucide-react";
+import { Settings, Plus, Image as ImageIcon, Paperclip, Download, Trash2, Tag as TagIcon, FileText, Save, Clock, MessageSquare, MoreVertical, Database, Zap, FolderOpen, X, Minimize2, Command } from "lucide-react";
 import QuickScrollNavigation from "./QuickScrollNavigation";
 import LocalStorageService from "../services/LocalStorageService";
 import Modal from "./Modal";
@@ -65,6 +65,9 @@ import SQLFileService from "../services/SQLFileService";
 import PageSQLScriptsModal from "./PageSQLScriptsModal";
 import PageIndexService from "../services/PageIndexService";
 import VisualCodeFullscreenModal from "./VisualCodeFullscreenModal";
+import SlashCommandModal from "./SlashCommandModal";
+import CommandButtonModal from "./CommandButtonModal";
+import { getSlashCommandItems } from "../utils/slashCommandItems";
 
 export default function LocalEditor({ onShowConfig }) {
   // Función helper para extraer emoji del título
@@ -149,6 +152,8 @@ export default function LocalEditor({ onShowConfig }) {
   const [showConsole, setShowConsole] = useState(false);
   const [showCentroEjecucion, setShowCentroEjecucion] = useState(false);
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
+  const [showSlashCommandModal, setShowSlashCommandModal] = useState(false);
+  const [cursorPosition, setCursorPosition] = useState({ top: 160, left: 300 });
   // Múltiples modales de Visual Code fullscreen
   const [visualCodeFullscreenModals, setVisualCodeFullscreenModals] = useState([]);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -528,12 +533,76 @@ export default function LocalEditor({ onShowConfig }) {
           class: 'cursor-pointer',
         },
       }),
-      Placeholder.configure({ placeholder: "Escribe '/' para comandos..." }),
-      SlashCommand,
+      Placeholder.configure({ placeholder: "Escribe aquí..." }),
       PreventUpdateLoopExtension,
     ],
     content: "",
   });
+
+  // Trackear posición del cursor para el botón flotante
+  useEffect(() => {
+    if (!editor) return;
+
+    const updateCursorPosition = () => {
+      try {
+        const { from } = editor.state.selection;
+        const coords = editor.view.coordsAtPos(from);
+        const editorContainer = editorContainerRef.current;
+        
+        if (editorContainer && coords) {
+          const containerRect = editorContainer.getBoundingClientRect();
+          const scrollTop = editorContainer.scrollTop;
+          
+          // Calcular posición relativa al contenedor del editor
+          let leftPos = coords.left - containerRect.left - 60; // 60px a la izquierda del cursor
+          let topPos = coords.top - containerRect.top + scrollTop + 20; // 20px debajo del cursor
+          
+          // Respetar el sidebar: si está colapsado, mínimo 80px, si no, mínimo 300px
+          const minLeft = sidebarColapsado ? 80 : 300;
+          if (leftPos < minLeft) {
+            leftPos = minLeft;
+          }
+          
+          // Asegurar que el botón no se salga por arriba
+          if (topPos < 20) {
+            topPos = 20;
+          }
+          
+          setCursorPosition({ top: topPos, left: leftPos });
+        }
+      } catch (e) {
+        // Ignorar errores al obtener posición del cursor
+      }
+    };
+
+    // Actualizar posición cuando cambia la selección o se actualiza el editor
+    const handleUpdate = () => {
+      updateCursorPosition();
+    };
+
+    const handleSelectionUpdate = () => {
+      updateCursorPosition();
+    };
+
+    editor.on('selectionUpdate', handleSelectionUpdate);
+    editor.on('update', handleUpdate);
+    editor.on('focus', handleUpdate);
+
+    // Actualizar también al hacer scroll
+    const scrollContainer = editorContainerRef.current;
+    if (scrollContainer) {
+      scrollContainer.addEventListener('scroll', updateCursorPosition, { passive: true });
+    }
+
+    return () => {
+      editor.off('selectionUpdate', handleSelectionUpdate);
+      editor.off('update', handleUpdate);
+      editor.off('focus', handleUpdate);
+      if (scrollContainer) {
+        scrollContainer.removeEventListener('scroll', updateCursorPosition);
+      }
+    };
+  }, [editor, sidebarColapsado]);
 
   // Ref para evitar cargas simultáneas
   const cargandoPaginasRef = useRef(false);
@@ -2671,8 +2740,8 @@ export default function LocalEditor({ onShowConfig }) {
         <CentroEjecucionPage onClose={() => setShowCentroEjecucion(false)} />
       </div>
 
-      {/* Botón flotante para abrir Centro de Ejecución cuando está cerrado */}
-      {!showCentroEjecucion && (
+      {/* Botón flotante para abrir Centro de Ejecución cuando está cerrado - Solo mostrar si hay una página seleccionada */}
+      {!showCentroEjecucion && paginaSeleccionada && (
         <button
           onClick={() => setShowCentroEjecucion(true)}
           className="fixed bottom-6 right-6 z-[50000] bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-full shadow-lg transition-all hover:scale-110 flex items-center gap-2 group"
@@ -2763,6 +2832,31 @@ export default function LocalEditor({ onShowConfig }) {
         pageId={paginaSeleccionada}
         pageName={tituloPaginaActual}
       />
+
+      {/* Modal de Comandos desde el botón - COMPLETAMENTE INDEPENDIENTE */}
+      {showSlashCommandModal && editor && (
+        <CommandButtonModal
+          isOpen={showSlashCommandModal}
+          onClose={() => {
+            setShowSlashCommandModal(false);
+          }}
+          items={getSlashCommandItems()}
+          onSelectCommand={(item) => {
+            // Cerrar el modal
+            setShowSlashCommandModal(false);
+            
+            // Ejecutar el comando después de un pequeño delay
+            setTimeout(() => {
+              const { from, to } = editor.state.selection;
+              const range = { from, to };
+              
+              if (item.command) {
+                item.command({ editor, range });
+              }
+            }, 50);
+          }}
+        />
+      )}
 
       {/* Modal de Historial de Versiones */}
       <VersionHistory
@@ -2858,7 +2952,8 @@ export default function LocalEditor({ onShowConfig }) {
       )}
 
       {/* Contenido principal */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden relative">
+        
         {/* Editor */}
         {paginaSeleccionada ? (
           <div className="flex-1 flex flex-col overflow-hidden">
@@ -2964,7 +3059,33 @@ export default function LocalEditor({ onShowConfig }) {
           </div>
 
           {/* Área de edición */}
-          <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-900 transition-colors" ref={editorContainerRef}>
+          <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-900 transition-colors relative" ref={editorContainerRef}>
+            {/* Botón flotante de comandos - sigue el cursor y respeta el sidebar */}
+            {paginaSeleccionada && editor && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  setShowSlashCommandModal(true);
+                }}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                }}
+                className="absolute z-50 bg-pink-600 hover:bg-pink-700 text-white rounded-full shadow-2xl transition-all hover:scale-110 flex items-center justify-center border-2 border-white pointer-events-auto"
+                style={{
+                  top: `${cursorPosition.top}px`,
+                  left: `${cursorPosition.left}px`,
+                  width: '44px',
+                  height: '44px',
+                  boxShadow: '0 4px 12px rgba(219, 39, 119, 0.4)',
+                }}
+                title="Insertar comando"
+              >
+                <Command className="w-5 h-5" />
+              </button>
+            )}
+            
             <div className="max-w-4xl mx-auto px-4 py-4">
               <EditorContent editor={editor} className="tiptap" ref={editorRef} />
             </div>

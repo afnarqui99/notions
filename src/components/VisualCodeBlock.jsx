@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import LocalStorageService from '../services/LocalStorageService';
 import { EditorView, basicSetup } from 'codemirror';
+import { ViewPlugin, Decoration } from '@codemirror/view';
 import { closeBrackets } from '@codemirror/autocomplete';
 import { javascript } from '@codemirror/lang-javascript';
 import { python } from '@codemirror/lang-python';
@@ -191,7 +192,7 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
   });
   const [theme, setTheme] = useState(() => {
     try {
-      return node.attrs.theme || 'oneDark';
+      return node.attrs.theme || 'cursorDark';
     } catch {
       return 'oneDark';
     }
@@ -963,6 +964,10 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
           lineHeight: `${fontSize * 1.5}px`,
           paddingTop: '10px',
           paddingBottom: '10px',
+          userSelect: 'text',
+          WebkitUserSelect: 'text',
+          MozUserSelect: 'text',
+          msUserSelect: 'text',
         },
         '.cm-editor': {
           height: '100%',
@@ -970,6 +975,10 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
         '.cm-scroller': {
           overflow: 'auto',
           fontFamily: '"Consolas", "Monaco", "Courier New", "Menlo", monospace',
+          userSelect: 'text',
+          WebkitUserSelect: 'text',
+          MozUserSelect: 'text',
+          msUserSelect: 'text',
         },
         '.cm-line': {
           padding: '0 12px',
@@ -1043,6 +1052,12 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
         '.cm-focused': {
           outline: 'none',
         },
+        // Estilo para variables no usadas (similar a Cursor/VS Code)
+        '.cm-unused-variable': {
+          opacity: '0.5',
+          color: '#858585',
+          fontStyle: 'italic',
+        },
       }, { dark: theme !== 'light' }),
     ];
 
@@ -1056,6 +1071,18 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
       editorExtensions.push(closeBrackets({ brackets: ['`'] }));
     }
 
+    // Detección de variables no usadas (solo para JavaScript/TypeScript)
+    if (language === 'javascript') {
+      editorExtensions.push(unusedVariablesExtension());
+    }
+
+    console.log('[VisualCodeBlock] Inicializando editor...', {
+      hasContainer: !!editorContainerRef.current,
+      contentLength: content.length,
+      language,
+      extensionsCount: editorExtensions.length
+    });
+
     const view = new EditorView({
       doc: content,
       extensions: editorExtensions,
@@ -1064,9 +1091,37 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
 
     editorViewRef.current = view;
     
+    // Asegurar que el contenedor permita interacción
+    if (editorContainerRef.current) {
+      editorContainerRef.current.style.pointerEvents = 'auto';
+      editorContainerRef.current.style.userSelect = 'text';
+      editorContainerRef.current.style.WebkitUserSelect = 'text';
+      editorContainerRef.current.style.MozUserSelect = 'text';
+      editorContainerRef.current.style.msUserSelect = 'text';
+      
+      // Agregar listeners para debugging
+      editorContainerRef.current.addEventListener('mousedown', (e) => {
+        console.log('[VisualCodeBlock] Mouse down en editor', e.target);
+      });
+      
+      editorContainerRef.current.addEventListener('selectstart', (e) => {
+        console.log('[VisualCodeBlock] Select start', e.target);
+      });
+    }
+    
     // Enfocar el editor automáticamente
     setTimeout(() => {
       view.focus();
+      console.log('[VisualCodeBlock] Editor enfocado, editable:', view.state.readOnly === false);
+      
+      // Verificar que el editor esté editable
+      const editorElement = editorContainerRef.current?.querySelector('.cm-editor');
+      if (editorElement) {
+        console.log('[VisualCodeBlock] Elemento editor encontrado:', {
+          pointerEvents: window.getComputedStyle(editorElement).pointerEvents,
+          userSelect: window.getComputedStyle(editorElement).userSelect,
+        });
+      }
     }, 100);
   };
 
@@ -1644,7 +1699,16 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
             {/* Editor - Estilo VS Code */}
             <div className="flex-1 overflow-hidden bg-[#1e1e1e] min-h-0">
               {activeFile ? (
-                <div ref={editorContainerRef} className="h-full w-full min-h-0" />
+                <div 
+                  ref={editorContainerRef} 
+                  className="h-full w-full min-h-0"
+                  style={{
+                    userSelect: 'text',
+                    WebkitUserSelect: 'text',
+                    MozUserSelect: 'text',
+                    msUserSelect: 'text',
+                  }}
+                />
               ) : (
                 <div className="h-full flex items-center justify-center text-[#858585]">
                   <div className="text-center">

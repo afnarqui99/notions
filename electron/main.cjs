@@ -1722,9 +1722,12 @@ app.whenReady().then(() => {
         
         const childProcess = spawn(spawnCommand, spawnArgs, spawnOptions);
 
-        // Detectar comandos que no terminan (servidores de desarrollo)
-        const isLongRunningCommand = /^(npm|yarn|pnpm)\s+(run\s+)?(dev|start|serve|watch)/i.test(command) ||
-                                    /^(python|node|nodemon|ts-node|tsx)\s+.*(dev|start|serve|watch)/i.test(command);
+        // Detectar comandos que no terminan (servidores de desarrollo) o que producen salida en tiempo real
+        const isLongRunningCommand = /^(npm|yarn|pnpm)\s+(run\s+)?(dev|start|serve|watch|test)/i.test(command) ||
+                                    /^(python|node|nodemon|ts-node|tsx)\s+.*(dev|start|serve|watch|test)/i.test(command) ||
+                                    /^npm\s+test/i.test(command) ||
+                                    /^yarn\s+test/i.test(command) ||
+                                    /^pnpm\s+test/i.test(command);
 
         let hasOutput = false;
         let lastOutputTime = Date.now();

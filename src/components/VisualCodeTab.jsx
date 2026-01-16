@@ -17,6 +17,7 @@ import {
   GitBranch
 } from 'lucide-react';
 import { EditorView, basicSetup } from 'codemirror';
+import { ViewPlugin, Decoration } from '@codemirror/view';
 import { closeBrackets } from '@codemirror/autocomplete';
 import { javascript } from '@codemirror/lang-javascript';
 import { python } from '@codemirror/lang-python';
@@ -166,7 +167,7 @@ export default function VisualCodeTab({
   const editorViewRef = useRef(null);
   const editorContainerRef = useRef(null);
   const [projectPath, setProjectPath] = useState(project?.path || '');
-  const [theme, setTheme] = useState(project?.theme || 'oneDark');
+  const [theme, setTheme] = useState(project?.theme || 'cursorDark');
   const [fontSize, setFontSize] = useState(project?.fontSize || 14);
   const [projectColor, setProjectColor] = useState(project?.color || '#1e1e1e');
   const [projectTitle, setProjectTitle] = useState(project?.title || '');
@@ -503,13 +504,27 @@ export default function VisualCodeTab({
               lineHeight: `${fontSize * 1.5}px`,
               paddingTop: '10px',
               paddingBottom: '10px',
+              userSelect: 'text !important',
+              WebkitUserSelect: 'text !important',
+              MozUserSelect: 'text !important',
+              msUserSelect: 'text !important',
+              pointerEvents: 'auto !important',
+              cursor: 'text !important',
             },
             '.cm-editor': {
               height: '100%',
+              pointerEvents: 'auto !important',
+              userSelect: 'text !important',
             },
             '.cm-scroller': {
               overflow: 'auto',
               fontFamily: '"Consolas", "Monaco", "Courier New", "Menlo", monospace',
+              userSelect: 'text !important',
+              WebkitUserSelect: 'text !important',
+              MozUserSelect: 'text !important',
+              msUserSelect: 'text !important',
+              pointerEvents: 'auto !important',
+              cursor: 'text !important',
             },
             '.cm-line': {
               padding: '0 12px',
@@ -547,12 +562,23 @@ export default function VisualCodeTab({
             '.cm-focused': {
               outline: 'none',
             },
+            // Estilo para variables no usadas (similar a Cursor/VS Code)
+            '.cm-unused-variable': {
+              opacity: '0.5',
+              color: '#858585',
+              fontStyle: 'italic',
+            },
           }),
         ];
 
         // Auto Close Tag
         if (extensions.autoCloseTag && (activeFile?.endsWith('.html') || activeFile?.endsWith('.jsx'))) {
           editorExtensions.push(closeBrackets());
+        }
+
+        // Detección de variables no usadas (solo para JavaScript/TypeScript)
+        if (activeFile && (activeFile.endsWith('.js') || activeFile.endsWith('.jsx') || activeFile.endsWith('.ts') || activeFile.endsWith('.tsx'))) {
+          editorExtensions.push(unusedVariablesExtension());
         }
 
         const view = new EditorView({
@@ -563,12 +589,70 @@ export default function VisualCodeTab({
 
         editorViewRef.current = view;
         
+        // Asegurar que el contenedor y el editor permitan interacción
+        if (editorContainerRef.current) {
+          editorContainerRef.current.style.pointerEvents = 'auto';
+          editorContainerRef.current.style.userSelect = 'text';
+          editorContainerRef.current.style.WebkitUserSelect = 'text';
+          editorContainerRef.current.style.MozUserSelect = 'text';
+          editorContainerRef.current.style.msUserSelect = 'text';
+          editorContainerRef.current.style.cursor = 'text';
+        }
+        
+        // Asegurar que el DOM del editor tenga los estilos correctos
+        if (view.dom) {
+          const editorDom = view.dom;
+          editorDom.style.pointerEvents = 'auto';
+          editorDom.style.userSelect = 'text';
+          editorDom.style.WebkitUserSelect = 'text';
+          editorDom.style.MozUserSelect = 'text';
+          editorDom.style.msUserSelect = 'text';
+          editorDom.style.cursor = 'text';
+          
+          // Asegurar que el contenido también tenga los estilos
+          const content = editorDom.querySelector('.cm-content');
+          if (content) {
+            content.style.pointerEvents = 'auto';
+            content.style.userSelect = 'text';
+            content.style.WebkitUserSelect = 'text';
+            content.style.MozUserSelect = 'text';
+            content.style.msUserSelect = 'text';
+            content.style.cursor = 'text';
+            // Asegurar que contentEditable esté habilitado
+            if (content.contentEditable !== 'true') {
+              content.contentEditable = 'true';
+            }
+          }
+        }
+        
         // Enfocar el editor después de crearlo
         setTimeout(() => {
           if (editorViewRef.current && editorViewRef.current.dom) {
             editorViewRef.current.focus();
+            console.log('[VisualCodeTab] Editor enfocado, editable:', editorViewRef.current.state.readOnly === false);
+            
+            const editorElement = editorContainerRef.current?.querySelector('.cm-editor');
+            if (editorElement) {
+              const computedStyle = window.getComputedStyle(editorElement);
+              console.log('[VisualCodeTab] Elemento editor encontrado:', {
+                pointerEvents: computedStyle.pointerEvents,
+                userSelect: computedStyle.userSelect,
+                contentEditable: editorElement.contentEditable,
+              });
+            }
+            
+            // Verificar el contenido también
+            const contentElement = editorContainerRef.current?.querySelector('.cm-content');
+            if (contentElement) {
+              const computedStyle = window.getComputedStyle(contentElement);
+              console.log('[VisualCodeTab] Elemento contenido encontrado:', {
+                pointerEvents: computedStyle.pointerEvents,
+                userSelect: computedStyle.userSelect,
+                contentEditable: contentElement.contentEditable,
+              });
+            }
           }
-        }, 50);
+        }, 100);
       } catch (error) {
         console.error('[VisualCodeTab] Error inicializando editor:', error);
       }
@@ -1083,6 +1167,16 @@ export default function VisualCodeTab({
                     loadFile(filePath, content);
                   }}
                   onProjectPathChange={setProjectPath}
+                  onProjectHandleChange={(handle) => {
+                    // Guardar el handle si es un proyecto del navegador
+                    if (handle && project?.id && typeof window !== 'undefined') {
+                      if (!window.directoryHandles) {
+                        window.directoryHandles = new Map();
+                      }
+                      window.directoryHandles.set(project.id, handle);
+                    }
+                  }}
+                  directoryHandle={project?.directoryHandle || null}
                   hideHeader={true}
                   vscodeStyle={true}
                   openFiles={openFiles}
@@ -1093,7 +1187,7 @@ export default function VisualCodeTab({
         )}
 
         {/* Editor */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden" style={{ position: 'relative' }}>
           {gitDiffFile ? (
             <GitDiffView
               projectPath={projectPath}
@@ -1103,8 +1197,19 @@ export default function VisualCodeTab({
           ) : activeFile ? (
             <div 
               ref={editorContainerRef} 
-              className="flex-1 overflow-auto"
-              style={{ height: '100%' }}
+              className="flex-1"
+              style={{ 
+                height: '100%',
+                width: '100%',
+                position: 'relative',
+                userSelect: 'text !important',
+                WebkitUserSelect: 'text !important',
+                MozUserSelect: 'text !important',
+                msUserSelect: 'text !important',
+                pointerEvents: 'auto !important',
+                cursor: 'text !important',
+                overflow: 'auto',
+              }}
             />
           ) : (
             <div className="flex-1 flex items-center justify-center text-[#858585]">
