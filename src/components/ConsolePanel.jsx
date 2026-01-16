@@ -364,10 +364,6 @@ ${code}
       try {
         const errors = codeIntelligenceService.validateSyntax(code, language);
         setSyntaxErrors(errors);
-        // Debug: mostrar errores en consola
-        if (errors.length > 0) {
-          console.log('Errores de sintaxis detectados:', errors);
-        }
       } catch (error) {
         console.error('Error en validación de sintaxis:', error);
         setSyntaxErrors([]);
@@ -384,12 +380,10 @@ ${code}
       try {
         const parsed = JSON.parse(savedPlugins);
         setPlugins(parsed);
-        console.log('✅ Plugins cargados desde localStorage:', parsed);
       } catch (e) {
         console.error('❌ Error al cargar plugins:', e);
       }
     } else {
-      console.log('ℹ️ No hay plugins guardados, usando valores por defecto');
       // Guardar los valores por defecto
       const defaultPlugins = {
         autocomplete: true,
@@ -399,17 +393,8 @@ ${code}
         linting: false
       };
       localStorage.setItem('console-plugins', JSON.stringify(defaultPlugins));
-      console.log('💾 Plugins por defecto guardados:', defaultPlugins);
     }
   }, []);
-  
-  // Debug: mostrar estado de plugins cuando cambian
-  useEffect(() => {
-    console.log('🔧 Estado actual de plugins:', plugins);
-    console.log('🔍 Validación de sintaxis activa:', plugins.syntaxValidation);
-    console.log('✨ Autocompletado activo:', plugins.autocomplete);
-    console.log('📝 Snippets activo:', plugins.snippets);
-  }, [plugins]);
 
   const executeCode = async () => {
     if (!code.trim()) {
@@ -2157,7 +2142,7 @@ ${code}
                 <option value="sqlite">SQLite</option>
               </select>
               <button
-                onClick={handleExecute}
+                onClick={executeCode}
                 disabled={isExecuting || !code.trim()}
                 className="px-3 py-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded transition-colors text-xs flex items-center gap-1"
                 title="Ejecutar código (Ctrl+Enter)"

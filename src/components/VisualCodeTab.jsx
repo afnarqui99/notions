@@ -27,6 +27,13 @@ import { json } from '@codemirror/lang-json';
 import { oneDark } from '@codemirror/theme-one-dark';
 import FileExplorer from './FileExplorer';
 import LocalStorageService from '../services/LocalStorageService';
+import { 
+  getThemeExtension, 
+  loadCustomThemeColors, 
+  saveCustomThemeColors,
+  AVAILABLE_THEMES,
+  DEFAULT_CUSTOM_THEME_COLORS
+} from '../services/CodeMirrorThemeService';
 import AIChatPanel from './AIChatPanel';
 import GitPanel from './GitPanel';
 import GitDiffView from './GitDiffView';
@@ -171,6 +178,9 @@ export default function VisualCodeTab({
   const [fontSize, setFontSize] = useState(project?.fontSize || 14);
   const [projectColor, setProjectColor] = useState(project?.color || '#1e1e1e');
   const [projectTitle, setProjectTitle] = useState(project?.title || '');
+  
+  // Estado para colores personalizados del tema
+  const [customThemeColors, setCustomThemeColors] = useState(DEFAULT_CUSTOM_THEME_COLORS);
   const [extensions, setExtensions] = useState(() => {
     try {
       return project?.extensions || {
@@ -199,6 +209,24 @@ export default function VisualCodeTab({
     }
   });
 
+  // Cargar colores personalizados del tema desde base de datos
+  useEffect(() => {
+    const loadColors = async () => {
+      const colors = await loadCustomThemeColors();
+      setCustomThemeColors(colors);
+    };
+
+    loadColors();
+  }, []);
+
+  // Guardar colores personalizados cuando cambien
+  useEffect(() => {
+    const timeoutId = setTimeout(async () => {
+      await saveCustomThemeColors(customThemeColors);
+    }, 1000);
+    return () => clearTimeout(timeoutId);
+  }, [customThemeColors]);
+
   // Limpiar archivos cuando cambia el proyecto
   useEffect(() => {
     if (project?.path && project.path !== projectPath) {
@@ -219,7 +247,7 @@ export default function VisualCodeTab({
   useEffect(() => {
     if (project?.path) {
       setProjectPath(project.path);
-      setTheme(project.theme || 'oneDark');
+      setTheme(project.theme || 'cursorDark');
       setFontSize(project.fontSize || 14);
       setProjectColor(project.color || '#1e1e1e');
       setProjectTitle(project.title || '');
@@ -251,7 +279,7 @@ export default function VisualCodeTab({
     }
   }, [theme, fontSize, projectColor, projectTitle, extensions]);
 
-  // Inicializar editor - Solo cuando cambia activeFile, theme, fontSize o isActive
+  // Inicializar editor - Solo cuando cambia activeFile, theme, fontSize, customThemeColors o isActive
   useEffect(() => {
     if (!editorContainerRef.current || !isActive) return;
 
@@ -280,7 +308,9 @@ export default function VisualCodeTab({
             case 'js':
             case 'jsx':
             case 'mjs':
-              return javascript({ jsx: true });
+            case 'ts':
+            case 'tsx':
+              return javascript({ jsx: true, typescript: true });
             case 'py':
               return python();
             case 'html':
@@ -295,191 +325,13 @@ export default function VisualCodeTab({
           }
         };
 
-        // Configurar tema - Estilo VS Code/Cursor
-        const getTheme = () => {
-          switch (theme) {
-            case 'oneDark':
-              // Tema Dark+ de VS Code (Dark Modern)
-              return EditorView.theme({
-                '&': {
-                  backgroundColor: '#1e1e1e',
-                  color: '#d4d4d4',
-                },
-                '.cm-content': {
-                  backgroundColor: '#1e1e1e',
-                  color: '#d4d4d4',
-                  caretColor: '#aeafad',
-                },
-                '.cm-gutters': {
-                  backgroundColor: '#1e1e1e',
-                  color: '#858585',
-                  border: 'none',
-                },
-                '.cm-lineNumbers': {
-                  color: '#858585',
-                },
-                '.cm-activeLineGutter': {
-                  backgroundColor: 'transparent',
-                  color: '#c6c6c6',
-                  fontWeight: 'normal',
-                },
-                '.cm-line': {
-                  color: '#d4d4d4',
-                },
-                '.cm-keyword': { color: '#569cd6' },
-                '.cm-string': { color: '#ce9178' },
-                '.cm-comment': { color: '#6a9955' },
-                '.cm-number': { color: '#b5cea8' },
-                '.cm-function': { color: '#dcdcaa' },
-                '.cm-variable': { color: '#9cdcfe' },
-                '.cm-variable-2': { color: '#9cdcfe' },
-                '.cm-variable-3': { color: '#4ec9b0' },
-                '.cm-type': { color: '#4ec9b0' },
-                '.cm-property': { color: '#9cdcfe' },
-                '.cm-operator': { color: '#d4d4d4' },
-                '.cm-meta': { color: '#569cd6' },
-                '.cm-bracket': { color: '#d4d4d4' },
-                '.cm-tag': { color: '#569cd6' },
-                '.cm-attribute': { color: '#9cdcfe' },
-                '.cm-selectionBackground': { backgroundColor: 'rgba(173, 214, 255, 0.4) !important' },
-                '.cm-focused .cm-selectionBackground': { backgroundColor: 'rgba(173, 214, 255, 0.4) !important' },
-                '.cm-cursor': { borderLeftColor: '#aeafad' },
-                '.cm-matchingBracket': {
-                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                  outline: '1px solid rgba(255, 255, 255, 0.2)',
-                },
-                '.cm-nonmatchingBracket': {
-                  backgroundColor: 'rgba(255, 0, 0, 0.2)',
-                },
-              }, { dark: true });
-            case 'light':
-              return EditorView.theme({
-                '&': { backgroundColor: '#ffffff', color: '#333333' },
-                '.cm-content': { backgroundColor: '#ffffff', color: '#333333' },
-                '.cm-gutters': { backgroundColor: '#f5f5f5', color: '#999999' },
-              });
-            case 'monokai':
-              return EditorView.theme({
-                '&': { backgroundColor: '#272822', color: '#f8f8f2' },
-                '.cm-content': { backgroundColor: '#272822', color: '#f8f8f2' },
-                '.cm-gutters': { backgroundColor: '#272822', color: '#75715e' },
-              });
-            case 'dracula':
-              return EditorView.theme({
-                '&': { backgroundColor: '#282a36', color: '#f8f8f2' },
-                '.cm-content': { backgroundColor: '#282a36', color: '#f8f8f2' },
-                '.cm-gutters': { backgroundColor: '#282a36', color: '#6272a4' },
-              });
-            case 'tokyoNight':
-              return EditorView.theme({
-                '&': { backgroundColor: '#1a1b26', color: '#c0caf5' },
-                '.cm-content': { backgroundColor: '#1a1b26', color: '#c0caf5' },
-                '.cm-gutters': { backgroundColor: '#1a1b26', color: '#565f89' },
-              });
-            case 'cursorDark':
-              // Tema oscuro principal de Cursor
-              return EditorView.theme({
-                '&': {
-                  backgroundColor: '#1e1e1e',
-                  color: '#d4d4d4',
-                },
-                '.cm-content': {
-                  backgroundColor: '#1e1e1e',
-                  color: '#d4d4d4',
-                  caretColor: '#aeafad',
-                },
-                '.cm-gutters': {
-                  backgroundColor: '#252526',
-                  color: '#858585',
-                  border: 'none',
-                },
-                '.cm-lineNumbers': {
-                  color: '#858585',
-                },
-                '.cm-activeLineGutter': {
-                  backgroundColor: 'transparent',
-                  color: '#c6c6c6',
-                  fontWeight: 'normal',
-                },
-                '.cm-line': {
-                  color: '#d4d4d4',
-                },
-                '.cm-keyword': { color: '#569cd6' },
-                '.cm-string': { color: '#ce9178' },
-                '.cm-comment': { color: '#6a9955' },
-                '.cm-number': { color: '#b5cea8' },
-                '.cm-function': { color: '#dcdcaa' },
-                '.cm-variable': { color: '#9cdcfe' },
-                '.cm-variable-2': { color: '#9cdcfe' },
-                '.cm-variable-3': { color: '#4ec9b0' },
-                '.cm-type': { color: '#4ec9b0' },
-                '.cm-property': { color: '#9cdcfe' },
-                '.cm-operator': { color: '#d4d4d4' },
-                '.cm-meta': { color: '#569cd6' },
-                '.cm-bracket': { color: '#d4d4d4' },
-                '.cm-tag': { color: '#569cd6' },
-                '.cm-attribute': { color: '#9cdcfe' },
-                '.cm-selectionBackground': { backgroundColor: 'rgba(173, 214, 255, 0.4) !important' },
-                '.cm-focused .cm-selectionBackground': { backgroundColor: 'rgba(173, 214, 255, 0.4) !important' },
-                '.cm-cursor': { borderLeftColor: '#aeafad' },
-                '.cm-matchingBracket': {
-                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                  outline: '1px solid rgba(255, 255, 255, 0.2)',
-                },
-                '.cm-nonmatchingBracket': {
-                  backgroundColor: 'rgba(255, 0, 0, 0.2)',
-                },
-              }, { dark: true });
-            default:
-              // Tema Dark+ de VS Code por defecto
-              return EditorView.theme({
-                '&': {
-                  backgroundColor: '#1e1e1e',
-                  color: '#d4d4d4',
-                },
-                '.cm-content': {
-                  backgroundColor: '#1e1e1e',
-                  color: '#d4d4d4',
-                  caretColor: '#aeafad',
-                },
-                '.cm-gutters': {
-                  backgroundColor: '#1e1e1e',
-                  color: '#858585',
-                  border: 'none',
-                },
-                '.cm-lineNumbers': {
-                  color: '#858585',
-                },
-                '.cm-activeLineGutter': {
-                  backgroundColor: 'transparent',
-                  color: '#c6c6c6',
-                },
-                '.cm-line': {
-                  color: '#d4d4d4',
-                },
-                '.cm-keyword': { color: '#569cd6' },
-                '.cm-string': { color: '#ce9178' },
-                '.cm-comment': { color: '#6a9955' },
-                '.cm-number': { color: '#b5cea8' },
-                '.cm-function': { color: '#dcdcaa' },
-                '.cm-variable': { color: '#9cdcfe' },
-                '.cm-type': { color: '#4ec9b0' },
-                '.cm-property': { color: '#9cdcfe' },
-                '.cm-operator': { color: '#d4d4d4' },
-                '.cm-meta': { color: '#569cd6' },
-                '.cm-bracket': { color: '#d4d4d4' },
-                '.cm-selectionBackground': { backgroundColor: 'rgba(173, 214, 255, 0.4) !important' },
-                '.cm-focused .cm-selectionBackground': { backgroundColor: 'rgba(173, 214, 255, 0.4) !important' },
-                '.cm-cursor': { borderLeftColor: '#aeafad' },
-              }, { dark: true });
-          }
-        };
+        // Usar el servicio centralizado para temas
+        // getThemeExtension ahora viene del servicio CodeMirrorThemeService
 
         const editorExtensions = [
           basicSetup,
           closeBrackets(),
           getLanguage(activeFile),
-          getTheme(),
           EditorView.updateListener.of((update) => {
             if (update.docChanged && activeFile) {
               const newContent = update.state.doc.toString();
@@ -493,6 +345,7 @@ export default function VisualCodeTab({
               });
             }
           }),
+          // Estilos de layout y tipografía (NO colores - los colores vienen después)
           EditorView.theme({
             '&': {
               fontSize: `${fontSize}px`,
@@ -513,6 +366,7 @@ export default function VisualCodeTab({
               msUserSelect: 'text !important',
               pointerEvents: 'auto !important',
               cursor: 'text !important',
+              // backgroundColor y color se establecen en el tema específico
             },
             '.cm-editor': {
               height: '100%',
@@ -533,7 +387,7 @@ export default function VisualCodeTab({
               padding: '0 12px',
             },
             '.cm-gutters': {
-              backgroundColor: 'transparent',
+              // backgroundColor se establece en el tema específico, no sobrescribir aquí
               border: 'none',
               paddingRight: '8px',
             },
@@ -565,23 +419,21 @@ export default function VisualCodeTab({
             '.cm-focused': {
               outline: 'none',
             },
-            // Estilos de selección VISIBLES
-            '.cm-selectionBackground': {
-              backgroundColor: 'rgba(173, 214, 255, 0.4) !important',
-            },
-            '.cm-focused .cm-selectionBackground': {
-              backgroundColor: 'rgba(173, 214, 255, 0.4) !important',
-            },
             '.cm-selectionMatch': {
               backgroundColor: 'rgba(255, 255, 255, 0.2) !important',
             },
             // Estilo para variables no usadas (similar a Cursor/VS Code)
             '.cm-unused-variable': {
               opacity: '0.5',
-              color: '#858585',
               fontStyle: 'italic',
+              // color se establece en el tema específico
             },
           }),
+          
+          // Tema de colores AL FINAL para que tenga prioridad sobre los estilos de layout
+          // IMPORTANTE: getThemeExtension retorna un array [themeExtension, syntaxHighlighting]
+          // Usar spread operator para agregar ambas extensiones
+          ...getThemeExtension(theme, theme === 'custom' ? customThemeColors : null),
         ];
 
         // Auto Close Tag
@@ -643,31 +495,11 @@ export default function VisualCodeTab({
         setTimeout(() => {
           if (editorViewRef.current && editorViewRef.current.dom) {
             editorViewRef.current.focus();
-            console.log('[VisualCodeTab] Editor enfocado, editable:', editorViewRef.current.state.readOnly === false);
-            
             const editorElement = editorContainerRef.current?.querySelector('.cm-editor');
             if (editorElement) {
-              const computedStyle = window.getComputedStyle(editorElement);
-              console.log('[VisualCodeTab] Elemento editor encontrado:', {
-                pointerEvents: computedStyle.pointerEvents,
-                userSelect: computedStyle.userSelect,
-                contentEditable: editorElement.contentEditable,
-              });
-              
               // Asegurar que el editor pueda recibir eventos del mouse y teclado
               editorElement.setAttribute('tabindex', '0');
               editorElement.style.outline = 'none';
-            }
-            
-            // Verificar el contenido también
-            const contentElement = editorContainerRef.current?.querySelector('.cm-content');
-            if (contentElement) {
-              const computedStyle = window.getComputedStyle(contentElement);
-              console.log('[VisualCodeTab] Elemento contenido encontrado:', {
-                pointerEvents: computedStyle.pointerEvents,
-                userSelect: computedStyle.userSelect,
-                contentEditable: contentElement.contentEditable,
-              });
             }
             
             // Agregar listener de clic para enfocar el editor cuando se hace clic en el contenedor
@@ -723,7 +555,7 @@ export default function VisualCodeTab({
         editorViewRef.current = null;
       }
     };
-  }, [activeFile, isActive, theme, fontSize]); // Removido fileContents y extensions de dependencias
+  }, [activeFile, isActive, theme, fontSize, customThemeColors]); // Incluir customThemeColors para que se actualice cuando cambien los colores
 
   // Actualizar contenido del editor cuando se carga un archivo nuevo
   // NOTA: El updateListener ya maneja las actualizaciones durante la escritura
@@ -876,92 +708,8 @@ export default function VisualCodeTab({
     return filePath.split(/[/\\]/).pop() || filePath;
   };
 
-  const themes = [
-    { 
-      value: 'notion', 
-      label: 'Notion', 
-      description: 'Paleta elegante de Notion (negro con colores suaves)',
-      preview: {
-        backgroundColor: '#1E1E1E',
-        textColor: '#D4D4D4',
-        keywordColor: '#569CD6',
-        stringColor: '#CE9178',
-        commentColor: '#6A9955'
-      }
-    },
-    { 
-      value: 'oneDark', 
-      label: 'One Dark',
-      description: 'Tema oscuro popular de Atom',
-      preview: {
-        backgroundColor: '#282c34',
-        textColor: '#abb2bf',
-        keywordColor: '#c678dd',
-        stringColor: '#98c379',
-        commentColor: '#5c6370'
-      }
-    },
-    { 
-      value: 'light', 
-      label: 'Light',
-      description: 'Tema claro para trabajo diurno',
-      preview: {
-        backgroundColor: '#ffffff',
-        textColor: '#333333',
-        keywordColor: '#0000ff',
-        stringColor: '#008000',
-        commentColor: '#808080'
-      }
-    },
-    { 
-      value: 'monokai', 
-      label: 'Monokai',
-      description: 'Tema clásico de Sublime Text',
-      preview: {
-        backgroundColor: '#272822',
-        textColor: '#f8f8f2',
-        keywordColor: '#f92672',
-        stringColor: '#e6db74',
-        commentColor: '#75715e'
-      }
-    },
-    { 
-      value: 'dracula', 
-      label: 'Dracula',
-      description: 'Tema oscuro con colores vibrantes',
-      preview: {
-        backgroundColor: '#282a36',
-        textColor: '#f8f8f2',
-        keywordColor: '#ff79c6',
-        stringColor: '#f1fa8c',
-        commentColor: '#6272a4'
-      }
-    },
-    { 
-      value: 'tokyoNight', 
-      label: 'Tokyo Night',
-      description: 'Tema oscuro elegante estilo Tokyo',
-      preview: {
-        backgroundColor: '#1a1b26',
-        textColor: '#c0caf5',
-        keywordColor: '#bb9af7',
-        stringColor: '#9ece6a',
-        commentColor: '#565f89'
-      }
-    },
-    { 
-      value: 'cursorDark', 
-      label: 'Cursor Dark',
-      description: 'Tema oscuro principal de Cursor (recomendado)',
-      preview: {
-        backgroundColor: '#1e1e1e',
-        textColor: '#d4d4d4',
-        keywordColor: '#569cd6',
-        stringColor: '#ce9178',
-        commentColor: '#6a9955'
-      }
-    },
-  ];
+  // Usar la lista de temas del servicio centralizado
+  const themes = AVAILABLE_THEMES;
 
   if (!isActive) return null;
 
@@ -1390,35 +1138,58 @@ export default function VisualCodeTab({
                       
                       {/* Preview */}
                       <div
-                        className="rounded p-3 font-mono text-xs border border-[#3e3e42] whitespace-pre"
+                        className="rounded font-mono text-xs border border-[#3e3e42] whitespace-pre flex"
                         style={{
                           backgroundColor: themeOption.preview.backgroundColor,
-                          color: themeOption.preview.textColor,
                           minHeight: '80px'
                         }}
                       >
-                        <div>
-                          <span style={{ color: themeOption.preview.keywordColor }}>const</span>
-                          <span style={{ color: themeOption.preview.textColor }}> </span>
-                          <span style={{ color: themeOption.preview.textColor }}>greeting</span>
-                          <span style={{ color: themeOption.preview.textColor }}> = </span>
-                          <span style={{ color: themeOption.preview.stringColor }}>"Hello World"</span>
-                          <span style={{ color: themeOption.preview.textColor }}>;</span>
+                        {/* Gutters */}
+                        <div
+                          className="px-2 py-3 text-right select-none"
+                          style={{
+                            backgroundColor: themeOption.preview.gutterColor || themeOption.preview.backgroundColor,
+                            color: '#858585',
+                            borderRight: '1px solid rgba(255, 255, 255, 0.1)',
+                            minWidth: '40px'
+                          }}
+                        >
+                          <div>1</div>
+                          <div>2</div>
+                          <div>3</div>
+                          <div>4</div>
+                          <div>5</div>
                         </div>
-                        <div style={{ color: themeOption.preview.commentColor }}>
-                          // Comentario de ejemplo
-                        </div>
-                        <div>
-                          <span style={{ color: themeOption.preview.keywordColor }}>function</span>
-                          <span style={{ color: themeOption.preview.textColor }}> </span>
-                          <span style={{ color: themeOption.preview.textColor }}>sum</span>
-                          <span style={{ color: themeOption.preview.textColor }}>(a, b) {`{`}</span>
-                        </div>
-                        <div style={{ color: themeOption.preview.textColor }}>
-                          {'  '}return a + b;
-                        </div>
-                        <div style={{ color: themeOption.preview.textColor }}>
-                          {`}`}
+                        {/* Code content */}
+                        <div
+                          className="flex-1 p-3"
+                          style={{
+                            color: themeOption.preview.textColor
+                          }}
+                        >
+                          <div>
+                            <span style={{ color: themeOption.preview.keywordColor }}>const</span>
+                            <span style={{ color: themeOption.preview.textColor }}> </span>
+                            <span style={{ color: themeOption.preview.textColor }}>greeting</span>
+                            <span style={{ color: themeOption.preview.textColor }}> = </span>
+                            <span style={{ color: themeOption.preview.stringColor }}>"Hello World"</span>
+                            <span style={{ color: themeOption.preview.textColor }}>;</span>
+                          </div>
+                          <div style={{ color: themeOption.preview.commentColor }}>
+                            // Comentario de ejemplo
+                          </div>
+                          <div>
+                            <span style={{ color: themeOption.preview.keywordColor }}>function</span>
+                            <span style={{ color: themeOption.preview.textColor }}> </span>
+                            <span style={{ color: themeOption.preview.textColor }}>sum</span>
+                            <span style={{ color: themeOption.preview.textColor }}>(a, b) {`{`}</span>
+                          </div>
+                          <div style={{ color: themeOption.preview.textColor }}>
+                            {'  '}return a + b;
+                          </div>
+                          <div style={{ color: themeOption.preview.textColor }}>
+                            {`}`}
+                          </div>
                         </div>
                       </div>
                     </button>

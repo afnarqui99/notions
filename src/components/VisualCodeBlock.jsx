@@ -24,6 +24,13 @@ import {
   Sparkles
 } from 'lucide-react';
 import LocalStorageService from '../services/LocalStorageService';
+import { 
+  getThemeExtension, 
+  loadCustomThemeColors, 
+  saveCustomThemeColors,
+  AVAILABLE_THEMES,
+  DEFAULT_CUSTOM_THEME_COLORS
+} from '../services/CodeMirrorThemeService';
 import { EditorView, basicSetup } from 'codemirror';
 import { ViewPlugin, Decoration } from '@codemirror/view';
 import { closeBrackets } from '@codemirror/autocomplete';
@@ -160,6 +167,10 @@ function ExtensionsPanel({ extensions, setExtensions }) {
 
 export default function VisualCodeBlock({ node, updateAttributes, deleteNode, editor, getPos }) {
   const [projectPath, setProjectPath] = useState(node.attrs.projectPath || '');
+  
+  // Estado para colores personalizados del tema
+  const [customThemeColors, setCustomThemeColors] = useState(DEFAULT_CUSTOM_THEME_COLORS);
+
   const [openFiles, setOpenFiles] = useState(() => {
     try {
       return node.attrs.openFiles ? JSON.parse(node.attrs.openFiles) : [];
@@ -194,7 +205,7 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
     try {
       return node.attrs.theme || 'cursorDark';
     } catch {
-      return 'oneDark';
+      return 'cursorDark';
     }
   });
   const [projectTitle, setProjectTitle] = useState(() => {
@@ -384,6 +395,7 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
       // Crear nuevo editor
       const timer = setTimeout(() => {
         if (activeFile && editorContainerRef.current) {
+          console.log('[VisualCodeBlock] Reinicializando editor con tema:', theme, 'customThemeColors:', customThemeColors);
           initializeEditor();
         }
       }, 50);
@@ -403,7 +415,7 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
         editorContainerRef.current.innerHTML = '';
       }
     }
-  }, [activeFile, theme, fileContents, openFiles]);
+  }, [activeFile, theme, fileContents, openFiles, customThemeColors]); // Incluir customThemeColors para que se actualice cuando cambien los colores
 
   const loadFileTree = async (rootPath) => {
     if (!rootPath || rootPath.trim() === '') {
@@ -411,21 +423,10 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
       return;
     }
     
-    // Validar que la ruta sea una ruta completa (contiene / o \ o :)
-    // Si solo es un nombre de carpeta, no es una ruta válida
-    const isFullPath = rootPath.includes('/') || rootPath.includes('\\') || rootPath.includes(':');
-    
-    if (!isFullPath) {
-      console.warn('[VisualCodeBlock] La ruta del proyecto no es una ruta completa:', rootPath);
-      console.warn('[VisualCodeBlock] Este proyecto probablemente fue creado en modo navegador.');
-      console.warn('[VisualCodeBlock] Por favor, selecciona la carpeta nuevamente usando "Abrir Carpeta"');
-      setLoading(false);
-      return;
-    }
-    
     setLoading(true);
     try {
       if (window.electronAPI && window.electronAPI.listDirectory) {
+        // Electron: usar API de Electron
         const result = await window.electronAPI.listDirectory(rootPath);
         if (result.error) {
           console.error('Error cargando directorio:', result.error);
@@ -440,7 +441,25 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
         setFileTree({ [rootPath]: items });
         setExpandedFolders(new Set([rootPath]));
       } else {
-        console.warn('[VisualCodeBlock] Electron API no disponible. No se pueden cargar archivos.');
+        // Navegador: buscar el handle del directorio
+        console.log('[VisualCodeBlock] Buscando handle del directorio para navegador...');
+        
+        // Buscar en window.directoryHandles
+        let dirHandle = null;
+        if (typeof window !== 'undefined' && window.directoryHandles) {
+          dirHandle = Array.from(window.directoryHandles.values()).find(
+            h => h.name === rootPath || rootPath.includes(h.name)
+          );
+        }
+        
+        if (dirHandle) {
+          console.log('[VisualCodeBlock] Handle encontrado, cargando archivos...');
+          await loadFilesFromBrowserHandle(dirHandle, rootPath);
+        } else {
+          console.warn('[VisualCodeBlock] No se encontró handle del directorio. Por favor, selecciona la carpeta nuevamente.');
+          // Mostrar mensaje al usuario
+          setFileTree({ [rootPath]: [] });
+        }
       }
     } catch (error) {
       console.error('Error al cargar archivos:', error);
@@ -449,9 +468,46 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
     }
   };
 
+  // Cargar archivos desde un DirectoryHandle del navegador
+  const loadFilesFromBrowserHandle = async (dirHandle, basePath) => {
+    try {
+      const items = [];
+      
+      for await (const [name, handle] of dirHandle.entries()) {
+        // Ignorar archivos y carpetas ocultas y node_modules
+        if (name.startsWith('.') || name === 'node_modules') {
+          continue;
+        }
+        
+        const item = {
+          name: name,
+          path: basePath === name ? name : `${basePath}/${name}`,
+          type: handle.kind === 'directory' ? 'folder' : 'file',
+          handle: handle, // Guardar el handle para uso futuro
+          children: handle.kind === 'directory' ? {} : null,
+          loaded: false
+        };
+        
+        items.push(item);
+      }
+      
+      // Actualizar solo la carpeta específica, manteniendo el resto del árbol
+      setFileTree(prev => ({ ...prev, [basePath]: items }));
+      // Mantener las carpetas ya expandidas, solo agregar la actual si no está
+      setExpandedFolders(prev => {
+        const newSet = new Set(prev);
+        newSet.add(basePath);
+        return newSet;
+      });
+    } catch (error) {
+      console.error('[VisualCodeBlock] Error cargando archivos desde handle:', error);
+    }
+  };
+
   const loadFolder = async (folderPath) => {
     try {
       if (window.electronAPI && window.electronAPI.listDirectory) {
+        // Electron: usar API de Electron
         const result = await window.electronAPI.listDirectory(folderPath);
         if (result.error) return;
         const items = (result.files || []).map(item => ({
@@ -460,6 +516,35 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
           loaded: false
         }));
         setFileTree(prev => ({ ...prev, [folderPath]: items }));
+      } else {
+        // Navegador: buscar el handle de la carpeta en el fileTree
+        console.log('[VisualCodeBlock] Buscando handle de carpeta para navegador...', folderPath);
+        
+        // Buscar la carpeta en el fileTree actual
+        const findFolderInTree = (tree, targetPath) => {
+          for (const [key, items] of Object.entries(tree)) {
+            for (const item of items) {
+              if (item.path === targetPath && item.type === 'folder' && item.handle) {
+                return item.handle;
+              }
+              // Buscar recursivamente en subcarpetas
+              if (item.type === 'folder' && tree[item.path]) {
+                const found = findFolderInTree({ [item.path]: tree[item.path] }, targetPath);
+                if (found) return found;
+              }
+            }
+          }
+          return null;
+        };
+        
+        const folderHandle = findFolderInTree(fileTree, folderPath);
+        
+        if (folderHandle && folderHandle.kind === 'directory') {
+          console.log('[VisualCodeBlock] Handle de carpeta encontrado, cargando contenido...');
+          await loadFilesFromBrowserHandle(folderHandle, folderPath);
+        } else {
+          console.warn('[VisualCodeBlock] No se encontró el handle de la carpeta:', folderPath);
+        }
       }
     } catch (error) {
       console.error('Error cargando carpeta:', error);
@@ -502,7 +587,31 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
           return;
         }
       } else {
-        console.warn('[VisualCodeBlock] Electron API no disponible');
+        // Navegador: buscar el handle del archivo en el fileTree
+        console.log('[VisualCodeBlock] Buscando archivo en fileTree para navegador...');
+        const fileItem = Object.values(fileTree).flat().find(item => item.path === filePath);
+        if (fileItem?.handle && fileItem.handle.kind === 'file') {
+          try {
+            console.log('[VisualCodeBlock] Leyendo archivo desde handle del navegador...');
+            const file = await fileItem.handle.getFile();
+            content = await file.text();
+            console.log('[VisualCodeBlock] Contenido leído desde navegador, longitud:', content.length);
+          } catch (error) {
+            console.error('[VisualCodeBlock] Error leyendo archivo desde handle:', error);
+            alert('Error al leer archivo: ' + error.message);
+            return;
+          }
+        } else {
+          console.warn('[VisualCodeBlock] No se encontró el archivo en fileTree o no tiene handle');
+          // Intentar buscar en el contenido ya cargado
+          if (fileContents[filePath]) {
+            content = fileContents[filePath];
+            console.log('[VisualCodeBlock] Usando contenido ya cargado del archivo');
+          } else {
+            alert('No se pudo abrir el archivo. Por favor, selecciona la carpeta nuevamente.');
+            return;
+          }
+        }
       }
 
       console.log('[VisualCodeBlock] Actualizando estado del archivo...');
@@ -577,11 +686,42 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
           }
         }
       } else if ('showDirectoryPicker' in window) {
-        const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
-        const folderName = handle.name;
-        setProjectPath(folderName);
+        // Navegador: usar File System Access API
+        try {
+          const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+          const folderName = handle.name;
+          const folderPath = folderName; // En navegador, usamos el nombre como identificador
+          
+          // Guardar el handle en window.directoryHandles si existe
+          if (typeof window !== 'undefined') {
+            if (!window.directoryHandles) {
+              window.directoryHandles = new Map();
+            }
+            window.directoryHandles.set(folderPath, handle);
+          }
+          
+          setProjectPath(folderPath);
+          setOpenFiles([]);
+          setActiveFile('');
+          setFileContents({});
+          if (editorViewRef.current) {
+            editorViewRef.current.destroy();
+            editorViewRef.current = null;
+          }
+          
+          // Cargar archivos usando el handle del navegador
+          await loadFilesFromBrowserHandle(handle, folderPath);
+        } catch (error) {
+          if (error.name !== 'AbortError') {
+            console.error('Error seleccionando carpeta:', error);
+            alert('Error al seleccionar carpeta: ' + error.message);
+          }
+        }
       } else {
-        alert('Tu navegador no soporta la selección de carpetas. Usa la versión Electron.');
+        alert('Tu navegador no soporta la selección de carpetas.\n\n' +
+          'Funciones disponibles:\n' +
+          '• Chrome/Edge: Funciona con File System Access API\n' +
+          '• Firefox/Safari: Usa la versión Electron de la aplicación');
       }
     } catch (error) {
       if (error.name !== 'AbortError') {
@@ -605,339 +745,8 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
     return langMap[ext] || 'javascript';
   };
 
-  // Funciones para temas
-  const getThemeExtension = () => {
-    switch (theme) {
-      case 'notion':
-        // Paleta de colores de Notion
-        return EditorView.theme({
-          '&': {
-            backgroundColor: '#1E1E1E',
-            color: '#D4D4D4',
-          },
-          '.cm-content': {
-            backgroundColor: '#1E1E1E',
-            color: '#D4D4D4',
-            caretColor: '#AEAFAD',
-          },
-          '.cm-gutters': {
-            backgroundColor: '#1E1E1E',
-            color: '#858585',
-            border: 'none',
-          },
-          '.cm-line': {
-            color: '#D4D4D4',
-          },
-          '.cm-keyword': { color: '#569CD6' },
-          '.cm-string': { color: '#CE9178' },
-          '.cm-comment': { color: '#6A9955' },
-          '.cm-number': { color: '#B5CEA8' },
-          '.cm-function': { color: '#DCDCAA' },
-          '.cm-variable': { color: '#9CDCFE' },
-          '.cm-type': { color: '#4EC9B0' },
-          '.cm-property': { color: '#9CDCFE' },
-          '.cm-operator': { color: '#D4D4D4' },
-          '.cm-meta': { color: '#569CD6' },
-          '.cm-bracket': { color: '#D4D4D4' },
-          '.cm-selectionBackground': { backgroundColor: '#264F78' },
-          '.cm-cursor': { borderLeftColor: '#AEAFAD' },
-        }, { dark: true });
-      case 'oneDark':
-        // Tema Dark+ de VS Code (Dark Modern)
-        return EditorView.theme({
-          '&': {
-            backgroundColor: '#1e1e1e',
-            color: '#d4d4d4',
-          },
-          '.cm-content': {
-            backgroundColor: '#1e1e1e',
-            color: '#d4d4d4',
-            caretColor: '#aeafad',
-          },
-          '.cm-gutters': {
-            backgroundColor: '#1e1e1e',
-            color: '#858585',
-            border: 'none',
-          },
-          '.cm-lineNumbers': {
-            color: '#858585',
-          },
-          '.cm-activeLineGutter': {
-            backgroundColor: 'transparent',
-            color: '#c6c6c6',
-            fontWeight: 'normal',
-          },
-          '.cm-line': {
-            color: '#d4d4d4',
-          },
-          '.cm-keyword': { color: '#569cd6' },
-          '.cm-string': { color: '#ce9178' },
-          '.cm-comment': { color: '#6a9955' },
-          '.cm-number': { color: '#b5cea8' },
-          '.cm-function': { color: '#dcdcaa' },
-          '.cm-variable': { color: '#9cdcfe' },
-          '.cm-variable-2': { color: '#9cdcfe' },
-          '.cm-variable-3': { color: '#4ec9b0' },
-          '.cm-type': { color: '#4ec9b0' },
-          '.cm-property': { color: '#9cdcfe' },
-          '.cm-operator': { color: '#d4d4d4' },
-          '.cm-meta': { color: '#569cd6' },
-          '.cm-bracket': { color: '#d4d4d4' },
-          '.cm-tag': { color: '#569cd6' },
-          '.cm-attribute': { color: '#9cdcfe' },
-          '.cm-selectionBackground': { backgroundColor: '#264f78' },
-          '.cm-cursor': { borderLeftColor: '#aeafad' },
-          '.cm-matchingBracket': {
-            backgroundColor: 'rgba(255, 255, 255, 0.1)',
-            outline: '1px solid rgba(255, 255, 255, 0.2)',
-          },
-          '.cm-nonmatchingBracket': {
-            backgroundColor: 'rgba(255, 0, 0, 0.2)',
-          },
-        }, { dark: true });
-      case 'light':
-        return EditorView.theme({
-          '&': {
-            backgroundColor: '#ffffff',
-            color: '#333333',
-          },
-          '.cm-content': {
-            backgroundColor: '#ffffff',
-            color: '#333333',
-          },
-          '.cm-gutters': {
-            backgroundColor: '#f5f5f5',
-            color: '#999999',
-          },
-        });
-      case 'monokai':
-        return EditorView.theme({
-          '&': {
-            backgroundColor: '#272822',
-            color: '#f8f8f2',
-          },
-          '.cm-content': {
-            backgroundColor: '#272822',
-            color: '#f8f8f2',
-          },
-          '.cm-gutters': {
-            backgroundColor: '#272822',
-            color: '#75715e',
-          },
-        });
-      case 'dracula':
-        return EditorView.theme({
-          '&': {
-            backgroundColor: '#282a36',
-            color: '#f8f8f2',
-          },
-          '.cm-content': {
-            backgroundColor: '#282a36',
-            color: '#f8f8f2',
-          },
-          '.cm-gutters': {
-            backgroundColor: '#282a36',
-            color: '#6272a4',
-          },
-        });
-      case 'tokyoNight':
-        return EditorView.theme({
-          '&': {
-            backgroundColor: '#1a1b26',
-            color: '#c0caf5',
-          },
-          '.cm-content': {
-            backgroundColor: '#1a1b26',
-            color: '#c0caf5',
-          },
-          '.cm-gutters': {
-            backgroundColor: '#1a1b26',
-            color: '#565f89',
-          },
-        });
-      case 'cursorDark':
-        // Tema oscuro principal de Cursor (similar a VS Code Dark+ pero con ajustes)
-        return EditorView.theme({
-          '&': {
-            backgroundColor: '#1e1e1e',
-            color: '#d4d4d4',
-          },
-          '.cm-content': {
-            backgroundColor: '#1e1e1e',
-            color: '#d4d4d4',
-            caretColor: '#aeafad',
-          },
-          '.cm-gutters': {
-            backgroundColor: '#252526',
-            color: '#858585',
-            border: 'none',
-          },
-          '.cm-lineNumbers': {
-            color: '#858585',
-          },
-          '.cm-activeLineGutter': {
-            backgroundColor: 'transparent',
-            color: '#c6c6c6',
-            fontWeight: 'normal',
-          },
-          '.cm-line': {
-            color: '#d4d4d4',
-          },
-          '.cm-keyword': { color: '#569cd6' },
-          '.cm-string': { color: '#ce9178' },
-          '.cm-comment': { color: '#6a9955' },
-          '.cm-number': { color: '#b5cea8' },
-          '.cm-function': { color: '#dcdcaa' },
-          '.cm-variable': { color: '#9cdcfe' },
-          '.cm-variable-2': { color: '#9cdcfe' },
-          '.cm-variable-3': { color: '#4ec9b0' },
-          '.cm-type': { color: '#4ec9b0' },
-          '.cm-property': { color: '#9cdcfe' },
-          '.cm-operator': { color: '#d4d4d4' },
-          '.cm-meta': { color: '#569cd6' },
-          '.cm-bracket': { color: '#d4d4d4' },
-          '.cm-tag': { color: '#569cd6' },
-          '.cm-attribute': { color: '#9cdcfe' },
-          '.cm-selectionBackground': { backgroundColor: '#264f78' },
-          '.cm-cursor': { borderLeftColor: '#aeafad' },
-          '.cm-matchingBracket': {
-            backgroundColor: 'rgba(255, 255, 255, 0.1)',
-            outline: '1px solid rgba(255, 255, 255, 0.2)',
-          },
-          '.cm-nonmatchingBracket': {
-            backgroundColor: 'rgba(255, 0, 0, 0.2)',
-          },
-        }, { dark: true });
-      default:
-        // Tema Dark+ de VS Code por defecto
-        return EditorView.theme({
-          '&': {
-            backgroundColor: '#1e1e1e',
-            color: '#d4d4d4',
-          },
-          '.cm-content': {
-            backgroundColor: '#1e1e1e',
-            color: '#d4d4d4',
-            caretColor: '#aeafad',
-          },
-          '.cm-gutters': {
-            backgroundColor: '#1e1e1e',
-            color: '#858585',
-            border: 'none',
-          },
-          '.cm-lineNumbers': {
-            color: '#858585',
-          },
-          '.cm-activeLineGutter': {
-            backgroundColor: 'transparent',
-            color: '#c6c6c6',
-          },
-          '.cm-line': {
-            color: '#d4d4d4',
-          },
-          '.cm-keyword': { color: '#569cd6' },
-          '.cm-string': { color: '#ce9178' },
-          '.cm-comment': { color: '#6a9955' },
-          '.cm-number': { color: '#b5cea8' },
-          '.cm-function': { color: '#dcdcaa' },
-          '.cm-variable': { color: '#9cdcfe' },
-          '.cm-type': { color: '#4ec9b0' },
-          '.cm-property': { color: '#9cdcfe' },
-          '.cm-operator': { color: '#d4d4d4' },
-          '.cm-meta': { color: '#569cd6' },
-          '.cm-bracket': { color: '#d4d4d4' },
-          '.cm-selectionBackground': { backgroundColor: '#264f78' },
-          '.cm-cursor': { borderLeftColor: '#aeafad' },
-        }, { dark: true });
-    }
-  };
-
-  const themes = [
-    { 
-      value: 'notion', 
-      label: 'Notion', 
-      description: 'Paleta elegante de Notion (negro con colores suaves)',
-      preview: {
-        backgroundColor: '#1E1E1E',
-        textColor: '#D4D4D4',
-        keywordColor: '#569CD6',
-        stringColor: '#CE9178',
-        commentColor: '#6A9955'
-      }
-    },
-    { 
-      value: 'oneDark', 
-      label: 'One Dark',
-      description: 'Tema oscuro popular de Atom',
-      preview: {
-        backgroundColor: '#282c34',
-        textColor: '#abb2bf',
-        keywordColor: '#c678dd',
-        stringColor: '#98c379',
-        commentColor: '#5c6370'
-      }
-    },
-    { 
-      value: 'light', 
-      label: 'Light',
-      description: 'Tema claro para trabajo diurno',
-      preview: {
-        backgroundColor: '#ffffff',
-        textColor: '#333333',
-        keywordColor: '#0000ff',
-        stringColor: '#008000',
-        commentColor: '#808080'
-      }
-    },
-    { 
-      value: 'monokai', 
-      label: 'Monokai',
-      description: 'Tema clásico de Sublime Text',
-      preview: {
-        backgroundColor: '#272822',
-        textColor: '#f8f8f2',
-        keywordColor: '#f92672',
-        stringColor: '#e6db74',
-        commentColor: '#75715e'
-      }
-    },
-    { 
-      value: 'dracula', 
-      label: 'Dracula',
-      description: 'Tema oscuro con colores vibrantes',
-      preview: {
-        backgroundColor: '#282a36',
-        textColor: '#f8f8f2',
-        keywordColor: '#ff79c6',
-        stringColor: '#f1fa8c',
-        commentColor: '#6272a4'
-      }
-    },
-    { 
-      value: 'tokyoNight', 
-      label: 'Tokyo Night',
-      description: 'Tema oscuro elegante estilo Tokyo',
-      preview: {
-        backgroundColor: '#1a1b26',
-        textColor: '#c0caf5',
-        keywordColor: '#bb9af7',
-        stringColor: '#9ece6a',
-        commentColor: '#565f89'
-      }
-    },
-    { 
-      value: 'cursorDark', 
-      label: 'Cursor Dark',
-      description: 'Tema oscuro principal de Cursor (recomendado)',
-      preview: {
-        backgroundColor: '#1e1e1e',
-        textColor: '#d4d4d4',
-        keywordColor: '#569cd6',
-        stringColor: '#ce9178',
-        commentColor: '#6a9955'
-      }
-    },
-  ];
+  // Usar el servicio centralizado para temas
+  // getThemeExtension y themes ahora vienen del servicio CodeMirrorThemeService
 
   const initializeEditor = () => {
     if (!editorContainerRef.current || !activeFile) return;
@@ -948,7 +757,8 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
     let langExtension;
     switch (language) {
       case 'javascript':
-        langExtension = javascript({ jsx: true, typescript: false });
+        // Habilitar TypeScript para mejor resaltado de sintaxis
+        langExtension = javascript({ jsx: true, typescript: true });
         break;
       case 'python':
         langExtension = python();
@@ -977,18 +787,7 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
       // Cerrar brackets automáticamente
       closeBrackets(),
       
-      // Tema
-      getThemeExtension(),
-      
-      // Listener para cambios
-      EditorView.updateListener.of((update) => {
-        if (update.docChanged) {
-          const newContent = update.state.doc.toString();
-          setFileContents(prev => ({ ...prev, [activeFile]: newContent }));
-        }
-      }),
-      
-      // Tema personalizado con estilos exactos de VS Code/Cursor
+      // Estilos de layout y tipografía (NO colores - los colores vienen después)
       EditorView.theme({
         '&': {
           fontSize: `${fontSize}px`,
@@ -1007,6 +806,7 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
           WebkitUserSelect: 'text',
           MozUserSelect: 'text',
           msUserSelect: 'text',
+          // backgroundColor se establece en el tema específico, no sobrescribir aquí
         },
         '.cm-editor': {
           height: '100%',
@@ -1023,7 +823,7 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
           padding: '0 12px',
         },
         '.cm-gutters': {
-          backgroundColor: 'transparent',
+          // backgroundColor se establece en el tema específico, no sobrescribir aquí
           border: 'none',
           paddingRight: '8px',
         },
@@ -1056,12 +856,7 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
           borderLeftWidth: '2px',
           borderLeftStyle: 'solid',
         },
-        '.cm-selectionBackground': {
-          backgroundColor: 'rgba(173, 214, 255, 0.3)',
-        },
-        '.cm-focused .cm-selectionBackground': {
-          backgroundColor: 'rgba(173, 214, 255, 0.3)',
-        },
+        // .cm-selectionBackground se establece en el tema específico, no sobrescribir aquí
         '.cm-selectionMatch': {
           backgroundColor: 'rgba(255, 255, 255, 0.1)',
         },
@@ -1094,10 +889,23 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
         // Estilo para variables no usadas (similar a Cursor/VS Code)
         '.cm-unused-variable': {
           opacity: '0.5',
-          color: '#858585',
           fontStyle: 'italic',
+          // color se establece en el tema específico
         },
-      }, { dark: theme !== 'light' }),
+      }),
+      
+      // Tema de colores AL FINAL para que tenga prioridad sobre los estilos de layout
+      // IMPORTANTE: getThemeExtension retorna un array [themeExtension, syntaxHighlighting]
+      // Usar spread operator para agregar ambas extensiones
+      ...getThemeExtension(theme, theme === 'custom' ? customThemeColors : null),
+      
+      // Listener para cambios
+      EditorView.updateListener.of((update) => {
+        if (update.docChanged) {
+          const newContent = update.state.doc.toString();
+          setFileContents(prev => ({ ...prev, [activeFile]: newContent }));
+        }
+      }),
     ];
 
     // Auto Close Tag - Cerrar automáticamente etiquetas HTML/XML
@@ -1119,7 +927,10 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
       hasContainer: !!editorContainerRef.current,
       contentLength: content.length,
       language,
-      extensionsCount: editorExtensions.length
+      theme,
+      extensionsCount: editorExtensions.length,
+      isCustomTheme: theme === 'custom',
+      customThemeColors: theme === 'custom' ? customThemeColors : null
     });
 
     const view = new EditorView({
@@ -1922,7 +1733,7 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
             {/* Content */}
             <div className="flex-1 overflow-y-auto p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {themes.map((themeOption) => {
+                {AVAILABLE_THEMES.map((themeOption) => {
                   const isSelected = theme === themeOption.value;
                   return (
                     <button
@@ -1953,35 +1764,58 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
                       
                       {/* Preview */}
                       <div
-                        className="rounded p-3 font-mono text-xs border border-[#3e3e42] whitespace-pre"
+                        className="rounded font-mono text-xs border border-[#3e3e42] whitespace-pre flex"
                         style={{
                           backgroundColor: themeOption.preview.backgroundColor,
-                          color: themeOption.preview.textColor,
                           minHeight: '80px'
                         }}
                       >
-                        <div>
-                          <span style={{ color: themeOption.preview.keywordColor }}>const</span>
-                          <span style={{ color: themeOption.preview.textColor }}> </span>
-                          <span style={{ color: themeOption.preview.textColor }}>greeting</span>
-                          <span style={{ color: themeOption.preview.textColor }}> = </span>
-                          <span style={{ color: themeOption.preview.stringColor }}>"Hello World"</span>
-                          <span style={{ color: themeOption.preview.textColor }}>;</span>
+                        {/* Gutters */}
+                        <div
+                          className="px-2 py-3 text-right select-none"
+                          style={{
+                            backgroundColor: themeOption.preview.gutterColor || themeOption.preview.backgroundColor,
+                            color: '#858585',
+                            borderRight: '1px solid rgba(255, 255, 255, 0.1)',
+                            minWidth: '40px'
+                          }}
+                        >
+                          <div>1</div>
+                          <div>2</div>
+                          <div>3</div>
+                          <div>4</div>
+                          <div>5</div>
                         </div>
-                        <div style={{ color: themeOption.preview.commentColor }}>
-                          // Comentario de ejemplo
-                        </div>
-                        <div>
-                          <span style={{ color: themeOption.preview.keywordColor }}>function</span>
-                          <span style={{ color: themeOption.preview.textColor }}> </span>
-                          <span style={{ color: themeOption.preview.textColor }}>sum</span>
-                          <span style={{ color: themeOption.preview.textColor }}>(a, b) {`{`}</span>
-                        </div>
-                        <div style={{ color: themeOption.preview.textColor }}>
-                          {'  '}return a + b;
-                        </div>
-                        <div style={{ color: themeOption.preview.textColor }}>
-                          {`}`}
+                        {/* Code content */}
+                        <div
+                          className="flex-1 p-3"
+                          style={{
+                            color: themeOption.preview.textColor
+                          }}
+                        >
+                          <div>
+                            <span style={{ color: themeOption.preview.keywordColor }}>const</span>
+                            <span style={{ color: themeOption.preview.textColor }}> </span>
+                            <span style={{ color: themeOption.preview.textColor }}>greeting</span>
+                            <span style={{ color: themeOption.preview.textColor }}> = </span>
+                            <span style={{ color: themeOption.preview.stringColor }}>"Hello World"</span>
+                            <span style={{ color: themeOption.preview.textColor }}>;</span>
+                          </div>
+                          <div style={{ color: themeOption.preview.commentColor }}>
+                            // Comentario de ejemplo
+                          </div>
+                          <div>
+                            <span style={{ color: themeOption.preview.keywordColor }}>function</span>
+                            <span style={{ color: themeOption.preview.textColor }}> </span>
+                            <span style={{ color: themeOption.preview.textColor }}>sum</span>
+                            <span style={{ color: themeOption.preview.textColor }}>(a, b) {`{`}</span>
+                          </div>
+                          <div style={{ color: themeOption.preview.textColor }}>
+                            {'  '}return a + b;
+                          </div>
+                          <div style={{ color: themeOption.preview.textColor }}>
+                            {`}`}
+                          </div>
                         </div>
                       </div>
                     </button>

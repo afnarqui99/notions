@@ -101,23 +101,6 @@ export function getSlashCommandItems() {
       },
     },
     {
-      label: "Visual Code",
-      description: "Editor de código similar a Visual Studio Code con explorador de archivos",
-      icon: "📁",
-      keywords: ["visualcode", "vscode", "editor", "codigo", "code", "programar", "desarrollar"],
-      command: ({ editor, range }) => {
-        editor.chain().focus().deleteRange(range).insertContent({
-          type: 'visualCodeBlock',
-          attrs: {
-            projectPath: '',
-            openFiles: '[]',
-            activeFile: '',
-            fileContents: '{}',
-          },
-        }).run();
-      },
-    },
-    {
       label: "Convertidor",
       description: "Convertir documentos: Markdown a PDF, PDF a Word, Word a PDF",
       icon: "🔄",
@@ -128,6 +111,21 @@ export function getSlashCommandItems() {
           attrs: {
             conversionType: 'markdown-to-pdf',
             inputContent: '',
+          },
+        }).run();
+      },
+    },
+    {
+      label: "Diagrama",
+      description: "Crear diagramas: flujo, secuencia, clase, estado, Gantt, ER - Similar a draw.io",
+      icon: "📊",
+      keywords: ["diagrama", "diagram", "drawio", "draw.io", "flujo", "secuencia", "clase", "estado", "gantt", "arquitectura", "mermaid"],
+      command: ({ editor, range }) => {
+        editor.chain().focus().deleteRange(range).insertContent({
+          type: 'diagramBlock',
+          attrs: {
+            diagramType: 'flowchart',
+            content: '',
           },
         }).run();
       },
