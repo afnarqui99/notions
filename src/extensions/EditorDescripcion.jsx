@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
-import { SlashCommand } from './SlashCommand';
 import Heading from "@tiptap/extension-heading";
 import { CodeBlockWithCopyExtension } from "./CodeBlockWithCopyExtension";
 import { MarkdownNodeExtension } from "./MarkdownNodeExtension";
@@ -25,6 +24,9 @@ import TaskItem from "@tiptap/extension-task-item";
 import { Toggle } from "./Toggle";
 import EmojiPicker from '../components/EmojiPicker';
 import QuickScrollNavigation from '../components/QuickScrollNavigation';
+import CommandButtonModal from '../components/CommandButtonModal';
+import { getSlashCommandItems } from '../utils/slashCommandItems';
+import { Command } from 'lucide-react';
 
 export default function EditorDescripcion({ content, onChange, autoFocus = false }) {
   const isUpdatingFromEditor = useRef(false);
@@ -33,6 +35,8 @@ export default function EditorDescripcion({ content, onChange, autoFocus = false
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [emojiPickerPosition, setEmojiPickerPosition] = useState({ top: 0, left: 0 });
   const emojiPickerRef = useRef(null);
+  const [showCommandButtonModal, setShowCommandButtonModal] = useState(false);
+  const [cursorPosition, setCursorPosition] = useState({ top: 160, left: 80 });
 
   const editor = useEditor({
     extensions: [
@@ -66,8 +70,7 @@ export default function EditorDescripcion({ content, onChange, autoFocus = false
         },
       }),
       Link.configure({ openOnClick: false, autolink: false }),
-      Placeholder.configure({ placeholder: "Escribe '/' para comandos..." }),
-      SlashCommand,
+      Placeholder.configure({ placeholder: "Escribe aquí..." }),
     ],
     content: content || { type: 'doc', content: [{ type: 'paragraph' }] },
     onUpdate: ({ editor }) => {
@@ -440,6 +443,66 @@ export default function EditorDescripcion({ content, onChange, autoFocus = false
     };
   }, [showEmojiPicker]);
 
+  // Trackear posición del cursor para el botón flotante
+  // El botón se mantiene fijo a la izquierda y sigue el cursor verticalmente
+  useEffect(() => {
+    if (!editor) return;
+
+    const updateCursorPosition = () => {
+      try {
+        const { from } = editor.state.selection;
+        const coords = editor.view.coordsAtPos(from);
+        const editorContainer = editorContainerRef.current;
+        
+        if (editorContainer && coords) {
+          const containerRect = editorContainer.getBoundingClientRect();
+          const scrollTop = editorContainer.scrollTop;
+          
+          // Posición horizontal: fija a la izquierda (80px)
+          const leftPos = 80;
+          
+          // Posición vertical: sigue el cursor (20px debajo del cursor)
+          let topPos = coords.top - containerRect.top + scrollTop + 20;
+          
+          // Asegurar que el botón no se salga por arriba
+          if (topPos < 20) {
+            topPos = 20;
+          }
+          
+          setCursorPosition({ top: topPos, left: leftPos });
+        }
+      } catch (e) {
+        // Ignorar errores al obtener posición del cursor
+      }
+    };
+
+    const handleUpdate = () => {
+      updateCursorPosition();
+    };
+
+    const handleSelectionUpdate = () => {
+      updateCursorPosition();
+    };
+
+    editor.on('selectionUpdate', handleSelectionUpdate);
+    editor.on('update', handleUpdate);
+    editor.on('focus', handleUpdate);
+
+    const scrollContainer = editorContainerRef.current;
+    if (scrollContainer) {
+      scrollContainer.addEventListener('scroll', updateCursorPosition, { passive: true });
+    }
+
+    return () => {
+      editor.off('selectionUpdate', handleSelectionUpdate);
+      editor.off('update', handleUpdate);
+      editor.off('focus', handleUpdate);
+      if (scrollContainer) {
+        scrollContainer.removeEventListener('scroll', updateCursorPosition);
+      }
+    };
+  }, [editor]);
+
   const handleEmojiSelect = (emoji) => {
     if (!editor) return;
     
@@ -513,6 +576,32 @@ export default function EditorDescripcion({ content, onChange, autoFocus = false
         }
       }}
     >
+      {/* Botón flotante de comandos - fijo a la izquierda, sigue el cursor verticalmente */}
+      {editor && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            setShowCommandButtonModal(true);
+          }}
+          onMouseDown={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+          }}
+          className="absolute z-50 bg-pink-600 hover:bg-pink-700 text-white rounded-full shadow-2xl transition-all hover:scale-110 flex items-center justify-center border-2 border-white pointer-events-auto"
+          style={{
+            top: `${cursorPosition.top}px`,
+            left: `${cursorPosition.left}px`,
+            width: '44px',
+            height: '44px',
+            boxShadow: '0 4px 12px rgba(219, 39, 119, 0.4)',
+          }}
+          title="Insertar comando"
+        >
+          <Command className="w-5 h-5" />
+        </button>
+      )}
+
       <EditorContent editor={editor} />
       
       {/* Emoji Picker para el editor dentro del Portal */}
@@ -543,6 +632,31 @@ export default function EditorDescripcion({ content, onChange, autoFocus = false
       
       {/* Navegación rápida */}
       <QuickScrollNavigation containerRef={editorContainerRef} />
+
+      {/* Modal de Comandos */}
+      {showCommandButtonModal && editor && (
+        <CommandButtonModal
+          isOpen={showCommandButtonModal}
+          onClose={() => {
+            setShowCommandButtonModal(false);
+          }}
+          items={getSlashCommandItems()}
+          onSelectCommand={(item) => {
+            // Cerrar el modal
+            setShowCommandButtonModal(false);
+            
+            // Ejecutar el comando después de un pequeño delay
+            setTimeout(() => {
+              const { from, to } = editor.state.selection;
+              const range = { from, to };
+              
+              if (item.command) {
+                item.command({ editor, range });
+              }
+            }, 50);
+          }}
+        />
+      )}
     </div>
   );
 }
