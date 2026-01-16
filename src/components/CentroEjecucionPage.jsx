@@ -28,6 +28,8 @@ import VisualCodeTab from './VisualCodeTab';
 import TerminalSettingsModal from './TerminalSettingsModal';
 import terminalCommandService from '../services/TerminalCommandService';
 import LocalStorageService from '../services/LocalStorageService';
+import Toast from './Toast';
+import ConfirmDeleteModal from './ConfirmDeleteModal';
 
 export default function CentroEjecucionPage({ onClose }) {
   const [terminals, setTerminals] = useState([]);
@@ -47,6 +49,9 @@ export default function CentroEjecucionPage({ onClose }) {
   const [loadingProjects, setLoadingProjects] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true); // Por defecto colapsado
   const [showSidebarSettings, setShowSidebarSettings] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState(null);
   const [sidebarStyles, setSidebarStyles] = useState({
     width: 256, // 64 * 4 = 256px (w-64)
     backgroundColor: '#000000', // Por defecto negro
@@ -325,7 +330,42 @@ export default function CentroEjecucionPage({ onClose }) {
           })
         );
 
-        setProjects(projectsData.filter(p => p !== null));
+        const validProjects = projectsData.filter(p => p !== null);
+        
+        // Filtrar duplicados basándose en el path (mantener solo el más reciente)
+        const projectsMap = new Map();
+        validProjects.forEach(project => {
+          if (!project.path) {
+            // Si no tiene path, mantenerlo (puede ser un proyecto especial)
+            projectsMap.set(project.id, project);
+          } else {
+            const existing = projectsMap.get(project.path);
+            if (!existing || (project.lastUpdated && new Date(project.lastUpdated) > new Date(existing.lastUpdated || 0))) {
+              projectsMap.set(project.path, project);
+            }
+          }
+        });
+
+        const uniqueProjects = Array.from(projectsMap.values());
+        setProjects(uniqueProjects);
+        
+        // Si se encontraron duplicados, limpiar los archivos duplicados
+        if (validProjects.length > uniqueProjects.length) {
+          const uniqueIds = new Set(uniqueProjects.map(p => p.id));
+          const duplicatesToDelete = validProjects.filter(p => !uniqueIds.has(p.id));
+          
+          // Eliminar archivos duplicados en segundo plano (no bloquear la UI)
+          duplicatesToDelete.forEach(async (duplicate) => {
+            try {
+              await LocalStorageService.deleteJSONFile(
+                `visual-code-project-${duplicate.id}.json`,
+                'data/visual-code-projects'
+              );
+            } catch (error) {
+              console.error(`[CentroEjecucionPage] Error eliminando proyecto duplicado ${duplicate.id}:`, error);
+            }
+          });
+        }
       } catch (error) {
         console.error('Error cargando proyectos:', error);
       } finally {
@@ -371,12 +411,6 @@ export default function CentroEjecucionPage({ onClose }) {
         setActiveTabType('terminal');
         return updated;
       });
-      
-      console.log('[CentroEjecucionPage] Terminal abierta desde VisualCodeTab:', {
-        projectPath,
-        projectName,
-        terminalId: newTerminal.id
-      });
     };
 
     window.addEventListener('open-terminal-from-visualcode', handleOpenTerminalFromVisualCode);
@@ -388,31 +422,135 @@ export default function CentroEjecucionPage({ onClose }) {
 
   // Función para eliminar un proyecto
   const deleteProject = async (projectId, projectName) => {
-    if (!window.confirm(`¿Estás seguro de que quieres eliminar el proyecto "${projectName || projectId}" de la lista?\n\nEsto no borrará los archivos de tu disco.`)) {
-      return;
-    }
+    // Guardar el proyecto a eliminar y mostrar el modal de confirmación
+    setProjectToDelete({ id: projectId, name: projectName || projectId });
+    setShowDeleteConfirmModal(true);
+  };
+
+  // Función que ejecuta la eliminación después de la confirmación
+  const confirmDeleteProject = async () => {
+    if (!projectToDelete) return;
+    
+    const { id: projectId, name: projectName } = projectToDelete;
+    setShowDeleteConfirmModal(false);
 
     try {
-      console.log('[CentroEjecucionPage] Intentando eliminar proyecto:', projectId);
+      // Primero, encontrar el proyecto para obtener su path
+      const projectData = projects.find(p => p.id === projectId);
+      const projectPath = projectData?.path;
       
-      // Eliminar archivo de configuración del proyecto
-      const eliminado = await LocalStorageService.deleteJSONFile(
-        `visual-code-project-${projectId}.json`,
-        'data/visual-code-projects'
-      );
-
-      console.log('[CentroEjecucionPage] Resultado de deleteJSONFile:', eliminado);
-
-      if (!eliminado) {
-        alert('Error: No se pudo eliminar el archivo del proyecto. Por favor, verifica los permisos o intenta nuevamente.');
-        return;
+      // Obtener todos los archivos de proyectos ANTES de eliminar para encontrar duplicados
+      const allFilesBefore = await LocalStorageService.listFiles('data/visual-code-projects');
+      const allProjectFilesBefore = allFilesBefore.filter(f => f.startsWith('visual-code-project-') && f.endsWith('.json'));
+      
+      // Encontrar TODOS los proyectos con el mismo path (duplicados)
+      const duplicatesToDelete = [];
+      if (projectPath) {
+        for (const file of allProjectFilesBefore) {
+          try {
+            const config = await LocalStorageService.readJSONFile(file, 'data/visual-code-projects');
+            if (config.projectPath === projectPath) {
+              duplicatesToDelete.push(file);
+            }
+          } catch (error) {
+            console.error(`Error leyendo proyecto ${file} para verificar duplicados:`, error);
+          }
+        }
+      } else {
+        // Si no tiene path, solo eliminar el archivo específico
+        duplicatesToDelete.push(`visual-code-project-${projectId}.json`);
+      }
+      
+      // Eliminar TODOS los archivos duplicados (incluyendo el original)
+      let allDeleted = true;
+      let atLeastOneDeleted = false;
+      
+      for (const file of duplicatesToDelete) {
+        try {
+          const deleted = await LocalStorageService.deleteJSONFile(file, 'data/visual-code-projects');
+          if (deleted) {
+            atLeastOneDeleted = true;
+          } else {
+            console.warn('[CentroEjecucionPage] No se pudo eliminar:', file);
+            allDeleted = false;
+          }
+        } catch (error) {
+          console.error(`Error eliminando archivo ${file}:`, error);
+          allDeleted = false;
+        }
       }
 
-      // Recargar proyectos
+      // Si no se encontraron archivos para eliminar, el proyecto probablemente ya no existe en la base de datos
+      // En este caso, simplemente eliminarlo del estado del sidebar
+      if (duplicatesToDelete.length === 0) {
+        // Eliminar del estado directamente
+        setProjects(prev => prev.filter(p => p.id !== projectId));
+        
+        // Cerrar todas las pestañas de Visual Code relacionadas con este proyecto
+        setVisualCodeTabs(prev => prev.filter(tab => tab.projectId !== projectId));
+        if (activeTabType === 'visualcode' && activeVisualCodeId) {
+          if (terminals.length > 0) {
+            setActiveTerminalId(terminals[0].id);
+            setActiveTabType('terminal');
+          } else {
+            setActiveTabType('terminal');
+          }
+        }
+        
+        setToast({ message: 'Proyecto eliminado del sidebar', type: 'success' });
+        setProjectToDelete(null);
+        return;
+      }
+      
+      // Verificar que al menos uno se eliminó correctamente
+      if (!atLeastOneDeleted) {
+        console.warn('[CentroEjecucionPage] No se pudo eliminar ningún archivo. Eliminando del sidebar de todas formas.');
+        // Aún así, eliminar del estado del sidebar
+        setProjects(prev => prev.filter(p => p.id !== projectId));
+        
+        // Cerrar todas las pestañas de Visual Code relacionadas con este proyecto
+        setVisualCodeTabs(prev => prev.filter(tab => tab.projectId !== projectId));
+        if (activeTabType === 'visualcode' && activeVisualCodeId) {
+          if (terminals.length > 0) {
+            setActiveTerminalId(terminals[0].id);
+            setActiveTabType('terminal');
+          } else {
+            setActiveTabType('terminal');
+          }
+        }
+        
+        setToast({ message: 'Advertencia: No se pudo eliminar el archivo del proyecto de la base de datos, pero se eliminó del sidebar.', type: 'error' });
+        setProjectToDelete(null);
+        return;
+      }
+      
+      if (!allDeleted && duplicatesToDelete.length > 1) {
+        console.warn('[CentroEjecucionPage] Algunos archivos duplicados no se pudieron eliminar completamente');
+      }
+
+      // Recargar proyectos después de eliminar
       const files = await LocalStorageService.listFiles('data/visual-code-projects');
-      console.log('[CentroEjecucionPage] Archivos encontrados después de eliminar:', files);
       
       const projectFiles = files.filter(f => f.startsWith('visual-code-project-') && f.endsWith('.json'));
+      
+      // Si no hay archivos, establecer proyectos como array vacío directamente
+      if (projectFiles.length === 0) {
+        setProjects([]);
+        
+        // Cerrar todas las pestañas de Visual Code relacionadas con este proyecto
+        setVisualCodeTabs(prev => prev.filter(tab => tab.projectId !== projectId));
+        if (activeTabType === 'visualcode' && activeVisualCodeId) {
+          // Si la pestaña activa era de Visual Code, cambiar a terminal
+          if (terminals.length > 0) {
+            setActiveTerminalId(terminals[0].id);
+            setActiveTabType('terminal');
+          } else {
+            setActiveTabType('terminal');
+          }
+        }
+        
+        return;
+      }
       
       const projectsData = await Promise.all(
         projectFiles.map(async (file) => {
@@ -433,14 +571,48 @@ export default function CentroEjecucionPage({ onClose }) {
         })
       );
 
-      const proyectosFiltrados = projectsData.filter(p => p !== null);
-      console.log('[CentroEjecucionPage] Proyectos después de filtrar:', proyectosFiltrados);
+      const validProjects = projectsData.filter(p => p !== null);
       
-      setProjects(proyectosFiltrados);
-      console.log('[CentroEjecucionPage] Proyecto eliminado exitosamente:', projectId);
+      // Filtrar duplicados basándose en el path (mantener solo el más reciente)
+      const projectsMap = new Map();
+      validProjects.forEach(project => {
+        if (!project.path) {
+          // Si no tiene path, mantenerlo (puede ser un proyecto especial)
+          projectsMap.set(project.id, project);
+        } else {
+          const existing = projectsMap.get(project.path);
+          if (!existing || (project.lastUpdated && new Date(project.lastUpdated) > new Date(existing.lastUpdated || 0))) {
+            projectsMap.set(project.path, project);
+          }
+        }
+      });
+
+      const uniqueProjects = Array.from(projectsMap.values());
+      
+      // Asegurar que el estado se actualice correctamente
+      setProjects(uniqueProjects);
+      
+      // Si no hay proyectos después del filtrado, cerrar la pestaña de Visual Code si estaba abierta
+      if (uniqueProjects.length === 0) {
+        // Cerrar todas las pestañas de Visual Code relacionadas con este proyecto
+        setVisualCodeTabs(prev => prev.filter(tab => tab.projectId !== projectId));
+        if (activeTabType === 'visualcode' && activeVisualCodeId) {
+          // Si la pestaña activa era de Visual Code, cambiar a terminal
+          if (terminals.length > 0) {
+            setActiveTerminalId(terminals[0].id);
+            setActiveTabType('terminal');
+          } else {
+            setActiveTabType('terminal');
+          }
+        }
+      }
+      
+      setToast({ message: `Proyecto "${projectName}" eliminado exitosamente`, type: 'success' });
+      setProjectToDelete(null);
     } catch (error) {
       console.error('[CentroEjecucionPage] Error eliminando proyecto:', error);
-      alert('Error al eliminar el proyecto: ' + error.message);
+      setToast({ message: `Error al eliminar el proyecto: ${error.message}`, type: 'error' });
+      setProjectToDelete(null);
     }
   };
 
@@ -494,20 +666,12 @@ export default function CentroEjecucionPage({ onClose }) {
   };
 
   const changeTerminalDirectory = (projectPath) => {
-    console.log('[CentroEjecucionPage] Cambiando directorio de terminal:', {
-      projectPath,
-      terminalsCount: terminals.length,
-      activeTerminalId
-    });
-    
     // Si no hay terminales, crear una por defecto
     if (terminals.length === 0) {
-      console.log('[CentroEjecucionPage] No hay terminales, creando una por defecto...');
       const defaultTerm = createDefaultTerminal();
       defaultTerm.currentDirectory = projectPath;
       setTerminals([defaultTerm]);
       setActiveTerminalId(defaultTerm.id);
-      console.log('[CentroEjecucionPage] Terminal por defecto creada con directorio:', projectPath);
       return;
     }
     
@@ -525,7 +689,6 @@ export default function CentroEjecucionPage({ onClose }) {
         currentDirectory: projectPath
       };
       updateTerminal(updatedTerminal);
-      console.log('[CentroEjecucionPage] Directorio de terminal actualizado a:', projectPath);
     } else {
       console.error('[CentroEjecucionPage] Terminal no encontrada, creando nueva...');
       const defaultTerm = createDefaultTerminal();
@@ -700,7 +863,7 @@ export default function CentroEjecucionPage({ onClose }) {
   const openProjectInVisualCode = (project, openMode = 'tab') => {
     if (!project || !project.path) {
       console.error('[CentroEjecucionPage] No se puede abrir proyecto sin path');
-      alert('Error: El proyecto no tiene una ruta válida');
+      setToast({ message: 'Error: El proyecto no tiene una ruta válida', type: 'error' });
       return;
     }
     
@@ -761,7 +924,6 @@ export default function CentroEjecucionPage({ onClose }) {
       setVisualCodeTabs(prev => [...prev, newTab]);
       setActiveVisualCodeId(newTab.id);
       setActiveTabType('visualcode');
-      console.log('[CentroEjecucionPage] Pestaña Visual Code agregada:', newTab);
     } else if (openMode === 'page' || openMode === 'fullscreen') {
       // Abrir en la página como bloque
       const event = new CustomEvent('open-visual-code', { 
@@ -779,7 +941,6 @@ export default function CentroEjecucionPage({ onClose }) {
       });
       
       window.dispatchEvent(event);
-      console.log('[CentroEjecucionPage] Evento disparado para abrir en página:', openMode);
     }
   };
 
@@ -801,46 +962,63 @@ export default function CentroEjecucionPage({ onClose }) {
           directoryHandle = handle;
           // En navegador, usamos el nombre del directorio como identificador
           selectedPath = handle.name || 'Proyecto del Navegador';
-          console.log('[CentroEjecucionPage] Directorio seleccionado en navegador:', selectedPath);
         } catch (error) {
           if (error.name === 'AbortError') {
-            console.log('[CentroEjecucionPage] Usuario canceló la selección');
             return;
           }
           console.error('[CentroEjecucionPage] Error seleccionando directorio:', error);
-          alert('Error al seleccionar carpeta: ' + error.message);
+          setToast({ message: `Error al seleccionar carpeta: ${error.message}`, type: 'error' });
           return;
         }
       } else {
-        alert('Tu navegador no soporta la selección de carpetas.\n\n' +
-              'Usa Chrome 86+, Edge 86+ u Opera 72+, o ejecuta la versión Electron:\n' +
-              'npm run electron:dev');
+        setToast({ 
+          message: 'Tu navegador no soporta la selección de carpetas. Usa Chrome 86+, Edge 86+ u Opera 72+, o ejecuta la versión Electron: npm run electron:dev', 
+          type: 'error',
+          duration: 5000 
+        });
         return;
       }
 
       if (selectedPath || directoryHandle) {
-        // Crear configuración del proyecto
-        const projectId = selectedPath.replace(/[<>:"/\\|?*]/g, '_') + '_' + Date.now();
-        const projectConfig = {
-          projectPath: selectedPath,
-          directoryHandle: directoryHandle ? 'browser-handle' : null, // Marcador para saber que es un handle del navegador
-          title: selectedPath.split(/[/\\]/).pop() || 'Nuevo Proyecto',
-          color: '#1e1e1e',
-          theme: 'cursorDark', // Cambiar a cursorDark por defecto
-          fontSize: 14,
-          extensions: {
-            errorLens: true,
-            betterComments: true,
-            es7ReactRedux: true,
-            reactSimpleSnippets: true,
-            autoCloseTag: true,
-            pasteJsonAsCode: true,
-            backticks: true,
-            tokyoNight: false,
-            beardedIcons: true
-          },
-          lastUpdated: new Date().toISOString()
-        };
+        // Verificar si ya existe un proyecto con el mismo path
+        const existingProject = projects.find(p => p.path === selectedPath);
+        let projectId;
+        let projectConfig;
+        
+        if (existingProject) {
+          // Si ya existe, usar el ID existente y actualizar la configuración
+          projectId = existingProject.id;
+          projectConfig = {
+            ...existingProject,
+            projectPath: selectedPath,
+            directoryHandle: directoryHandle ? 'browser-handle' : existingProject.directoryHandle,
+            title: existingProject.name || selectedPath.split(/[/\\]/).pop() || 'Nuevo Proyecto',
+            lastUpdated: new Date().toISOString()
+          };
+        } else {
+          // Si no existe, crear uno nuevo
+          projectId = selectedPath.replace(/[<>:"/\\|?*]/g, '_') + '_' + Date.now();
+          projectConfig = {
+            projectPath: selectedPath,
+            directoryHandle: directoryHandle ? 'browser-handle' : null, // Marcador para saber que es un handle del navegador
+            title: selectedPath.split(/[/\\]/).pop() || 'Nuevo Proyecto',
+            color: '#1e1e1e',
+            theme: 'cursorDark', // Cambiar a cursorDark por defecto
+            fontSize: 14,
+            extensions: {
+              errorLens: true,
+              betterComments: true,
+              es7ReactRedux: true,
+              reactSimpleSnippets: true,
+              autoCloseTag: true,
+              pasteJsonAsCode: true,
+              backticks: true,
+              tokyoNight: false,
+              beardedIcons: true
+            },
+            lastUpdated: new Date().toISOString()
+          };
+        }
 
         // Guardar el handle del directorio en un mapa global si es navegador
         if (directoryHandle && typeof window !== 'undefined') {
@@ -848,7 +1026,6 @@ export default function CentroEjecucionPage({ onClose }) {
             window.directoryHandles = new Map();
           }
           window.directoryHandles.set(projectId, directoryHandle);
-          console.log('[CentroEjecucionPage] Handle guardado para proyecto:', projectId);
         }
 
         // Guardar proyecto
@@ -881,7 +1058,17 @@ export default function CentroEjecucionPage({ onClose }) {
           })
         );
 
-        setProjects(projectsData.filter(p => p !== null));
+        // Filtrar duplicados basándose en el path (mantener solo el más reciente)
+        const projectsMap = new Map();
+        projectsData.filter(p => p !== null).forEach(project => {
+          const existing = projectsMap.get(project.path);
+          if (!existing || new Date(project.lastUpdated) > new Date(existing.lastUpdated)) {
+            projectsMap.set(project.path, project);
+          }
+        });
+
+        const uniqueProjects = Array.from(projectsMap.values());
+        setProjects(uniqueProjects);
         
         // Abrir automáticamente el proyecto en Visual Code
         openProjectInVisualCode({
@@ -895,7 +1082,7 @@ export default function CentroEjecucionPage({ onClose }) {
     } catch (error) {
       if (error.name !== 'AbortError') {
         console.error('Error seleccionando proyecto:', error);
-        alert('Error al seleccionar proyecto: ' + error.message);
+        setToast({ message: `Error al seleccionar proyecto: ${error.message}`, type: 'error' });
       }
     }
   };
@@ -1152,7 +1339,6 @@ export default function CentroEjecucionPage({ onClose }) {
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
-                              console.log('[CentroEjecucionPage] Cambiando directorio de terminal a:', project.path);
                               changeTerminalDirectory(project.path);
                             }}
                             className="w-full px-3 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded text-xs flex items-center justify-center gap-2 transition-colors font-medium"
@@ -1670,6 +1856,30 @@ export default function CentroEjecucionPage({ onClose }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal de confirmación para eliminar proyecto */}
+      <ConfirmDeleteModal
+        isOpen={showDeleteConfirmModal}
+        onClose={() => {
+          setShowDeleteConfirmModal(false);
+          setProjectToDelete(null);
+        }}
+        onConfirm={confirmDeleteProject}
+        title="¿Eliminar proyecto?"
+        message={projectToDelete ? `¿Estás seguro de que quieres eliminar el proyecto "${projectToDelete.name}" de la lista?\n\nEsto no borrará los archivos de tu disco.` : ''}
+        confirmText="Eliminar"
+        cancelText="Cancelar"
+      />
+
+      {/* Toast de notificaciones */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          duration={toast.duration || 3000}
+          onClose={() => setToast(null)}
+        />
       )}
     </div>
   );

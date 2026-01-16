@@ -914,7 +914,7 @@ export const SlashCommand = Extension.create({
           return {
             onStart: (props) => {
               if (!props.editor?.isEditable) return;
-              
+
               // Si hay un modal cerrándose, forzar limpieza y continuar
               if (isClosing) {
                 console.log('[SlashCommand] Modal cerrándose (isClosing=true), forzando limpieza...');
@@ -1029,17 +1029,17 @@ export const SlashCommand = Extension.create({
               // Renderizar el modal
               console.log('[SlashCommand] Renderizando modal...');
               try {
-                root.render(
-                  React.createElement(SlashCommandModal, {
-                    isOpen: true,
-                    onClose: () => {
+              root.render(
+                React.createElement(SlashCommandModal, {
+                  isOpen: true,
+                  onClose: () => {
                     console.log('[SlashCommand] onClose llamado');
                     isClosing = true;
                     
                     // Limpiar el root de React
                     if (root) {
                       try {
-                        root.unmount();
+                      root.unmount();
                         console.log('[SlashCommand] Root desmontado');
                       } catch (e) {
                         console.warn('[SlashCommand] Error desmontando root:', e);
@@ -1053,7 +1053,7 @@ export const SlashCommand = Extension.create({
                       }
                       if (modalContainer.parentNode) {
                         try {
-                          modalContainer.parentNode.removeChild(modalContainer);
+                      modalContainer.parentNode.removeChild(modalContainer);
                           console.log('[SlashCommand] Contenedor removido del DOM');
                         } catch (e) {
                           console.warn('[SlashCommand] Error removiendo contenedor:', e);
@@ -1119,8 +1119,8 @@ export const SlashCommand = Extension.create({
                       }, 150);
                       
                       // Ejecutar el comando después de limpiar
-                      editor.chain().focus().deleteRange(range).run();
-                      await item.command({ editor, range });
+                    editor.chain().focus().deleteRange(range).run();
+                    await item.command({ editor, range });
                     } catch (error) {
                       console.error('[SlashCommand] Error ejecutando comando:', error);
                     } finally {
@@ -1130,8 +1130,8 @@ export const SlashCommand = Extension.create({
                       }, 1000);
                     }
                   },
-                  })
-                );
+                })
+              );
                 console.log('[SlashCommand] Modal renderizado exitosamente');
                 
                 // Verificar que el modal esté en el DOM después de un breve delay
@@ -1236,8 +1236,8 @@ export const SlashCommand = Extension.create({
                     // Limpiar el root de React
                     if (root) {
                       try {
-                        root.unmount();
-                        root = null;
+                      root.unmount();
+                      root = null;
                       } catch (e) {
                         console.warn('[SlashCommand] Error desmontando root en onUpdate:', e);
                       }
@@ -1249,12 +1249,12 @@ export const SlashCommand = Extension.create({
                       }
                       if (modalContainer.parentNode) {
                         try {
-                          modalContainer.parentNode.removeChild(modalContainer);
+                      modalContainer.parentNode.removeChild(modalContainer);
                         } catch (e) {
                           console.warn('[SlashCommand] Error removiendo contenedor en onUpdate:', e);
                         }
-                      }
-                      modalContainer = null;
+                    }
+                    modalContainer = null;
                     }
                   },
                   items: props.items || [],
@@ -1339,7 +1339,7 @@ export const SlashCommand = Extension.create({
                         overlay.parentNode.removeChild(overlay);
                         console.log(`[SlashCommand] Overlay del slash command ${index + 1} removido en onExit`);
                       }
-                    } catch (e) {
+                } catch (e) {
                       console.warn(`[SlashCommand] Error removiendo overlay ${index + 1} en onExit:`, e);
                     }
                   }
@@ -1359,8 +1359,8 @@ export const SlashCommand = Extension.create({
               if (modalContainer) {
                 if (modalContainer._reactRoot) {
                   delete modalContainer._reactRoot;
-                }
-                modalContainer = null;
+              }
+              modalContainer = null;
               }
               
               // Resetear el flag después de limpiar

@@ -120,12 +120,6 @@ export default function TerminalTab({
 
   // Actualizar estilos y shell cuando cambia el terminal
   useEffect(() => {
-    console.log('[TerminalTab] Terminal actualizado:', {
-      id: terminal.id,
-      shell: terminal.shell,
-      currentDirectory: terminal.currentDirectory,
-      styles: terminal.styles
-    });
     const newStyles = terminal.styles || {
       backgroundColor: '#1e1e1e',
       textColor: '#d4d4d4',
@@ -153,7 +147,6 @@ export default function TerminalTab({
       setTerminalStyles(newStyles);
     }
     if (currentShell !== newShell) {
-      console.log('[TerminalTab] Shell cambiado de', currentShell, 'a', newShell);
       setCurrentShell(newShell);
     }
     if (currentDirectory !== newDirectory) {

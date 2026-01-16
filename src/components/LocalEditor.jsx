@@ -21,6 +21,7 @@ import { ConsoleNode } from "../extensions/ConsoleNode";
 import { PostmanNode } from "../extensions/PostmanNode";
 import { VisualCodeNode } from "../extensions/VisualCodeNode";
 import { ConvertidorNode } from "../extensions/ConvertidorNode";
+import { DiagramNode } from "../extensions/DiagramNode";
 import TableHeader from "@tiptap/extension-table-header";
 import { ImageExtended } from "../extensions/ImageExtended";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -506,6 +507,7 @@ export default function LocalEditor({ onShowConfig }) {
       PostmanNode,
       VisualCodeNode,
       ConvertidorNode,
+      DiagramNode,
       Heading.configure({ levels: [1, 2, 3, 4, 5, 6] }),
       Underline,
       TextStyle,
@@ -547,6 +549,7 @@ export default function LocalEditor({ onShowConfig }) {
 
     const updateCursorPosition = () => {
       try {
+        if (!editor || !editor.state || !editor.state.selection) return;
         const { from } = editor.state.selection;
         const coords = editor.view.coordsAtPos(from);
         const editorContainer = editorContainerRef.current;
@@ -1287,15 +1290,12 @@ export default function LocalEditor({ onShowConfig }) {
   // Escuchar evento para abrir la consola
   useEffect(() => {
     const handleOpenConsole = (e) => {
-      console.log('Evento open-console recibido', e);
       e.preventDefault();
       e.stopPropagation();
-      console.log('Abriendo consola...');
       setShowConsole(true);
     };
 
     window.addEventListener('open-console', handleOpenConsole);
-    console.log('Listener de open-console registrado');
     return () => {
       window.removeEventListener('open-console', handleOpenConsole);
     };
@@ -1316,14 +1316,12 @@ export default function LocalEditor({ onShowConfig }) {
       
       if (paginaCentro) {
         // Si existe, seleccionarla
-        console.log('[LocalEditor] Página Centro de Ejecución encontrada, seleccionando...', paginaCentro.id);
         if (seleccionarPaginaRef.current) {
           seleccionarPaginaRef.current(paginaCentro.id);
         }
         setShowCentroEjecucion(true);
       } else {
         // Si no existe, crearla y luego seleccionarla
-        console.log('[LocalEditor] Página Centro de Ejecución no existe, creándola...');
         const contenido = {
           type: "doc",
           content: [
@@ -1380,7 +1378,6 @@ export default function LocalEditor({ onShowConfig }) {
   // Escuchar evento para abrir Visual Code con un proyecto
   useEffect(() => {
     const handleOpenVisualCode = async (e) => {
-      console.log('[LocalEditor] Evento open-visual-code recibido:', e.detail);
       e.preventDefault();
       e.stopPropagation();
       const { projectPath, projectTitle, projectColor, theme, fontSize, extensions, openMode } = e.detail || {};
@@ -1393,7 +1390,6 @@ export default function LocalEditor({ onShowConfig }) {
       
       // Si el modo es 'fullscreen', abrir en modal independiente
       if (openMode === 'fullscreen') {
-        console.log('[LocalEditor] Abriendo Visual Code en modo fullscreen independiente');
         
         // Verificar si ya existe un modal para este proyecto
         const existingModalIndex = visualCodeFullscreenModals.findIndex(
@@ -1442,13 +1438,11 @@ export default function LocalEditor({ onShowConfig }) {
         
         if (paginaCentro) {
           // Si existe, seleccionarla y esperar a que se cargue
-          console.log('[LocalEditor] Página Centro de Ejecución encontrada, seleccionando...', paginaCentro.id);
           if (seleccionarPaginaRef.current) {
             seleccionarPaginaRef.current(paginaCentro.id);
           }
           setTimeout(() => {
             if (editor) {
-              console.log('[LocalEditor] Página cargada, procesando Visual Code...');
               window.dispatchEvent(new CustomEvent('open-visual-code', { 
                 detail: e.detail,
                 bubbles: true,
@@ -1463,7 +1457,6 @@ export default function LocalEditor({ onShowConfig }) {
           return;
         } else {
           // Si no existe, crearla
-          console.log('[LocalEditor] Página Centro de Ejecución no existe, creándola...');
           const contenido = {
             type: "doc",
             content: [
@@ -1492,7 +1485,6 @@ export default function LocalEditor({ onShowConfig }) {
             // Esperar un poco más para que el editor esté listo
             setTimeout(() => {
               if (editor) {
-                console.log('[LocalEditor] Página creada, procesando Visual Code...');
                 window.dispatchEvent(new CustomEvent('open-visual-code', { 
                   detail: e.detail,
                   bubbles: true,
@@ -1522,8 +1514,6 @@ export default function LocalEditor({ onShowConfig }) {
         });
 
         if (existingPos !== null) {
-          console.log('[LocalEditor] Reutilizando bloque Visual Code existente en pos:', existingPos);
-
           // Actualizar atributos principales si llegan desde el Centro (sin tocar archivos abiertos/contenidos)
           const nextAttrs = {
             ...existingNode.attrs,
@@ -1563,14 +1553,6 @@ export default function LocalEditor({ onShowConfig }) {
         }
 
         // 2) Si no existe, insertar bloque Visual Code nuevo
-        console.log('[LocalEditor] Insertando nuevo bloque Visual Code con:', {
-          projectPath,
-          projectTitle,
-          projectColor,
-          theme,
-          fontSize
-        });
-
         // Obtener la posición actual del cursor
         const { from } = editor.state.selection;
         
@@ -1602,8 +1584,6 @@ export default function LocalEditor({ onShowConfig }) {
           })
           .run();
         
-        console.log('[LocalEditor] Bloque Visual Code insertado exitosamente');
-        
         // Scroll al bloque insertado y disparar evento para abrir explorador
         setTimeout(() => {
           const visualCodeBlocks = document.querySelectorAll('visual-code-block');
@@ -1631,7 +1611,6 @@ export default function LocalEditor({ onShowConfig }) {
     };
     
     window.addEventListener('open-visual-code', handleOpenVisualCode);
-    console.log('[LocalEditor] Listener de open-visual-code registrado');
     
     return () => {
       window.removeEventListener('open-visual-code', handleOpenVisualCode);
@@ -1867,7 +1846,6 @@ export default function LocalEditor({ onShowConfig }) {
     try {
       const result = await SQLFileService.getFilesByPage(pageId);
       const count = result.files?.length || 0;
-      console.log(`[checkPageSQLScripts] Página ${pageId}: ${count} scripts encontrados`, result);
       setPageSQLScriptsCount(count);
     } catch (error) {
       console.error('Error verificando scripts SQL:', error);
@@ -1919,7 +1897,7 @@ export default function LocalEditor({ onShowConfig }) {
               type: 'link',
               attrs: {
                 href: href,
-                target: null,
+                target: '_self', // Usar _self en lugar de null para asegurar que se renderice
               }
             }
           ]
@@ -1985,7 +1963,9 @@ export default function LocalEditor({ onShowConfig }) {
         });
       } else {
         // Obtener la posición del cursor
+        if (!editor || !editor.state) return;
         const { state } = editor;
+        if (!state || !state.selection) return;
         const { $from } = state.selection;
         const coords = editor.view.coordsAtPos($from.pos);
         
@@ -2111,27 +2091,63 @@ export default function LocalEditor({ onShowConfig }) {
     
     const handleClick = (event) => {
       const target = event.target;
-      // Verificar si el clic fue en un enlace
-      const linkElement = target.closest('a');
+      // Verificar si el clic fue en un enlace o en un elemento dentro de un enlace
+      let linkElement = target.closest('a');
+      
+      // Si el target es un nodo de texto, buscar el enlace en el padre
+      if (!linkElement && target.parentElement) {
+        linkElement = target.parentElement.closest('a');
+      }
+      
+      // Si aún no encontramos el enlace, buscar en todos los ancestros
+      if (!linkElement) {
+        let current = target;
+        while (current && current !== editorElement) {
+          if (current.tagName === 'A') {
+            linkElement = current;
+            break;
+          }
+          current = current.parentElement;
+        }
+      }
+      
       if (linkElement) {
         const href = linkElement.getAttribute('href');
         if (href && href.startsWith('page:')) {
           event.preventDefault();
           event.stopPropagation();
+          event.stopImmediatePropagation();
           const paginaId = href.replace('page:', '');
+          
+          // Verificar que la página existe en la lista de páginas
+          const paginaExiste = paginas.some(p => p.id === paginaId);
+          if (!paginaExiste) {
+            setToast({
+              message: 'La página no existe o no está disponible',
+              type: 'error'
+            });
+            return false;
+          }
+          
+          // Usar el ref para seleccionar la página (esto disparará el useEffect que carga el contenido)
           if (seleccionarPaginaRef.current) {
             seleccionarPaginaRef.current(paginaId);
+          } else if (typeof seleccionarPagina === 'function') {
+            // Fallback: usar la función directamente si el ref no está disponible
+            seleccionarPagina(paginaId);
           }
+          return false;
         }
       }
     };
 
-    editorElement.addEventListener('click', handleClick);
+    // Usar capture phase para asegurar que capturamos el evento antes que otros manejadores
+    editorElement.addEventListener('click', handleClick, true);
     return () => {
-      editorElement.removeEventListener('click', handleClick);
+      editorElement.removeEventListener('click', handleClick, true);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editor]); // No incluir seleccionarPagina para evitar bucles
+  }, [editor, seleccionarPagina, paginas]); // Incluir paginas para verificar existencia
 
   // Extraer URLs de imágenes y archivos del contenido
   const extraerArchivosDelContenido = (contenido) => {
@@ -2354,7 +2370,6 @@ export default function LocalEditor({ onShowConfig }) {
           const eliminado = await LocalStorageService.deleteJSONFile(`${pagina.id}.json`, 'data');
           if (eliminado) {
             paginasEliminadas++;
-            console.log(`[LocalEditor] Página ${pagina.id} eliminada exitosamente`);
           } else {
             const errorMsg = `No se pudo eliminar el archivo de la página ${pagina.id}`;
             console.error(`[LocalEditor] Error: ${errorMsg}`);
@@ -2853,6 +2868,7 @@ export default function LocalEditor({ onShowConfig }) {
             
             // Ejecutar el comando después de un pequeño delay
             setTimeout(() => {
+              if (!editor || !editor.state || !editor.state.selection) return;
               const { from, to } = editor.state.selection;
               const range = { from, to };
               
