@@ -38,14 +38,6 @@ export default function MultiTerminalView({
           }
           return t;
         }));
-        
-        // Notificar que el proceso terminó (para actualizar el estado de isProcessRunning)
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('terminal-process-status-changed', {
-            terminalId: data.terminalId,
-            running: false
-          });
-        }
       };
 
       window.electronAPI.onTerminalOutput(handleOutput);

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Save, ZoomIn, ZoomOut, Palette, FolderOpen, File, Minimize2, Maximize2, Edit2, Type, Check, Sparkles } from 'lucide-react';
 import { EditorView, basicSetup } from 'codemirror';
+import { ViewPlugin, Decoration } from '@codemirror/view';
 import { closeBrackets } from '@codemirror/autocomplete';
 import { javascript } from '@codemirror/lang-javascript';
 import { python } from '@codemirror/lang-python';
@@ -12,6 +13,84 @@ import { oneDark } from '@codemirror/theme-one-dark';
 import FileExplorer from './FileExplorer';
 import AIChatPanel from './AIChatPanel';
 import GitPanel from './GitPanel';
+
+// Extensión para detectar y marcar variables no usadas
+function unusedVariablesExtension() {
+  return ViewPlugin.fromClass(class {
+    decorations = Decoration.none;
+    
+    constructor(view) {
+      this.updateDecorations(view);
+    }
+    
+    update(update) {
+      if (update.docChanged || update.viewportChanged) {
+        this.updateDecorations(update.view);
+      }
+    }
+    
+    updateDecorations(view) {
+      const decorations = [];
+      const doc = view.state.doc;
+      const text = doc.toString();
+      
+      if (!text || text.length === 0) {
+        this.decorations = Decoration.none;
+        return;
+      }
+      
+      try {
+        const unusedVars = this.findUnusedVariables(text);
+        unusedVars.forEach(({ name, from, to }) => {
+          const decoration = Decoration.mark({
+            class: 'cm-unused-variable',
+            attributes: { title: `Variable '${name}' no está siendo usada` }
+          });
+          decorations.push(decoration.range(from, to));
+        });
+      } catch (error) {
+        console.warn('Error analizando variables no usadas:', error);
+      }
+      
+      this.decorations = Decoration.set(decorations);
+    }
+    
+    escapeRegex(str) {
+      return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+    
+    findUnusedVariables(text) {
+      const unused = [];
+      const patterns = [
+        { regex: /(?:const|let|var)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*[=;]/g, type: 'variable' },
+        { regex: /function\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/g, type: 'function' },
+        { regex: /class\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*[{\s]/g, type: 'class' },
+      ];
+      
+      patterns.forEach(({ regex }) => {
+        let match;
+        const regexCopy = new RegExp(regex.source, regex.flags);
+        while ((match = regexCopy.exec(text)) !== null) {
+          const varName = match[1];
+          const fullMatch = match[0];
+          const varIndex = fullMatch.indexOf(varName);
+          const from = match.index + varIndex;
+          const to = from + varName.length;
+          const afterDeclaration = text.substring(to);
+          const usageRegex = new RegExp(`\\b${this.escapeRegex(varName)}\\b`);
+          const matches = afterDeclaration.match(usageRegex);
+          if (!matches || matches.length === 0) {
+            unused.push({ name: varName, from, to });
+          }
+        }
+      });
+      
+      return unused;
+    }
+  }, {
+    decorations: v => v.decorations
+  });
+}
 
 export default function VisualCodeFullscreenModal({ 
   isOpen, 
@@ -35,7 +114,7 @@ export default function VisualCodeFullscreenModal({
   const [fileContents, setFileContents] = useState({});
   const [showFileExplorer, setShowFileExplorer] = useState(true);
   const [showGitPanel, setShowGitPanel] = useState(false);
-  const [theme, setTheme] = useState(initialTheme || 'oneDark');
+  const [theme, setTheme] = useState(initialTheme || 'cursorDark');
   const [fontSize, setFontSize] = useState(initialFontSize || 14);
   const [projectColorState, setProjectColorState] = useState(projectColor || '#1e1e1e');
   const [projectTitleState, setProjectTitleState] = useState(projectTitle || '');
@@ -240,11 +319,41 @@ export default function VisualCodeFullscreenModal({
           }),
           EditorView.theme({
             '&': { fontSize: `${fontSize}px` },
-            '.cm-content': { fontSize: `${fontSize}px` },
+            '.cm-content': { 
+              fontSize: `${fontSize}px`,
+              userSelect: 'text',
+              WebkitUserSelect: 'text',
+              MozUserSelect: 'text',
+              msUserSelect: 'text',
+            },
             '.cm-editor': { height: '100%' },
-            '.cm-scroller': { overflow: 'auto' },
+            '.cm-scroller': { 
+              overflow: 'auto',
+              userSelect: 'text',
+              WebkitUserSelect: 'text',
+              MozUserSelect: 'text',
+              msUserSelect: 'text',
+            },
+            // Estilo para variables no usadas (similar a Cursor/VS Code)
+            '.cm-unused-variable': {
+              opacity: '0.5',
+              color: '#858585',
+              fontStyle: 'italic',
+            },
           }),
         ];
+
+        // Detección de variables no usadas (solo para JavaScript/TypeScript)
+        if (activeFile && (activeFile.endsWith('.js') || activeFile.endsWith('.jsx') || activeFile.endsWith('.ts') || activeFile.endsWith('.tsx'))) {
+          editorExtensions.push(unusedVariablesExtension());
+        }
+
+        console.log('[VisualCodeFullscreenModal] Inicializando editor...', {
+          hasContainer: !!editorContainerRef.current,
+          contentLength: content.length,
+          activeFile,
+          extensionsCount: editorExtensions.length
+        });
 
         const view = new EditorView({
           doc: content,
@@ -253,7 +362,29 @@ export default function VisualCodeFullscreenModal({
         });
 
         editorViewRef.current = view;
+        
+        // Asegurar que el contenedor permita interacción
+        if (editorContainerRef.current) {
+          editorContainerRef.current.style.pointerEvents = 'auto';
+          editorContainerRef.current.style.userSelect = 'text';
+          editorContainerRef.current.style.WebkitUserSelect = 'text';
+          editorContainerRef.current.style.MozUserSelect = 'text';
+          editorContainerRef.current.style.msUserSelect = 'text';
+          editorContainerRef.current.style.cursor = 'text';
+        }
+        
         view.focus();
+        console.log('[VisualCodeFullscreenModal] Editor enfocado, editable:', view.state.readOnly === false);
+        
+        setTimeout(() => {
+          const editorElement = editorContainerRef.current?.querySelector('.cm-editor');
+          if (editorElement) {
+            console.log('[VisualCodeFullscreenModal] Elemento editor encontrado:', {
+              pointerEvents: window.getComputedStyle(editorElement).pointerEvents,
+              userSelect: window.getComputedStyle(editorElement).userSelect,
+            });
+          }
+        }, 100);
 
         // Manejar Ctrl+S
         const handleKeyDown = (e) => {
@@ -680,7 +811,24 @@ export default function VisualCodeFullscreenModal({
             <div 
               ref={editorContainerRef} 
               className="flex-1 overflow-auto"
-              style={{ height: '100%' }}
+              style={{ 
+                height: '100%',
+                userSelect: 'text',
+                WebkitUserSelect: 'text',
+                MozUserSelect: 'text',
+                msUserSelect: 'text',
+                pointerEvents: 'auto',
+                cursor: 'text',
+              }}
+              onMouseDown={(e) => {
+                console.log('[VisualCodeFullscreenModal] Mouse down en contenedor', e.target);
+              }}
+              onClick={(e) => {
+                console.log('[VisualCodeFullscreenModal] Click en contenedor', e.target);
+                if (editorViewRef.current) {
+                  editorViewRef.current.focus();
+                }
+              }}
             />
           ) : (
             <div className="flex-1 flex items-center justify-center text-[#858585]">

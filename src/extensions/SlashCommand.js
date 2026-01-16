@@ -908,64 +908,383 @@ export const SlashCommand = Extension.create({
         render: () => {
           let modalContainer = null;
           let root = null;
+          let isClosing = false; // Flag para evitar abrir un nuevo modal mientras se cierra
+          let isModalOpen = false; // Flag para rastrear si el modal está abierto
 
           return {
             onStart: (props) => {
               if (!props.editor?.isEditable) return;
+              
+              // Si hay un modal cerrándose, forzar limpieza y continuar
+              if (isClosing) {
+                console.log('[SlashCommand] Modal cerrándose (isClosing=true), forzando limpieza...');
+                // Forzar limpieza de cualquier contenedor que pueda quedar
+                const stuckContainers = document.querySelectorAll('#slash-command-modal-container');
+                if (stuckContainers.length > 0) {
+                  console.log(`[SlashCommand] Forzando limpieza de ${stuckContainers.length} contenedores atascados`);
+                  stuckContainers.forEach(container => {
+                    try {
+                      if (container._reactRoot) {
+                        container._reactRoot.unmount();
+                        delete container._reactRoot;
+                      }
+                      if (container.parentNode) {
+                        container.parentNode.removeChild(container);
+                      }
+                    } catch (e) {
+                      console.warn('[SlashCommand] Error forzando limpieza:', e);
+                    }
+                  });
+                }
+                // Resetear el flag y continuar
+                isClosing = false;
+                console.log('[SlashCommand] Flag isClosing forzado a false, continuando...');
+              }
 
+              console.log('[SlashCommand] onStart llamado');
+
+              // LIMPIEZA AGRESIVA: Remover TODOS los overlays y contenedores relacionados
+              // Primero, limpiar todos los contenedores
+              const allContainers = document.querySelectorAll('#slash-command-modal-container');
+              console.log(`[SlashCommand] Limpiando ${allContainers.length} contenedores existentes`);
+              allContainers.forEach((container, index) => {
+                try {
+                  console.log(`[SlashCommand] Limpiando contenedor ${index + 1}`);
+                  if (container._reactRoot) {
+                    try {
+                      container._reactRoot.unmount();
+                      console.log(`[SlashCommand] Root ${index + 1} desmontado`);
+                    } catch (e) {
+                      console.warn(`[SlashCommand] Error desmontando root ${index + 1}:`, e);
+                    }
+                    delete container._reactRoot;
+                  }
+                  if (container.parentNode) {
+                    container.parentNode.removeChild(container);
+                    console.log(`[SlashCommand] Contenedor ${index + 1} removido del DOM`);
+                  }
+                } catch (e) {
+                  console.error(`[SlashCommand] Error limpiando contenedor ${index + 1}:`, e);
+                }
+              });
+              
+              // Segundo, limpiar SOLO overlays del slash command modal
+              // Buscar overlays que contengan el contenedor del modal o que sean el contenedor mismo
+              const overlaysByClass = document.querySelectorAll('div.fixed.inset-0');
+              console.log(`[SlashCommand] Encontrados ${overlaysByClass.length} divs con fixed inset-0`);
+              
+              overlaysByClass.forEach((overlay, index) => {
+                // Verificar si tiene el contenedor del modal como hijo directo o descendiente
+                const hasModalContainer = overlay.querySelector('#slash-command-modal-container');
+                // Verificar si el overlay mismo es parte del contenedor (el contenedor está dentro del overlay)
+                const isPartOfModal = overlay.id === 'slash-command-modal-container' || 
+                                      overlay.closest('#slash-command-modal-container');
+                // Verificar z-index específico del slash command (70000)
+                const zIndex = window.getComputedStyle(overlay).zIndex;
+                const isSlashCommandZIndex = zIndex === '70000' || overlay.className.includes('z-[70000]');
+                
+                // Solo remover si:
+                // 1. Tiene el contenedor del modal (es el overlay del slash command), O
+                // 2. Es parte del contenedor del modal, O
+                // 3. Tiene el z-index específico del slash command (50000) Y no tiene otros identificadores
+                if (hasModalContainer || (isSlashCommandZIndex && !overlay.id && !overlay.closest('[id]'))) {
+                  console.log(`[SlashCommand] Removiendo overlay del slash command ${index + 1}`, {
+                    hasModalContainer: !!hasModalContainer,
+                    isSlashCommandZIndex,
+                    zIndex,
+                    className: overlay.className
+                  });
+                  try {
+                    if (overlay.parentNode) {
+                      overlay.parentNode.removeChild(overlay);
+                      console.log(`[SlashCommand] Overlay ${index + 1} removido exitosamente`);
+                    }
+                  } catch (e) {
+                    console.error(`[SlashCommand] Error removiendo overlay ${index + 1}:`, e);
+                  }
+                } else {
+                  console.log(`[SlashCommand] Overlay ${index + 1} NO es del slash command, manteniéndolo`, {
+                    zIndex,
+                    className: overlay.className,
+                    id: overlay.id
+                  });
+                }
+              });
+              
+              // Crear contenedor para el modal inmediatamente después de limpiar
               // Crear contenedor para el modal
+              console.log('[SlashCommand] Creando contenedor del modal...');
               modalContainer = document.createElement('div');
               modalContainer.id = 'slash-command-modal-container';
               document.body.appendChild(modalContainer);
+              console.log('[SlashCommand] Contenedor creado y agregado al DOM');
 
               // Crear root de React
+              console.log('[SlashCommand] Creando root de React...');
               root = createRoot(modalContainer);
+              // Guardar referencia del root en el contenedor para limpieza posterior
+              modalContainer._reactRoot = root;
+              console.log('[SlashCommand] Root creado');
 
               // Renderizar el modal
-              root.render(
-                React.createElement(SlashCommandModal, {
-                  isOpen: true,
-                  onClose: () => {
+              console.log('[SlashCommand] Renderizando modal...');
+              try {
+                root.render(
+                  React.createElement(SlashCommandModal, {
+                    isOpen: true,
+                    onClose: () => {
+                    console.log('[SlashCommand] onClose llamado');
+                    isClosing = true;
+                    
+                    // Limpiar el root de React
                     if (root) {
-                      root.unmount();
+                      try {
+                        root.unmount();
+                        console.log('[SlashCommand] Root desmontado');
+                      } catch (e) {
+                        console.warn('[SlashCommand] Error desmontando root:', e);
+                      }
                       root = null;
                     }
-                    if (modalContainer && modalContainer.parentNode) {
-                      modalContainer.parentNode.removeChild(modalContainer);
+                    // Remover el contenedor del DOM
+                    if (modalContainer) {
+                      if (modalContainer._reactRoot) {
+                        delete modalContainer._reactRoot;
+                      }
+                      if (modalContainer.parentNode) {
+                        try {
+                          modalContainer.parentNode.removeChild(modalContainer);
+                          console.log('[SlashCommand] Contenedor removido del DOM');
+                        } catch (e) {
+                          console.warn('[SlashCommand] Error removiendo contenedor:', e);
+                        }
+                      }
                     }
                     modalContainer = null;
+                    
+                    // Resetear el flag después de un breve delay
+                    setTimeout(() => {
+                      isClosing = false;
+                      console.log('[SlashCommand] Flag isClosing reseteado');
+                    }, 100);
                   },
                   items: props.items || [],
                   query: props.query || '',
                   onSelectCommand: async (item) => {
+                    // Prevenir doble ejecución
+                    if (item._executing) {
+                      console.warn('[SlashCommand] Comando ya está ejecutándose, ignorando...');
+                      return;
+                    }
+                    
+                    console.log('[SlashCommand] Comando seleccionado en onStart:', item.label);
                     const { editor, range } = props;
-                    editor.chain().focus().deleteRange(range).run();
-                    await item.command({ editor, range });
+                    
+                    // Marcar como ejecutándose
+                    item._executing = true;
+                    
+                    try {
+                      // Marcar como cerrando
+                      isClosing = true;
+                      
+                      // Cerrar el modal ANTES de ejecutar el comando para evitar que quede bloqueando
+                      if (root) {
+                        try {
+                          root.unmount();
+                          root = null;
+                          console.log('[SlashCommand] Root desmontado en onSelectCommand (onStart)');
+                        } catch (e) {
+                          console.warn('[SlashCommand] Error desmontando root en onSelectCommand:', e);
+                        }
+                      }
+                      if (modalContainer) {
+                        if (modalContainer._reactRoot) {
+                          delete modalContainer._reactRoot;
+                        }
+                        if (modalContainer.parentNode) {
+                          try {
+                            modalContainer.parentNode.removeChild(modalContainer);
+                            console.log('[SlashCommand] Contenedor removido en onSelectCommand (onStart)');
+                          } catch (e) {
+                            console.warn('[SlashCommand] Error removiendo contenedor en onSelectCommand:', e);
+                          }
+                        }
+                        modalContainer = null;
+                      }
+                      
+                      // Resetear el flag después de limpiar
+                      setTimeout(() => {
+                        isClosing = false;
+                        console.log('[SlashCommand] Flag isClosing reseteado en onSelectCommand');
+                      }, 150);
+                      
+                      // Ejecutar el comando después de limpiar
+                      editor.chain().focus().deleteRange(range).run();
+                      await item.command({ editor, range });
+                    } catch (error) {
+                      console.error('[SlashCommand] Error ejecutando comando:', error);
+                    } finally {
+                      // Limpiar la marca después de un delay
+                      setTimeout(() => {
+                        item._executing = false;
+                      }, 1000);
+                    }
                   },
-                })
-              );
+                  })
+                );
+                console.log('[SlashCommand] Modal renderizado exitosamente');
+                
+                // Verificar que el modal esté en el DOM después de un breve delay
+                setTimeout(() => {
+                  const container = document.getElementById('slash-command-modal-container');
+                  if (container) {
+                    const overlay = container.querySelector('div.fixed.inset-0');
+                    const modalContent = overlay ? overlay.querySelector('div.bg-white, div.bg-gray-800') : null;
+                    const style = overlay ? window.getComputedStyle(overlay) : null;
+                    console.log('[SlashCommand] Verificación post-render:', {
+                      containerExists: !!container,
+                      containerInDOM: container.parentNode !== null,
+                      overlayExists: !!overlay,
+                      overlayVisible: overlay ? style.display !== 'none' : false,
+                      overlayZIndex: overlay ? style.zIndex : 'N/A',
+                      overlayPointerEvents: overlay ? style.pointerEvents : 'N/A',
+                      modalContentExists: !!modalContent,
+                      modalContentVisible: modalContent ? window.getComputedStyle(modalContent).display !== 'none' : false
+                    });
+                    
+                    // Asegurar que el overlay sea interactivo
+                    if (overlay) {
+                      // Forzar estilos críticos
+                      overlay.style.pointerEvents = 'auto';
+                      overlay.style.zIndex = '70000';
+                      console.log('[SlashCommand] Estilos del overlay forzados');
+                      
+                      // Verificar si el modal content existe y es visible
+                      if (modalContent) {
+                        const contentStyle = window.getComputedStyle(modalContent);
+                        console.log('[SlashCommand] Estilos del contenido del modal:', {
+                          display: contentStyle.display,
+                          visibility: contentStyle.visibility,
+                          opacity: contentStyle.opacity,
+                          zIndex: contentStyle.zIndex
+                        });
+                      } else {
+                        console.warn('[SlashCommand] Contenido del modal no encontrado');
+                      }
+                    } else {
+                      console.error('[SlashCommand] Overlay no encontrado después del render');
+                    }
+                  } else {
+                    console.warn('[SlashCommand] Contenedor no encontrado después del render');
+                  }
+                }, 100);
+              } catch (error) {
+                console.error('[SlashCommand] Error renderizando modal:', error);
+                // Limpiar en caso de error
+                if (root) {
+                  try {
+                    root.unmount();
+                  } catch (e) {
+                    console.error('[SlashCommand] Error desmontando root después de error:', e);
+                  }
+                  root = null;
+                }
+                if (modalContainer && modalContainer.parentNode) {
+                  try {
+                    modalContainer.parentNode.removeChild(modalContainer);
+                  } catch (e) {
+                    console.error('[SlashCommand] Error removiendo contenedor después de error:', e);
+                  }
+                  modalContainer = null;
+                }
+              }
             },
             onUpdate: (props) => {
-              if (!root || !modalContainer) return;
+              // Si no hay root o contenedor, intentar recrear
+              if (!root || !modalContainer) {
+                // Verificar si el contenedor existe pero no hay root
+                const existingContainer = document.getElementById('slash-command-modal-container');
+                if (existingContainer && !root) {
+                  // Limpiar y recrear
+                  try {
+                    if (existingContainer._reactRoot) {
+                      existingContainer._reactRoot.unmount();
+                    }
+                    if (existingContainer.parentNode) {
+                      existingContainer.parentNode.removeChild(existingContainer);
+                    }
+                  } catch (e) {
+                    console.warn('[SlashCommand] Error limpiando en onUpdate:', e);
+                  }
+                  // Recrear
+                  modalContainer = document.createElement('div');
+                  modalContainer.id = 'slash-command-modal-container';
+                  document.body.appendChild(modalContainer);
+                  root = createRoot(modalContainer);
+                  modalContainer._reactRoot = root;
+                } else {
+                  return;
+                }
+              }
 
               // Actualizar el modal con nuevos items y query
               root.render(
                 React.createElement(SlashCommandModal, {
                   isOpen: true,
                   onClose: () => {
+                    console.log('[SlashCommand] onClose llamado en onUpdate');
+                    // Limpiar el root de React
                     if (root) {
-                      root.unmount();
-                      root = null;
+                      try {
+                        root.unmount();
+                        root = null;
+                      } catch (e) {
+                        console.warn('[SlashCommand] Error desmontando root en onUpdate:', e);
+                      }
                     }
-                    if (modalContainer && modalContainer.parentNode) {
-                      modalContainer.parentNode.removeChild(modalContainer);
+                    // Remover el contenedor del DOM
+                    if (modalContainer) {
+                      if (modalContainer._reactRoot) {
+                        delete modalContainer._reactRoot;
+                      }
+                      if (modalContainer.parentNode) {
+                        try {
+                          modalContainer.parentNode.removeChild(modalContainer);
+                        } catch (e) {
+                          console.warn('[SlashCommand] Error removiendo contenedor en onUpdate:', e);
+                        }
+                      }
+                      modalContainer = null;
                     }
-                    modalContainer = null;
                   },
                   items: props.items || [],
                   query: props.query || '',
                   onSelectCommand: async (item) => {
+                    console.log('[SlashCommand] Comando seleccionado en onUpdate:', item.label);
                     const { editor, range } = props;
+                    // Cerrar el modal antes de ejecutar el comando
+                    if (root) {
+                      try {
+                        root.unmount();
+                        root = null;
+                      } catch (e) {
+                        console.warn('[SlashCommand] Error desmontando root en onSelectCommand (onUpdate):', e);
+                      }
+                    }
+                    if (modalContainer) {
+                      if (modalContainer._reactRoot) {
+                        delete modalContainer._reactRoot;
+                      }
+                      if (modalContainer.parentNode) {
+                        try {
+                          modalContainer.parentNode.removeChild(modalContainer);
+                        } catch (e) {
+                          console.warn('[SlashCommand] Error removiendo contenedor en onSelectCommand (onUpdate):', e);
+                        }
+                      }
+                      modalContainer = null;
+                    }
+                    // Ejecutar el comando
                     editor.chain().focus().deleteRange(range).run();
                     await item.command({ editor, range });
                   },
@@ -973,23 +1292,82 @@ export const SlashCommand = Extension.create({
               );
             },
             onExit: () => {
-              // Asegurar que solo limpiamos si el modal aún existe
+              console.log('[SlashCommand] onExit llamado');
+              isClosing = true;
+              
+              // Limpiar cualquier modal que pueda estar en el DOM
+              const allContainers = document.querySelectorAll('#slash-command-modal-container');
+              console.log(`[SlashCommand] Limpiando ${allContainers.length} contenedores en onExit`);
+              allContainers.forEach((container, index) => {
+                try {
+                  console.log(`[SlashCommand] Limpiando contenedor ${index + 1} en onExit`);
+                  if (container._reactRoot) {
+                    container._reactRoot.unmount();
+                    delete container._reactRoot;
+                    console.log(`[SlashCommand] Root ${index + 1} desmontado en onExit`);
+                  }
+                  if (container.parentNode) {
+                    container.parentNode.removeChild(container);
+                    console.log(`[SlashCommand] Contenedor ${index + 1} removido en onExit`);
+                  }
+                } catch (e) {
+                  console.warn(`[SlashCommand] Error limpiando contenedor ${index + 1} en onExit:`, e);
+                  // Forzar remoción
+                  try {
+                    if (container.parentNode) {
+                      container.parentNode.removeChild(container);
+                    }
+                  } catch (e2) {
+                    console.error(`[SlashCommand] Error forzando remoción del contenedor ${index + 1}:`, e2);
+                  }
+                }
+              });
+              
+              // Limpiar SOLO overlays del slash command modal
+              const overlays = document.querySelectorAll('div.fixed.inset-0');
+              if (overlays.length > 0) {
+                console.log(`[SlashCommand] Verificando ${overlays.length} overlays en onExit`);
+                overlays.forEach((overlay, index) => {
+                  const hasModalContainer = overlay.querySelector('#slash-command-modal-container');
+                  const zIndex = window.getComputedStyle(overlay).zIndex;
+                  const isSlashCommandZIndex = zIndex === '70000' || overlay.className.includes('z-[70000]');
+                  
+                  // Solo remover si tiene el contenedor del modal o tiene el z-index específico del slash command
+                  if (hasModalContainer || (isSlashCommandZIndex && !overlay.id && !overlay.closest('[id]'))) {
+                    try {
+                      if (overlay.parentNode) {
+                        overlay.parentNode.removeChild(overlay);
+                        console.log(`[SlashCommand] Overlay del slash command ${index + 1} removido en onExit`);
+                      }
+                    } catch (e) {
+                      console.warn(`[SlashCommand] Error removiendo overlay ${index + 1} en onExit:`, e);
+                    }
+                  }
+                });
+              }
+              
+              // Limpiar referencias locales
               if (root) {
                 try {
                   root.unmount();
+                  console.log('[SlashCommand] Root local desmontado en onExit');
                 } catch (e) {
-                  // Ignorar errores si ya se desmontó
+                  console.warn('[SlashCommand] Error desmontando root local en onExit:', e);
                 }
                 root = null;
               }
-              if (modalContainer && modalContainer.parentNode) {
-                try {
-                  modalContainer.parentNode.removeChild(modalContainer);
-                } catch (e) {
-                  // Ignorar errores si ya se removió
+              if (modalContainer) {
+                if (modalContainer._reactRoot) {
+                  delete modalContainer._reactRoot;
                 }
+                modalContainer = null;
               }
-              modalContainer = null;
+              
+              // Resetear el flag después de limpiar
+              setTimeout(() => {
+                isClosing = false;
+                console.log('[SlashCommand] Flag isClosing reseteado en onExit');
+              }, 150);
             },
           };
         },

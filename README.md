@@ -59,6 +59,10 @@ npm run electron:build:win
 
 # O solo ZIP portable
 npm run electron:build:zip
+
+# linux
+npm run electron:build:linux
+
 ```
 
 #### Archivos Generados:

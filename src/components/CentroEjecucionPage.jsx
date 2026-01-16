@@ -614,10 +614,27 @@ export default function CentroEjecucionPage({ onClose }) {
     // En Electron, las rutas completas tienen / o \ o : (para Windows)
     const isFullPath = project.path.includes('/') || project.path.includes('\\') || project.path.includes(':');
     
+    // En navegador, verificar si tenemos un directoryHandle guardado
+    let directoryHandle = null;
     if (!isFullPath && !window.electronAPI) {
-      alert('⚠️ Este proyecto fue creado en modo navegador y no tiene una ruta completa.\n\n' +
-            'Por favor, vuelve a seleccionar el proyecto usando la versión Electron para tener todas las funcionalidades.');
-      return;
+      // Buscar el handle del proyecto en window.directoryHandles
+      if (window.directoryHandles && project.id) {
+        directoryHandle = window.directoryHandles.get(project.id);
+        if (!directoryHandle) {
+          // Intentar buscar por el path también
+          for (const [id, handle] of window.directoryHandles.entries()) {
+            if (id.includes(project.path.replace(/[<>:"/\\|?*]/g, '_'))) {
+              directoryHandle = handle;
+              break;
+            }
+          }
+        }
+      }
+      
+      if (!directoryHandle) {
+        console.warn('[CentroEjecucionPage] No se encontró directoryHandle para proyecto del navegador:', project.id);
+        // Permitir continuar de todas formas, el FileExplorer manejará la situación
+      }
     }
     
     // Cerrar modal
@@ -642,7 +659,9 @@ export default function CentroEjecucionPage({ onClose }) {
         theme: project.theme || 'oneDark',
         fontSize: project.fontSize || 14,
         extensions: project.extensions || {},
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        projectId: project.id, // Guardar el ID del proyecto para recuperar el handle
+        isBrowserProject: !isFullPath && !window.electronAPI // Marcar si es proyecto del navegador
       };
       
       setVisualCodeTabs(prev => [...prev, newTab]);
@@ -673,6 +692,7 @@ export default function CentroEjecucionPage({ onClose }) {
   const handleSelectProject = async () => {
     try {
       let selectedPath = null;
+      let directoryHandle = null;
       
       // Usar la misma lógica que Visual Code para seleccionar carpetas
       if (window.electronAPI && window.electronAPI.selectDirectory) {
@@ -680,25 +700,39 @@ export default function CentroEjecucionPage({ onClose }) {
         selectedPath = await window.electronAPI.selectDirectory();
       } else if ('showDirectoryPicker' in window) {
         // Navegador: usar File System Access API
-        // Nota: En navegador, File System Access API no proporciona rutas completas del sistema
-        // Solo funciona completamente en Electron
-        alert('⚠️ Selección de proyectos en navegador tiene limitaciones.\n\n' +
-              'Para usar todas las funcionalidades de Visual Code, usa la versión Electron.\n\n' +
-              'Ejecuta: npm run electron:dev');
-        return;
+        try {
+          const handle = await window.showDirectoryPicker({
+            mode: 'readwrite' // Necesitamos escritura para guardar archivos
+          });
+          directoryHandle = handle;
+          // En navegador, usamos el nombre del directorio como identificador
+          selectedPath = handle.name || 'Proyecto del Navegador';
+          console.log('[CentroEjecucionPage] Directorio seleccionado en navegador:', selectedPath);
+        } catch (error) {
+          if (error.name === 'AbortError') {
+            console.log('[CentroEjecucionPage] Usuario canceló la selección');
+            return;
+          }
+          console.error('[CentroEjecucionPage] Error seleccionando directorio:', error);
+          alert('Error al seleccionar carpeta: ' + error.message);
+          return;
+        }
       } else {
-        alert('Tu navegador no soporta la selección de carpetas. Usa la versión Electron.');
+        alert('Tu navegador no soporta la selección de carpetas.\n\n' +
+              'Usa Chrome 86+, Edge 86+ u Opera 72+, o ejecuta la versión Electron:\n' +
+              'npm run electron:dev');
         return;
       }
 
-      if (selectedPath) {
+      if (selectedPath || directoryHandle) {
         // Crear configuración del proyecto
-        const projectId = selectedPath.replace(/[<>:"/\\|?*]/g, '_');
+        const projectId = selectedPath.replace(/[<>:"/\\|?*]/g, '_') + '_' + Date.now();
         const projectConfig = {
           projectPath: selectedPath,
+          directoryHandle: directoryHandle ? 'browser-handle' : null, // Marcador para saber que es un handle del navegador
           title: selectedPath.split(/[/\\]/).pop() || 'Nuevo Proyecto',
           color: '#1e1e1e',
-          theme: 'oneDark',
+          theme: 'cursorDark', // Cambiar a cursorDark por defecto
           fontSize: 14,
           extensions: {
             errorLens: true,
@@ -713,6 +747,15 @@ export default function CentroEjecucionPage({ onClose }) {
           },
           lastUpdated: new Date().toISOString()
         };
+
+        // Guardar el handle del directorio en un mapa global si es navegador
+        if (directoryHandle && typeof window !== 'undefined') {
+          if (!window.directoryHandles) {
+            window.directoryHandles = new Map();
+          }
+          window.directoryHandles.set(projectId, directoryHandle);
+          console.log('[CentroEjecucionPage] Handle guardado para proyecto:', projectId);
+        }
 
         // Guardar proyecto
         await LocalStorageService.saveJSONFile(
@@ -1164,10 +1207,29 @@ export default function CentroEjecucionPage({ onClose }) {
                 hideTabs={true}
               />
             ) : (
-              activeVisualCodeId && visualCodeTabs.find(tab => tab.id === activeVisualCodeId) && (
-                <VisualCodeTab
-                  project={visualCodeTabs.find(tab => tab.id === activeVisualCodeId)}
-                  isActive={true}
+              activeVisualCodeId && visualCodeTabs.find(tab => tab.id === activeVisualCodeId) && (() => {
+                const activeTab = visualCodeTabs.find(tab => tab.id === activeVisualCodeId);
+                // Obtener el directoryHandle si es un proyecto del navegador
+                let directoryHandle = null;
+                if (activeTab.isBrowserProject && activeTab.projectId && window.directoryHandles) {
+                  directoryHandle = window.directoryHandles.get(activeTab.projectId);
+                  // Si no se encuentra por ID, intentar buscar por el path
+                  if (!directoryHandle) {
+                    for (const [id, handle] of window.directoryHandles.entries()) {
+                      if (id.includes(activeTab.path.replace(/[<>:"/\\|?*]/g, '_'))) {
+                        directoryHandle = handle;
+                        break;
+                      }
+                    }
+                  }
+                }
+                return (
+                  <VisualCodeTab
+                    project={{
+                      ...activeTab,
+                      directoryHandle: directoryHandle
+                    }}
+                    isActive={true}
                   onClose={() => {
                     const updated = visualCodeTabs.filter(t => t.id !== activeVisualCodeId);
                     setVisualCodeTabs(updated);
@@ -1184,7 +1246,8 @@ export default function CentroEjecucionPage({ onClose }) {
                     ));
                   }}
                 />
-              )
+                );
+              })()
             )}
           </div>
         </div>

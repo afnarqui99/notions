@@ -24,6 +24,7 @@ export default function FileExplorer({
   onFileSelect,
   onProjectPathChange,
   onProjectHandleChange, // Nuevo callback para pasar el handle del proyecto
+  directoryHandle = null, // Handle del directorio para proyectos del navegador
   hideHeader = false, // Opción para ocultar el header cuando se usa dentro de otro componente
   vscodeStyle = false, // Estilo VS Code/Cursor con colores oscuros
   openFiles = [] // Lista de archivos abiertos para resaltarlos en amarillo
@@ -64,9 +65,30 @@ export default function FileExplorer({
     if (isOpen && projectPath) {
       // Guardar ruta en localStorage
       localStorage.setItem(`${STORAGE_KEY}-path`, projectPath);
+      
+      // Primero intentar usar el directoryHandle pasado como prop
+      if (directoryHandle) {
+        console.log('[FileExplorer] Usando directoryHandle pasado como prop para:', projectPath);
+        loadFilesFromBrowserHandle(directoryHandle, projectPath);
+        return;
+      }
+      
+      // Si hay un handle del navegador disponible, usarlo
+      if (typeof window !== 'undefined' && window.directoryHandles) {
+        // Buscar el handle por el projectPath (que puede ser el nombre del directorio)
+        const handle = Array.from(window.directoryHandles.values()).find(
+          h => h.name === projectPath || projectPath.includes(h.name)
+        );
+        if (handle) {
+          console.log('[FileExplorer] Usando handle del navegador para:', projectPath);
+          loadFilesFromBrowserHandle(handle, projectPath);
+          return;
+        }
+      }
+      
       loadFilesRecursive(projectPath);
     }
-  }, [isOpen, projectPath]);
+  }, [isOpen, projectPath, directoryHandle]);
 
   // Guardar estado de expansión
   useEffect(() => {
