@@ -219,6 +219,17 @@ class LocalStorageService {
     });
   }
 
+  // Verificar si hay un baseDirectoryHandle disponible
+  async hasBaseDirectory() {
+    // En Electron, siempre hay acceso al sistema de archivos
+    if (typeof window !== 'undefined' && window.electronAPI) {
+      return true;
+    }
+    
+    // En navegador, verificar si hay baseDirectoryHandle
+    return this.baseDirectoryHandle !== null;
+  }
+
   // Obtener o crear subdirectorio (soporta rutas anidadas como 'data/comments')
   async getOrCreateSubdirectory(path) {
     if (!this.baseDirectoryHandle) {

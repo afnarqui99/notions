@@ -67,6 +67,95 @@ html.dark body {
   cursor: text !important;
 }
 
+/* Estilos específicos para VisualCodeBlock */
+.visual-code-block-wrapper {
+  pointer-events: auto !important;
+}
+
+.visual-code-block-wrapper .cm-editor,
+.visual-code-block-wrapper .cm-content,
+.visual-code-block-wrapper .cm-scroller {
+  pointer-events: auto !important;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  cursor: text !important;
+}
+
+/* Asegurar que los elementos del editor sean interactivos */
+.visual-code-block-wrapper [class*="cm-"] {
+  pointer-events: auto !important;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  cursor: text !important;
+}
+
+/* Estilos específicos para VisualCodeTab (Centro de Ejecución) */
+.visual-code-tab-container,
+.visual-code-tab-container * {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+  pointer-events: auto !important;
+}
+
+.visual-code-tab-container .cm-editor,
+.visual-code-tab-container .cm-content,
+.visual-code-tab-container .cm-scroller,
+.visual-code-tab-container .cm-line,
+.visual-code-tab-container .cm-line * {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+  pointer-events: auto !important;
+  cursor: text !important;
+}
+
+/* Asegurar que la selección funcione correctamente en CodeMirror */
+.visual-code-tab-container .cm-editor.cm-focused {
+  outline: none !important;
+}
+
+/* Estilos de selección visibles para VisualCodeTab */
+.visual-code-tab-container .cm-selectionBackground,
+.visual-code-tab-container .cm-selectionBackground * {
+  background-color: rgba(173, 214, 255, 0.4) !important;
+  color: inherit !important;
+}
+
+.visual-code-tab-container .cm-focused .cm-selectionBackground,
+.visual-code-tab-container .cm-focused .cm-selectionBackground * {
+  background-color: rgba(173, 214, 255, 0.4) !important;
+  color: inherit !important;
+}
+
+/* Selección cuando el editor está enfocado */
+.visual-code-tab-container .cm-editor.cm-focused .cm-selectionBackground {
+  background-color: rgba(173, 214, 255, 0.4) !important;
+}
+
+/* Selección de texto estándar del navegador también visible */
+.visual-code-tab-container .cm-content::selection,
+.visual-code-tab-container .cm-content ::selection {
+  background-color: rgba(173, 214, 255, 0.4) !important;
+  color: inherit !important;
+}
+
+.visual-code-tab-container .cm-content::-moz-selection,
+.visual-code-tab-container .cm-content ::-moz-selection {
+  background-color: rgba(173, 214, 255, 0.4) !important;
+  color: inherit !important;
+}
+
+/* Permitir selección de múltiples líneas */
+.visual-code-tab-container .cm-content {
+  white-space: pre !important;
+  word-wrap: normal !important;
+  overflow-wrap: normal !important;
+}
+
 .ProseMirror p.is-editor-empty:first-child::before {
   color: #adb5bd;
   content: attr(data-placeholder);

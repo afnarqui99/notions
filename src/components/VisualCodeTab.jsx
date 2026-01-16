@@ -341,7 +341,8 @@ export default function VisualCodeTab({
                 '.cm-bracket': { color: '#d4d4d4' },
                 '.cm-tag': { color: '#569cd6' },
                 '.cm-attribute': { color: '#9cdcfe' },
-                '.cm-selectionBackground': { backgroundColor: '#264f78' },
+                '.cm-selectionBackground': { backgroundColor: 'rgba(173, 214, 255, 0.4) !important' },
+                '.cm-focused .cm-selectionBackground': { backgroundColor: 'rgba(173, 214, 255, 0.4) !important' },
                 '.cm-cursor': { borderLeftColor: '#aeafad' },
                 '.cm-matchingBracket': {
                   backgroundColor: 'rgba(255, 255, 255, 0.1)',
@@ -418,7 +419,8 @@ export default function VisualCodeTab({
                 '.cm-bracket': { color: '#d4d4d4' },
                 '.cm-tag': { color: '#569cd6' },
                 '.cm-attribute': { color: '#9cdcfe' },
-                '.cm-selectionBackground': { backgroundColor: '#264f78' },
+                '.cm-selectionBackground': { backgroundColor: 'rgba(173, 214, 255, 0.4) !important' },
+                '.cm-focused .cm-selectionBackground': { backgroundColor: 'rgba(173, 214, 255, 0.4) !important' },
                 '.cm-cursor': { borderLeftColor: '#aeafad' },
                 '.cm-matchingBracket': {
                   backgroundColor: 'rgba(255, 255, 255, 0.1)',
@@ -466,7 +468,8 @@ export default function VisualCodeTab({
                 '.cm-operator': { color: '#d4d4d4' },
                 '.cm-meta': { color: '#569cd6' },
                 '.cm-bracket': { color: '#d4d4d4' },
-                '.cm-selectionBackground': { backgroundColor: '#264f78' },
+                '.cm-selectionBackground': { backgroundColor: 'rgba(173, 214, 255, 0.4) !important' },
+                '.cm-focused .cm-selectionBackground': { backgroundColor: 'rgba(173, 214, 255, 0.4) !important' },
                 '.cm-cursor': { borderLeftColor: '#aeafad' },
               }, { dark: true });
           }
@@ -562,6 +565,16 @@ export default function VisualCodeTab({
             '.cm-focused': {
               outline: 'none',
             },
+            // Estilos de selección VISIBLES
+            '.cm-selectionBackground': {
+              backgroundColor: 'rgba(173, 214, 255, 0.4) !important',
+            },
+            '.cm-focused .cm-selectionBackground': {
+              backgroundColor: 'rgba(173, 214, 255, 0.4) !important',
+            },
+            '.cm-selectionMatch': {
+              backgroundColor: 'rgba(255, 255, 255, 0.2) !important',
+            },
             // Estilo para variables no usadas (similar a Cursor/VS Code)
             '.cm-unused-variable': {
               opacity: '0.5',
@@ -577,9 +590,10 @@ export default function VisualCodeTab({
         }
 
         // Detección de variables no usadas (solo para JavaScript/TypeScript)
-        if (activeFile && (activeFile.endsWith('.js') || activeFile.endsWith('.jsx') || activeFile.endsWith('.ts') || activeFile.endsWith('.tsx'))) {
-          editorExtensions.push(unusedVariablesExtension());
-        }
+        // TODO: Implementar extensión para detectar variables no usadas
+        // if (activeFile && (activeFile.endsWith('.js') || activeFile.endsWith('.jsx') || activeFile.endsWith('.ts') || activeFile.endsWith('.tsx'))) {
+        //   editorExtensions.push(unusedVariablesExtension());
+        // }
 
         const view = new EditorView({
           doc: content,
@@ -639,6 +653,10 @@ export default function VisualCodeTab({
                 userSelect: computedStyle.userSelect,
                 contentEditable: editorElement.contentEditable,
               });
+              
+              // Asegurar que el editor pueda recibir eventos del mouse y teclado
+              editorElement.setAttribute('tabindex', '0');
+              editorElement.style.outline = 'none';
             }
             
             // Verificar el contenido también
@@ -651,6 +669,39 @@ export default function VisualCodeTab({
                 contentEditable: contentElement.contentEditable,
               });
             }
+            
+            // Agregar listener de clic para enfocar el editor cuando se hace clic en el contenedor
+            // PERO solo si no hay una selección de texto activa
+            const handleContainerClick = (e) => {
+              // Solo enfocar si el clic no es en un botón u otro elemento interactivo
+              if (e.target.closest('button') || e.target.closest('input') || e.target.closest('textarea')) {
+                return;
+              }
+              
+              // Verificar si hay una selección de texto activa
+              const selection = window.getSelection();
+              if (selection && selection.toString().length > 0) {
+                // Hay texto seleccionado, no enfocar para permitir copiar
+                return;
+              }
+              
+              // Enfocar el editor después de un breve delay para no interferir con la selección
+              setTimeout(() => {
+                if (editorViewRef.current) {
+                  editorViewRef.current.focus();
+                }
+              }, 0);
+            };
+            
+            if (editorContainerRef.current) {
+              // Usar capture: false para no interferir con la selección
+              editorContainerRef.current.addEventListener('click', handleContainerClick, false);
+              
+              // Guardar el handler para limpiarlo después
+              if (!editorContainerRef.current._clickHandler) {
+                editorContainerRef.current._clickHandler = handleContainerClick;
+              }
+            }
           }
         }, 100);
       } catch (error) {
@@ -661,6 +712,12 @@ export default function VisualCodeTab({
     initializeEditor();
 
     return () => {
+      // Limpiar listener de clic
+      if (editorContainerRef.current && editorContainerRef.current._clickHandler) {
+        editorContainerRef.current.removeEventListener('click', editorContainerRef.current._clickHandler, true);
+        delete editorContainerRef.current._clickHandler;
+      }
+      
       if (editorViewRef.current) {
         editorViewRef.current.destroy();
         editorViewRef.current = null;
@@ -708,25 +765,49 @@ export default function VisualCodeTab({
   }, [activeFile, fileContents]); // Solo cuando cambia el archivo activo
 
   // Manejar Ctrl+S para guardar y Ctrl+/Ctrl- para zoom
+  // IMPORTANTE: Solo manejar estos atajos específicos y NO bloquear otros como Ctrl+A
   useEffect(() => {
     const handleKeyDown = (e) => {
+      // Solo manejar si el editor está enfocado o si es un atajo global que queremos capturar
+      const isEditorFocused = editorViewRef.current && 
+        document.activeElement && 
+        (document.activeElement.closest('.cm-editor') || 
+         document.activeElement === editorViewRef.current.dom);
+      
+      // Si no es el editor el que está enfocado, no interferir (excepto para atajos globales específicos)
+      if (!isEditorFocused && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+        // Permitir que otros componentes manejen sus propios atajos
+        return;
+      }
+      
+      // Solo manejar atajos específicos
       if ((e.ctrlKey || e.metaKey) && e.key === 's' && activeFile) {
         e.preventDefault();
+        e.stopPropagation();
         saveFile(activeFile);
+        return;
       }
       if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '=') && !e.shiftKey) {
         e.preventDefault();
+        e.stopPropagation();
         setFontSize(prev => Math.min(prev + 1, 32));
+        return;
       }
       if ((e.ctrlKey || e.metaKey) && e.key === '-') {
         e.preventDefault();
+        e.stopPropagation();
         setFontSize(prev => Math.max(prev - 1, 8));
+        return;
       }
+      
+      // Para todos los demás eventos (incluyendo Ctrl+A), NO hacer preventDefault
+      // Esto permite que CodeMirror maneje sus propios atajos de teclado
     };
 
-    window.addEventListener('keydown', handleKeyDown);
+    // Usar capture: false para que el editor pueda manejar primero sus eventos
+    window.addEventListener('keydown', handleKeyDown, false);
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keydown', handleKeyDown, false);
     };
   }, [activeFile]);
 
@@ -1197,7 +1278,7 @@ export default function VisualCodeTab({
           ) : activeFile ? (
             <div 
               ref={editorContainerRef} 
-              className="flex-1"
+              className="flex-1 visual-code-tab-container"
               style={{ 
                 height: '100%',
                 width: '100%',
@@ -1209,6 +1290,25 @@ export default function VisualCodeTab({
                 pointerEvents: 'auto !important',
                 cursor: 'text !important',
                 overflow: 'auto',
+              }}
+              onClick={(e) => {
+                // Solo enfocar si el clic no es parte de una selección de texto
+                // Verificar si hay una selección activa
+                const selection = window.getSelection();
+                if (selection && selection.toString().length > 0) {
+                  // Hay texto seleccionado, no enfocar para permitir copiar
+                  return;
+                }
+                
+                // Enfocar el editor cuando se hace clic en el contenedor (pero no en botones/inputs)
+                if (editorViewRef.current && !e.target.closest('button') && !e.target.closest('input') && !e.target.closest('textarea')) {
+                  // Usar setTimeout para no interferir con la selección
+                  setTimeout(() => {
+                    if (editorViewRef.current) {
+                      editorViewRef.current.focus();
+                    }
+                  }, 0);
+                }
               }}
             />
           ) : (
