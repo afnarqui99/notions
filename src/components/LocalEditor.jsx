@@ -31,7 +31,7 @@ import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import { Toggle } from "../extensions/Toggle";
 import { Comment } from "../extensions/Comment";
-import { Settings, Plus, Image as ImageIcon, Paperclip, Download, Trash2, Tag as TagIcon, FileText, Save, Clock, MessageSquare, MoreVertical, Database, Zap, FolderOpen, X, Minimize2, Command } from "lucide-react";
+import { Settings, Plus, Image as ImageIcon, Paperclip, Download, Trash2, Tag as TagIcon, FileText, Save, Clock, MessageSquare, MoreVertical, Database, Zap, FolderOpen, X, Minimize2, Command, Calendar } from "lucide-react";
 import QuickScrollNavigation from "./QuickScrollNavigation";
 import LocalStorageService from "../services/LocalStorageService";
 import Modal from "./Modal";
@@ -68,6 +68,7 @@ import VisualCodeFullscreenModal from "./VisualCodeFullscreenModal";
 import SlashCommandModal from "./SlashCommandModal";
 import CommandButtonModal from "./CommandButtonModal";
 import { getSlashCommandItems } from "../utils/slashCommandItems";
+import WelcomeExamples from "./WelcomeExamples";
 
 export default function LocalEditor({ onShowConfig }) {
   // Función helper para extraer emoji del título
@@ -540,6 +541,7 @@ export default function LocalEditor({ onShowConfig }) {
   });
 
   // Trackear posición del cursor para el botón flotante
+  // El botón se mantiene fijo a la izquierda (respetando el sidebar) y sigue el cursor verticalmente
   useEffect(() => {
     if (!editor) return;
 
@@ -553,15 +555,12 @@ export default function LocalEditor({ onShowConfig }) {
           const containerRect = editorContainer.getBoundingClientRect();
           const scrollTop = editorContainer.scrollTop;
           
-          // Calcular posición relativa al contenedor del editor
-          let leftPos = coords.left - containerRect.left - 60; // 60px a la izquierda del cursor
-          let topPos = coords.top - containerRect.top + scrollTop + 20; // 20px debajo del cursor
+          // Posición horizontal: fija a la izquierda, respetando el sidebar
+          // Si el sidebar está colapsado: 80px, si no: 300px
+          const leftPos = sidebarColapsado ? 80 : 300;
           
-          // Respetar el sidebar: si está colapsado, mínimo 80px, si no, mínimo 300px
-          const minLeft = sidebarColapsado ? 80 : 300;
-          if (leftPos < minLeft) {
-            leftPos = minLeft;
-          }
+          // Posición vertical: sigue el cursor (20px debajo del cursor)
+          let topPos = coords.top - containerRect.top + scrollTop + 20;
           
           // Asegurar que el botón no se salga por arriba
           if (topPos < 20) {
@@ -3060,7 +3059,7 @@ export default function LocalEditor({ onShowConfig }) {
 
           {/* Área de edición */}
           <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-900 transition-colors relative" ref={editorContainerRef}>
-            {/* Botón flotante de comandos - sigue el cursor y respeta el sidebar */}
+            {/* Botón flotante de comandos - fijo a la izquierda, sigue el cursor verticalmente */}
             {paginaSeleccionada && editor && (
               <button
                 onClick={(e) => {
@@ -3095,94 +3094,273 @@ export default function LocalEditor({ onShowConfig }) {
           <QuickScrollNavigation containerRef={editorContainerRef} />
         </div>
         ) : (
-          <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900 transition-colors">
-            {/* Mostrar páginas favoritas como cards */}
-            {(() => {
-              const paginasFavoritas = paginas.filter(p => favoritos.includes(p.id));
-              
-              if (paginasFavoritas.length > 0) {
-                return (
-                  <div className="max-w-7xl mx-auto px-6 py-8">
-                    <h2 className="text-2xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
-                      <svg className="w-6 h-6 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                      </svg>
-                      Páginas Favoritas
-                    </h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                      {paginasFavoritas.map((pagina) => (
-                        <div
-                          key={pagina.id}
-                          onClick={() => seleccionarPagina(pagina.id)}
-                          className="bg-white rounded-lg border border-gray-200 p-4 hover:border-blue-400 hover:shadow-md transition-all cursor-pointer group"
-                        >
-                          <div className="flex items-start justify-between mb-2">
-                            <h3 className="font-semibold text-gray-900 text-lg group-hover:text-blue-600 transition-colors line-clamp-2 flex-1">
-                              {pagina.titulo || 'Sin título'}
-                            </h3>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                // Toggle favorito
-                                const nuevosFavoritos = favoritos.includes(pagina.id)
-                                  ? favoritos.filter(id => id !== pagina.id)
-                                  : [...favoritos, pagina.id];
-                                try {
-                                  localStorage.setItem('notion-favoritos', JSON.stringify(nuevosFavoritos));
-                                  setFavoritos(nuevosFavoritos);
-                                } catch (error) {
-                                  // Error guardando favoritos
-                                }
-                              }}
-                              className="ml-2 p-1 hover:bg-gray-100 rounded transition-colors flex-shrink-0"
-                              title={favoritos.includes(pagina.id) ? "Quitar de favoritos" : "Agregar a favoritos"}
-                            >
-                              <svg 
-                                className={`w-5 h-5 ${favoritos.includes(pagina.id) ? 'text-yellow-500 fill-current' : 'text-gray-400'}`} 
-                                fill="currentColor" 
-                                viewBox="0 0 20 20"
+          <div className="flex-1 overflow-y-auto bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 transition-colors">
+            <div className="max-w-7xl mx-auto px-6 py-12">
+              {/* Hero Section */}
+              <div className="text-center mb-16">
+                <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 mb-6 shadow-lg">
+                  <FileText className="w-10 h-10 text-white" />
+                </div>
+                <h1 className="text-5xl font-bold text-gray-900 dark:text-white mb-4">
+                  Bienvenido a tu Espacio de Trabajo
+                </h1>
+                <p className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto mb-8">
+                  Organiza tus ideas, gestiona proyectos y potencia tu productividad con herramientas poderosas y fáciles de usar
+                </p>
+                <button
+                  onClick={() => setShowNewPageModal(true)}
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-pink-600 to-purple-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200"
+                >
+                  <Plus className="w-5 h-5" />
+                  Crear tu primera página
+                </button>
+              </div>
+
+              {/* Features Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-16">
+                {/* Feature 1 */}
+                <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-md hover:shadow-xl transition-all duration-200 border border-gray-200 dark:border-gray-700">
+                  <div className="w-12 h-12 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mb-4">
+                    <FileText className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                    Notas y Documentación
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-300 text-sm">
+                    Crea páginas ricas con títulos, listas, tablas y más. Perfecto para documentar ideas, reuniones y proyectos.
+                  </p>
+                </div>
+
+                {/* Feature 2 */}
+                <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-md hover:shadow-xl transition-all duration-200 border border-gray-200 dark:border-gray-700">
+                  <div className="w-12 h-12 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center mb-4">
+                    <Database className="w-6 h-6 text-green-600 dark:text-green-400" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                    Tablas Dinámicas
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-300 text-sm">
+                    Gestiona datos complejos con tablas estilo Notion. Organiza proyectos, inventarios, contactos y más.
+                  </p>
+                </div>
+
+                {/* Feature 3 */}
+                <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-md hover:shadow-xl transition-all duration-200 border border-gray-200 dark:border-gray-700">
+                  <div className="w-12 h-12 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center mb-4">
+                    <Zap className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                    Comandos Rápidos
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-300 text-sm">
+                    Inserta elementos con un clic: títulos, listas, tablas, código, imágenes y más. Todo al alcance de tu mano.
+                  </p>
+                </div>
+
+                {/* Feature 4 */}
+                <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-md hover:shadow-xl transition-all duration-200 border border-gray-200 dark:border-gray-700">
+                  <div className="w-12 h-12 rounded-lg bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center mb-4">
+                    <Calendar className="w-6 h-6 text-orange-600 dark:text-orange-400" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                    Calendarios y Eventos
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-300 text-sm">
+                    Visualiza fechas importantes y eventos en calendarios interactivos. Nunca pierdas una fecha clave.
+                  </p>
+                </div>
+
+                {/* Feature 5 */}
+                <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-md hover:shadow-xl transition-all duration-200 border border-gray-200 dark:border-gray-700">
+                  <div className="w-12 h-12 rounded-lg bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center mb-4">
+                    <ImageIcon className="w-6 h-6 text-pink-600 dark:text-pink-400" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                    Galerías de Imágenes
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-300 text-sm">
+                    Organiza y visualiza tus imágenes en galerías elegantes. Perfecto para portfolios, catálogos y más.
+                  </p>
+                </div>
+
+                {/* Feature 6 */}
+                <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-md hover:shadow-xl transition-all duration-200 border border-gray-200 dark:border-gray-700">
+                  <div className="w-12 h-12 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center mb-4">
+                    <FolderOpen className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                    Organización Total
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-300 text-sm">
+                    Organiza tus páginas en carpetas, usa tags, favoritos y búsqueda avanzada. Todo bajo control.
+                  </p>
+                </div>
+              </div>
+
+              {/* Use Cases Section */}
+              <div className="mb-16">
+                <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-8 text-center">
+                  Casos de Uso Reales
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Use Case 1 */}
+                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-xl p-6 border border-blue-200 dark:border-blue-800">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                      <span className="text-2xl">📝</span>
+                      Gestión de Proyectos
+                    </h3>
+                    <p className="text-gray-700 dark:text-gray-300 text-sm mb-4">
+                      Crea páginas para cada proyecto con tablas de tareas, seguimiento de progreso, notas de reuniones y documentación técnica.
+                    </p>
+                    <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
+                      <li>✓ Tablas para tareas y asignaciones</li>
+                      <li>✓ Documentación de requisitos</li>
+                      <li>✓ Seguimiento de hitos y fechas</li>
+                    </ul>
+                  </div>
+
+                  {/* Use Case 2 */}
+                  <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-xl p-6 border border-green-200 dark:border-green-800">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                      <span className="text-2xl">📚</span>
+                      Notas de Estudio
+                    </h3>
+                    <p className="text-gray-700 dark:text-gray-300 text-sm mb-4">
+                      Organiza tus apuntes, resúmenes y materiales de estudio. Usa bloques de código para ejemplos y fórmulas.
+                    </p>
+                    <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
+                      <li>✓ Apuntes estructurados por tema</li>
+                      <li>✓ Bloques de código para ejemplos</li>
+                      <li>✓ Tablas para comparaciones</li>
+                    </ul>
+                  </div>
+
+                  {/* Use Case 3 */}
+                  <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 rounded-xl p-6 border border-purple-200 dark:border-purple-800">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                      <span className="text-2xl">💼</span>
+                      Planificación Personal
+                    </h3>
+                    <p className="text-gray-700 dark:text-gray-300 text-sm mb-4">
+                      Gestiona tus metas, hábitos y planes personales. Usa calendarios para eventos y tablas para seguimiento.
+                    </p>
+                    <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
+                      <li>✓ Calendarios para eventos importantes</li>
+                      <li>✓ Listas de tareas y hábitos</li>
+                      <li>✓ Seguimiento de objetivos</li>
+                    </ul>
+                  </div>
+
+                  {/* Use Case 4 */}
+                  <div className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 rounded-xl p-6 border border-orange-200 dark:border-orange-800">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                      <span className="text-2xl">💡</span>
+                      Brainstorming e Ideas
+                    </h3>
+                    <p className="text-gray-700 dark:text-gray-300 text-sm mb-4">
+                      Captura ideas rápidamente, organiza conceptos y desarrolla proyectos creativos con total libertad.
+                    </p>
+                    <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
+                      <li>✓ Captura rápida de ideas</li>
+                      <li>✓ Organización con tags</li>
+                      <li>✓ Desarrollo de conceptos</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              {/* Ejemplos Visuales */}
+              <div className="mb-16">
+                <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-8 text-center">
+                  Ejemplos Visuales
+                </h2>
+                <p className="text-center text-gray-600 dark:text-gray-400 mb-8 max-w-2xl mx-auto">
+                  Descubre cómo puedes usar nuestras herramientas con estos ejemplos reales
+                </p>
+                <WelcomeExamples />
+              </div>
+
+              {/* Quick Start */}
+              <div className="bg-gradient-to-r from-pink-500 to-purple-600 rounded-2xl p-8 text-white text-center shadow-xl">
+                <h2 className="text-3xl font-bold mb-4">¿Listo para comenzar?</h2>
+                <p className="text-lg mb-6 opacity-90">
+                  Crea tu primera página y descubre todas las posibilidades que tienes a tu alcance
+                </p>
+                <button
+                  onClick={() => setShowNewPageModal(true)}
+                  className="inline-flex items-center gap-2 px-8 py-4 bg-white text-purple-600 rounded-lg font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200"
+                >
+                  <Plus className="w-5 h-5" />
+                  Crear nueva página
+                </button>
+              </div>
+
+              {/* Favoritas Section (si hay favoritas) */}
+              {(() => {
+                const paginasFavoritas = paginas.filter(p => favoritos.includes(p.id));
+                if (paginasFavoritas.length > 0) {
+                  return (
+                    <div className="mt-16">
+                      <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
+                        <svg className="w-6 h-6 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                        </svg>
+                        Tus Páginas Favoritas
+                      </h2>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                        {paginasFavoritas.map((pagina) => (
+                          <div
+                            key={pagina.id}
+                            onClick={() => seleccionarPagina(pagina.id)}
+                            className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 hover:border-blue-400 hover:shadow-md transition-all cursor-pointer group"
+                          >
+                            <div className="flex items-start justify-between mb-2">
+                              <h3 className="font-semibold text-gray-900 dark:text-white text-lg group-hover:text-blue-600 transition-colors line-clamp-2 flex-1">
+                                {pagina.titulo || 'Sin título'}
+                              </h3>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const nuevosFavoritos = favoritos.includes(pagina.id)
+                                    ? favoritos.filter(id => id !== pagina.id)
+                                    : [...favoritos, pagina.id];
+                                  try {
+                                    localStorage.setItem('notion-favoritos', JSON.stringify(nuevosFavoritos));
+                                    setFavoritos(nuevosFavoritos);
+                                  } catch (error) {
+                                    // Error guardando favoritos
+                                  }
+                                }}
+                                className="ml-2 p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors flex-shrink-0"
+                                title="Quitar de favoritos"
                               >
-                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                              </svg>
-                            </button>
+                                <svg 
+                                  className="w-5 h-5 text-yellow-500 fill-current" 
+                                  fill="currentColor" 
+                                  viewBox="0 0 20 20"
+                                >
+                                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                </svg>
+                              </button>
+                            </div>
+                            {pagina.actualizadoEn && (
+                              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                                Actualizado: {new Date(pagina.actualizadoEn).toLocaleDateString('es-ES', {
+                                  year: 'numeric',
+                                  month: 'short',
+                                  day: 'numeric'
+                                })}
+                              </p>
+                            )}
                           </div>
-                          {pagina.actualizadoEn && (
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                              Actualizado: {new Date(pagina.actualizadoEn).toLocaleDateString('es-ES', {
-                                year: 'numeric',
-                                month: 'short',
-                                day: 'numeric'
-                              })}
-                            </p>
-                          )}
-                          {pagina.creadoEn && (
-                            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                              Creado: {new Date(pagina.creadoEn).toLocaleDateString('es-ES', {
-                                year: 'numeric',
-                                month: 'short',
-                                day: 'numeric'
-                              })}
-                            </p>
-                          )}
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                );
-              } else {
-                return (
-                  <div className="flex-1 flex items-center justify-center text-gray-500">
-                    <div className="text-center">
-                      <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                      <p className="text-lg mb-2">No hay páginas favoritas</p>
-                      <p className="text-sm text-gray-400 dark:text-gray-500">Marca páginas como favoritas desde el sidebar para verlas aquí</p>
-                    </div>
-                  </div>
-                );
-              }
-            })()}
+                  );
+                }
+                return null;
+              })()}
+            </div>
           </div>
         )}
       </div>
