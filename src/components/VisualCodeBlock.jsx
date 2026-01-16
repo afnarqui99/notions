@@ -360,9 +360,18 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
     }
   }, [projectPath]);
 
-  // Inicializar CodeMirror cuando cambia el archivo activo o el tema
+  // Inicializar CodeMirror cuando cambia el archivo activo, el tema o el contenido del archivo
   useEffect(() => {
     if (activeFile && editorContainerRef.current) {
+      // Verificar que el contenido del archivo esté disponible
+      const fileContent = fileContents[activeFile];
+      
+      // Si el archivo está en openFiles pero no tiene contenido aún, esperar un momento
+      if (openFiles.includes(activeFile) && fileContent === undefined) {
+        console.log('[VisualCodeBlock] Esperando contenido del archivo...', activeFile);
+        return;
+      }
+      
       // Destruir editor anterior si existe
       if (editorViewRef.current) {
         editorViewRef.current.destroy();
@@ -377,7 +386,7 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
         if (activeFile && editorContainerRef.current) {
           initializeEditor();
         }
-      }, 0);
+      }, 50);
 
       return () => {
         clearTimeout(timer);
@@ -386,8 +395,15 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
           editorViewRef.current = null;
         }
       };
+    } else if (!activeFile && editorViewRef.current) {
+      // Si no hay archivo activo, limpiar el editor
+      editorViewRef.current.destroy();
+      editorViewRef.current = null;
+      if (editorContainerRef.current) {
+        editorContainerRef.current.innerHTML = '';
+      }
     }
-  }, [activeFile, theme]);
+  }, [activeFile, theme, fileContents, openFiles]);
 
   const loadFileTree = async (rootPath) => {
     if (!rootPath || rootPath.trim() === '') {
@@ -464,7 +480,11 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
   };
 
   const openFile = async (filePath) => {
+    console.log('[VisualCodeBlock] openFile llamado con:', filePath);
+    
+    // Si el archivo ya está abierto, solo activarlo
     if (openFiles.includes(filePath)) {
+      console.log('[VisualCodeBlock] Archivo ya está abierto, activándolo');
       setActiveFile(filePath);
       return;
     }
@@ -472,20 +492,39 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
     try {
       let content = '';
       if (window.electronAPI && window.electronAPI.readFile) {
+        console.log('[VisualCodeBlock] Leyendo archivo desde Electron API...');
         const result = await window.electronAPI.readFile(filePath);
         if (result.content !== undefined) {
           content = result.content;
+          console.log('[VisualCodeBlock] Contenido leído, longitud:', content.length);
         } else if (result.error) {
-          console.error('Error leyendo archivo:', result.error);
+          console.error('[VisualCodeBlock] Error leyendo archivo:', result.error);
           return;
         }
+      } else {
+        console.warn('[VisualCodeBlock] Electron API no disponible');
       }
 
-      setFileContents(prev => ({ ...prev, [filePath]: content }));
-      setOpenFiles(prev => [...prev, filePath]);
+      console.log('[VisualCodeBlock] Actualizando estado del archivo...');
+      // Actualizar contenido primero
+      setFileContents(prev => {
+        const updated = { ...prev, [filePath]: content };
+        console.log('[VisualCodeBlock] fileContents actualizado, archivos:', Object.keys(updated));
+        return updated;
+      });
+      
+      // Luego agregar a openFiles
+      setOpenFiles(prev => {
+        const updated = [...prev, filePath];
+        console.log('[VisualCodeBlock] openFiles actualizado, archivos:', updated);
+        return updated;
+      });
+      
+      // Finalmente activar el archivo (esto disparará el useEffect)
       setActiveFile(filePath);
+      console.log('[VisualCodeBlock] Archivo abierto y activado:', filePath);
     } catch (error) {
-      console.error('Error abriendo archivo:', error);
+      console.error('[VisualCodeBlock] Error abriendo archivo:', error);
     }
   };
 
@@ -1098,29 +1137,68 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
       editorContainerRef.current.style.WebkitUserSelect = 'text';
       editorContainerRef.current.style.MozUserSelect = 'text';
       editorContainerRef.current.style.msUserSelect = 'text';
+      editorContainerRef.current.style.cursor = 'text';
       
-      // Agregar listeners para debugging
-      editorContainerRef.current.addEventListener('mousedown', (e) => {
-        console.log('[VisualCodeBlock] Mouse down en editor', e.target);
-      });
+      // Asegurar que todos los elementos hijos también permitan interacción
+      const editorElement = editorContainerRef.current.querySelector('.cm-editor');
+      if (editorElement) {
+        editorElement.style.pointerEvents = 'auto';
+        editorElement.style.userSelect = 'text';
+        editorElement.style.WebkitUserSelect = 'text';
+        editorElement.style.cursor = 'text';
+      }
       
-      editorContainerRef.current.addEventListener('selectstart', (e) => {
-        console.log('[VisualCodeBlock] Select start', e.target);
-      });
+      const contentElement = editorContainerRef.current.querySelector('.cm-content');
+      if (contentElement) {
+        contentElement.style.pointerEvents = 'auto';
+        contentElement.style.userSelect = 'text';
+        contentElement.style.WebkitUserSelect = 'text';
+        contentElement.style.cursor = 'text';
+      }
+      
+      const scrollerElement = editorContainerRef.current.querySelector('.cm-scroller');
+      if (scrollerElement) {
+        scrollerElement.style.pointerEvents = 'auto';
+        scrollerElement.style.userSelect = 'text';
+        scrollerElement.style.WebkitUserSelect = 'text';
+        scrollerElement.style.cursor = 'text';
+      }
     }
     
-    // Enfocar el editor automáticamente
+    // Enfocar el editor automáticamente y asegurar interacción
     setTimeout(() => {
       view.focus();
       console.log('[VisualCodeBlock] Editor enfocado, editable:', view.state.readOnly === false);
       
-      // Verificar que el editor esté editable
+      // Verificar y forzar estilos en todos los elementos del editor
       const editorElement = editorContainerRef.current?.querySelector('.cm-editor');
       if (editorElement) {
         console.log('[VisualCodeBlock] Elemento editor encontrado:', {
           pointerEvents: window.getComputedStyle(editorElement).pointerEvents,
           userSelect: window.getComputedStyle(editorElement).userSelect,
         });
+        
+        // Forzar estilos en todos los elementos del editor
+        const allEditorElements = editorContainerRef.current?.querySelectorAll('.cm-editor, .cm-content, .cm-scroller, .cm-line, .cm-line *');
+        allEditorElements?.forEach((el) => {
+          const computed = window.getComputedStyle(el);
+          if (computed.pointerEvents === 'none') {
+            el.style.pointerEvents = 'auto';
+          }
+          if (computed.userSelect === 'none' || computed.userSelect === '') {
+            el.style.userSelect = 'text';
+            el.style.WebkitUserSelect = 'text';
+            el.style.MozUserSelect = 'text';
+            el.style.msUserSelect = 'text';
+          }
+          if (computed.cursor === 'default' || computed.cursor === '') {
+            el.style.cursor = 'text';
+          }
+        });
+        
+        // Asegurar que el editor pueda recibir eventos de teclado
+        editorElement.setAttribute('tabindex', '0');
+        editorElement.setAttribute('contenteditable', 'true');
       }
     }, 100);
   };
@@ -1209,9 +1287,14 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
 
   const updateEditorContent = () => {
     if (!editorViewRef.current || !activeFile) return;
-    const content = fileContents[activeFile] || '';
+    const content = fileContents[activeFile];
+    if (content === undefined) {
+      console.log('[VisualCodeBlock] Contenido del archivo no disponible aún');
+      return;
+    }
     const currentContent = editorViewRef.current.state.doc.toString();
     if (currentContent !== content) {
+      console.log('[VisualCodeBlock] Actualizando contenido del editor');
       editorViewRef.current.dispatch({
         changes: {
           from: 0,
@@ -1221,6 +1304,13 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
       });
     }
   };
+
+  // Actualizar el contenido del editor cuando cambia fileContents para el archivo activo
+  useEffect(() => {
+    if (activeFile && editorViewRef.current && fileContents[activeFile] !== undefined) {
+      updateEditorContent();
+    }
+  }, [fileContents, activeFile]);
 
   const renderFileTree = (items, parentPath = '', level = 0) => {
     if (!items) return null;
@@ -1311,14 +1401,20 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
   };
 
   return (
-    <NodeViewWrapper className="visual-code-block-wrapper my-4">
-      <div className={`bg-[#1e1e1e] border border-gray-700 rounded-lg shadow-lg overflow-hidden ${
-        isFullscreen 
-          ? 'fixed inset-0 z-[50000] rounded-none' 
-          : isExpanded 
-            ? 'fixed inset-4 z-[50000]' 
-            : ''
-      }`}>
+    <NodeViewWrapper 
+      className="visual-code-block-wrapper my-4"
+      style={{ pointerEvents: 'auto' }}
+    >
+      <div 
+        className={`bg-[#1e1e1e] border border-gray-700 rounded-lg shadow-lg overflow-hidden ${
+          isFullscreen 
+            ? 'fixed inset-0 z-[50000] rounded-none' 
+            : isExpanded 
+              ? 'fixed inset-4 z-[50000]' 
+              : ''
+        }`}
+        style={{ pointerEvents: 'auto' }}
+      >
         {/* Header - Estilo VS Code */}
         <div 
           className="border-b border-[#3e3e42] px-3 py-1.5 flex items-center justify-between transition-colors"
@@ -1697,7 +1793,10 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
             )}
 
             {/* Editor - Estilo VS Code */}
-            <div className="flex-1 overflow-hidden bg-[#1e1e1e] min-h-0">
+            <div 
+              className="flex-1 overflow-hidden bg-[#1e1e1e] min-h-0"
+              style={{ pointerEvents: 'auto' }}
+            >
               {activeFile ? (
                 <div 
                   ref={editorContainerRef} 
@@ -1707,6 +1806,8 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
                     WebkitUserSelect: 'text',
                     MozUserSelect: 'text',
                     msUserSelect: 'text',
+                    pointerEvents: 'auto',
+                    cursor: 'text',
                   }}
                 />
               ) : (

@@ -60,20 +60,47 @@ export default function CentroEjecucionPage({ onClose }) {
   useEffect(() => {
     const loadSidebarConfig = async () => {
       try {
-        const saved = await LocalStorageService.readJSONFile('centro-ejecucion-sidebar.json', 'data');
-        if (saved) {
-          // Solo cargar si existe configuración guardada, de lo contrario usar valores por defecto
-          if (saved.collapsed !== undefined) {
-            setSidebarCollapsed(saved.collapsed);
+        // Intentar cargar desde archivo primero
+        const hasBaseDirectory = await LocalStorageService.hasBaseDirectory();
+        if (hasBaseDirectory) {
+          try {
+            const saved = await LocalStorageService.readJSONFile('centro-ejecucion-sidebar.json', 'data');
+            if (saved) {
+              if (saved.collapsed !== undefined) {
+                setSidebarCollapsed(saved.collapsed);
+              }
+              if (saved.styles) {
+                setSidebarStyles(prev => ({ ...prev, ...saved.styles }));
+              }
+            }
+          } catch (fileError) {
+            // Si falla, intentar desde localStorage
+            const localStorageConfig = localStorage.getItem('centro-ejecucion-sidebar-config');
+            if (localStorageConfig) {
+              const saved = JSON.parse(localStorageConfig);
+              if (saved.collapsed !== undefined) {
+                setSidebarCollapsed(saved.collapsed);
+              }
+              if (saved.styles) {
+                setSidebarStyles(prev => ({ ...prev, ...saved.styles }));
+              }
+            }
           }
-          if (saved.styles) {
-            setSidebarStyles(prev => ({ ...prev, ...saved.styles }));
+        } else {
+          // Si no hay baseDirectoryHandle, cargar desde localStorage
+          const localStorageConfig = localStorage.getItem('centro-ejecucion-sidebar-config');
+          if (localStorageConfig) {
+            const saved = JSON.parse(localStorageConfig);
+            if (saved.collapsed !== undefined) {
+              setSidebarCollapsed(saved.collapsed);
+            }
+            if (saved.styles) {
+              setSidebarStyles(prev => ({ ...prev, ...saved.styles }));
+            }
           }
         }
-        // Si no hay configuración guardada, los valores por defecto ya están establecidos (negro y colapsado)
       } catch (error) {
         console.error('Error cargando configuración del sidebar:', error);
-        // En caso de error, mantener valores por defecto (negro y colapsado)
       }
     };
 
@@ -84,6 +111,17 @@ export default function CentroEjecucionPage({ onClose }) {
   useEffect(() => {
     const saveSidebarConfig = async () => {
       try {
+        // Verificar si hay baseDirectoryHandle antes de intentar guardar
+        const hasBaseDirectory = await LocalStorageService.hasBaseDirectory();
+        if (!hasBaseDirectory) {
+          // Si no hay baseDirectoryHandle, guardar en localStorage como fallback
+          localStorage.setItem('centro-ejecucion-sidebar-config', JSON.stringify({
+            collapsed: sidebarCollapsed,
+            styles: sidebarStyles
+          }));
+          return;
+        }
+        
         await LocalStorageService.saveJSONFile(
           'centro-ejecucion-sidebar.json',
           {
@@ -93,7 +131,15 @@ export default function CentroEjecucionPage({ onClose }) {
           'data'
         );
       } catch (error) {
-        console.error('Error guardando configuración del sidebar:', error);
+        // Si falla, intentar guardar en localStorage como fallback
+        try {
+          localStorage.setItem('centro-ejecucion-sidebar-config', JSON.stringify({
+            collapsed: sidebarCollapsed,
+            styles: sidebarStyles
+          }));
+        } catch (localStorageError) {
+          console.error('Error guardando configuración del sidebar:', error);
+        }
       }
     };
 
@@ -104,16 +150,45 @@ export default function CentroEjecucionPage({ onClose }) {
   useEffect(() => {
     const loadTerminals = async () => {
       try {
-        const saved = await LocalStorageService.readJSONFile('centro-ejecucion-terminals.json', 'data');
-        if (saved && saved.terminals && saved.terminals.length > 0) {
-          setTerminals(saved.terminals);
-          setActiveTerminalId(saved.activeTerminalId || saved.terminals[0]?.id || '');
+        // Intentar cargar desde archivo primero
+        const hasBaseDirectory = await LocalStorageService.hasBaseDirectory();
+        if (hasBaseDirectory) {
+          try {
+            const saved = await LocalStorageService.readJSONFile('centro-ejecucion-terminals.json', 'data');
+            if (saved && saved.terminals && saved.terminals.length > 0) {
+              setTerminals(saved.terminals);
+              setActiveTerminalId(saved.activeTerminalId || saved.terminals[0]?.id || '');
+              return;
+            }
+          } catch (fileError) {
+            // Si falla, intentar desde localStorage
+            const localStorageData = localStorage.getItem('centro-ejecucion-terminals');
+            if (localStorageData) {
+              const saved = JSON.parse(localStorageData);
+              if (saved && saved.terminals && saved.terminals.length > 0) {
+                setTerminals(saved.terminals);
+                setActiveTerminalId(saved.activeTerminalId || saved.terminals[0]?.id || '');
+                return;
+              }
+            }
+          }
         } else {
-          // Crear terminal por defecto
-          const defaultTerm = createDefaultTerminal();
-          setTerminals([defaultTerm]);
-          setActiveTerminalId(defaultTerm.id);
+          // Si no hay baseDirectoryHandle, cargar desde localStorage
+          const localStorageData = localStorage.getItem('centro-ejecucion-terminals');
+          if (localStorageData) {
+            const saved = JSON.parse(localStorageData);
+            if (saved && saved.terminals && saved.terminals.length > 0) {
+              setTerminals(saved.terminals);
+              setActiveTerminalId(saved.activeTerminalId || saved.terminals[0]?.id || '');
+              return;
+            }
+          }
         }
+        
+        // Si no hay datos guardados, crear terminal por defecto
+        const defaultTerm = createDefaultTerminal();
+        setTerminals([defaultTerm]);
+        setActiveTerminalId(defaultTerm.id);
       } catch (error) {
         console.error('Error cargando terminales:', error);
         const defaultTerm = createDefaultTerminal();
@@ -130,13 +205,32 @@ export default function CentroEjecucionPage({ onClose }) {
     if (terminals.length > 0) {
       const saveTerminals = async () => {
         try {
+          // Verificar si hay baseDirectoryHandle antes de intentar guardar
+          const hasBaseDirectory = await LocalStorageService.hasBaseDirectory();
+          if (!hasBaseDirectory) {
+            // Si no hay baseDirectoryHandle, guardar en localStorage como fallback
+            localStorage.setItem('centro-ejecucion-terminals', JSON.stringify({
+              terminals,
+              activeTerminalId
+            }));
+            return;
+          }
+          
           await LocalStorageService.saveJSONFile(
             'centro-ejecucion-terminals.json',
             { terminals, activeTerminalId },
             'data'
           );
         } catch (error) {
-          console.error('Error guardando terminales:', error);
+          // Si falla, intentar guardar en localStorage como fallback
+          try {
+            localStorage.setItem('centro-ejecucion-terminals', JSON.stringify({
+              terminals,
+              activeTerminalId
+            }));
+          } catch (localStorageError) {
+            console.error('Error guardando terminales:', error);
+          }
         }
       };
       saveTerminals();
@@ -1083,20 +1177,30 @@ export default function CentroEjecucionPage({ onClose }) {
           <div className="flex items-center gap-1 px-2 py-1 bg-gray-800 border-b border-gray-700 overflow-x-auto">
             {/* Pestañas de Terminales */}
             {terminals.map(terminal => (
-              <button
+              <div
                 key={terminal.id}
-                onClick={() => {
-                  setActiveTerminalId(terminal.id);
-                  setActiveTabType('terminal');
-                }}
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-t transition-colors text-sm ${
                   activeTabType === 'terminal' && terminal.id === activeTerminalId
                     ? 'bg-gray-900 text-white'
                     : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                 }`}
               >
-                <Terminal className="w-3 h-3" />
-                <span>{terminal.name}</span>
+                <button
+                  onClick={() => {
+                    setActiveTerminalId(terminal.id);
+                    setActiveTabType('terminal');
+                  }}
+                  className="flex items-center gap-2 flex-1 text-left"
+                  style={{
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    color: 'inherit',
+                    padding: 0
+                  }}
+                >
+                  <Terminal className="w-3 h-3" />
+                  <span>{terminal.name}</span>
+                </button>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -1120,25 +1224,35 @@ export default function CentroEjecucionPage({ onClose }) {
                     <X className="w-3 h-3" />
                   </button>
                 )}
-              </button>
+              </div>
             ))}
             
             {/* Pestañas de Visual Code */}
             {visualCodeTabs.map(tab => (
-              <button
+              <div
                 key={tab.id}
-                onClick={() => {
-                  setActiveVisualCodeId(tab.id);
-                  setActiveTabType('visualcode');
-                }}
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-t transition-colors text-sm ${
                   activeTabType === 'visualcode' && tab.id === activeVisualCodeId
                     ? 'bg-gray-900 text-white'
                     : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                 }`}
               >
-                <FileCode className="w-3 h-3" />
-                <span>{tab.name}</span>
+                <button
+                  onClick={() => {
+                    setActiveVisualCodeId(tab.id);
+                    setActiveTabType('visualcode');
+                  }}
+                  className="flex items-center gap-2 flex-1 text-left"
+                  style={{
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    color: 'inherit',
+                    padding: 0
+                  }}
+                >
+                  <FileCode className="w-3 h-3" />
+                  <span>{tab.name}</span>
+                </button>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -1159,7 +1273,7 @@ export default function CentroEjecucionPage({ onClose }) {
                 >
                   <X className="w-3 h-3" />
                 </button>
-              </button>
+              </div>
             ))}
             
             {/* Botón para agregar terminal */}

@@ -564,20 +564,30 @@ Para comandos completos del sistema, usa la versión Electron de la aplicación.
             const inactiveText = isActive ? headerText : `${headerText}80`;
             
             return (
-              <button
+              <div
                 key={terminal.id}
-                onClick={() => {
-                  setLocalActiveId(terminal.id);
-                  onUpdateActiveTerminal(terminal.id);
-                }}
                 className="flex items-center gap-2 px-3 py-1.5 rounded-t transition-colors text-sm"
                 style={{
                   backgroundColor: isActive ? headerBg : inactiveBg,
                   color: isActive ? headerText : inactiveText
                 }}
               >
-                <Terminal className="w-3 h-3" />
-                <span>{terminal.name}</span>
+                <button
+                  onClick={() => {
+                    setLocalActiveId(terminal.id);
+                    onUpdateActiveTerminal(terminal.id);
+                  }}
+                  className="flex items-center gap-2 flex-1 text-left"
+                  style={{
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    color: 'inherit',
+                    padding: 0
+                  }}
+                >
+                  <Terminal className="w-3 h-3" />
+                  <span>{terminal.name}</span>
+                </button>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -604,7 +614,7 @@ Para comandos completos del sistema, usa la versión Electron de la aplicación.
                     <X className="w-3 h-3" />
                   </button>
                 )}
-              </button>
+              </div>
             );
           })}
           <button

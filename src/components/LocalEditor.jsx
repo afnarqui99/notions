@@ -1157,6 +1157,21 @@ export default function LocalEditor({ onShowConfig }) {
   // Atajos de teclado globales
   useEffect(() => {
     const handleKeyDown = async (e) => {
+      const target = e.target;
+      
+      // NO interferir si estamos en un editor de CodeMirror (VisualCodeTab)
+      const isCodeMirrorEditor = target.closest('.cm-editor') || target.closest('.cm-content') || target.closest('.cm-scroller');
+      if (isCodeMirrorEditor) {
+        // Permitir que CodeMirror maneje todos sus atajos (Ctrl+A, Ctrl+C, Ctrl+V, etc.)
+        return;
+      }
+      
+      // NO interferir si estamos en un input/textarea real
+      const isRealInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
+      if (isRealInput) {
+        return;
+      }
+      
       // Ctrl+S (Windows/Linux) o Cmd+S (Mac) - Guardar
       if ((e.ctrlKey || e.metaKey) && e.key === 's' && !e.shiftKey) {
         e.preventDefault();
@@ -1173,31 +1188,23 @@ export default function LocalEditor({ onShowConfig }) {
       }
       // Ctrl+G - Notas generales
       if (e.ctrlKey && !e.metaKey && e.key.toLowerCase() === 'g' && !e.shiftKey) {
-        const target = e.target;
-        const isRealInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
-        if (!isRealInput) {
-          e.preventDefault();
-          e.stopPropagation();
-          if (!showGeneralNotesHistory) {
-            setShowGeneralNotesHistory(true);
-          }
+        e.preventDefault();
+        e.stopPropagation();
+        if (!showGeneralNotesHistory) {
+          setShowGeneralNotesHistory(true);
         }
       }
       
       // Ctrl+Q - Nota rápida (solo Ctrl, no Cmd, para evitar conflictos en Mac)
       if (e.ctrlKey && !e.metaKey && e.key.toLowerCase() === 'q' && !e.shiftKey) {
-        // Solo prevenir si no estamos en un input/textarea real (no el editor)
-        const target = e.target;
-        const isRealInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
-        if (!isRealInput) {
-          e.preventDefault();
-          e.stopPropagation();
-          setShowQuickNote(true);
-        }
+        e.preventDefault();
+        e.stopPropagation();
+        setShowQuickNote(true);
       }
     };
 
     // Usar capture phase para capturar el evento antes que otros listeners
+    // PERO solo para atajos específicos, no para bloquear Ctrl+A, Ctrl+C, etc.
     window.addEventListener('keydown', handleKeyDown, true);
     return () => {
       window.removeEventListener('keydown', handleKeyDown, true);
