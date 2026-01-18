@@ -161,8 +161,16 @@ export default function CentroEjecucionPage({ onClose }) {
           try {
             const saved = await LocalStorageService.readJSONFile('centro-ejecucion-terminals.json', 'data');
             if (saved && saved.terminals && saved.terminals.length > 0) {
-              setTerminals(saved.terminals);
-              setActiveTerminalId(saved.activeTerminalId || saved.terminals[0]?.id || '');
+              // Migrar terminales con bash en Windows a powershell
+              const isWindows = typeof window !== 'undefined' && window.electronAPI?.platform === 'win32';
+              const migratedTerminals = saved.terminals.map(term => {
+                if (isWindows && term.shell === 'bash') {
+                  return { ...term, shell: 'powershell' };
+                }
+                return term;
+              });
+              setTerminals(migratedTerminals);
+              setActiveTerminalId(saved.activeTerminalId || migratedTerminals[0]?.id || '');
               return;
             }
           } catch (fileError) {
@@ -171,8 +179,16 @@ export default function CentroEjecucionPage({ onClose }) {
             if (localStorageData) {
               const saved = JSON.parse(localStorageData);
               if (saved && saved.terminals && saved.terminals.length > 0) {
-                setTerminals(saved.terminals);
-                setActiveTerminalId(saved.activeTerminalId || saved.terminals[0]?.id || '');
+                // Migrar terminales con bash en Windows a powershell
+                const isWindows = typeof window !== 'undefined' && window.electronAPI?.platform === 'win32';
+                const migratedTerminals = saved.terminals.map(term => {
+                  if (isWindows && term.shell === 'bash') {
+                    return { ...term, shell: 'powershell' };
+                  }
+                  return term;
+                });
+                setTerminals(migratedTerminals);
+                setActiveTerminalId(saved.activeTerminalId || migratedTerminals[0]?.id || '');
                 return;
               }
             }
@@ -391,7 +407,7 @@ export default function CentroEjecucionPage({ onClose }) {
       const newTerminal = {
         id: `terminal-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         name: `Terminal - ${projectName || 'Proyecto'}`,
-        shell: isWindows ? 'cmd' : 'bash',
+        shell: isWindows ? 'powershell' : 'bash',
         currentDirectory: projectPath,
         output: '',
         history: [],
@@ -617,10 +633,11 @@ export default function CentroEjecucionPage({ onClose }) {
   };
 
   const createDefaultTerminal = () => {
+    const isWindows = typeof window !== 'undefined' && window.electronAPI?.platform === 'win32';
     return {
       id: `terminal-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       name: 'Terminal Principal',
-      shell: 'bash', // Por defecto bash
+      shell: isWindows ? 'powershell' : 'bash', // PowerShell en Windows, bash en Linux/Mac
       currentDirectory: '~',
       output: '',
       history: [],
@@ -1469,7 +1486,7 @@ export default function CentroEjecucionPage({ onClose }) {
                 const newTerminal = {
                   id: `terminal-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                   name: `Terminal ${terminals.length + 1}`,
-                  shell: isWindows ? 'cmd' : 'bash',
+                  shell: isWindows ? 'powershell' : 'bash',
                   currentDirectory: '~',
                   output: '',
                   history: [],
