@@ -22,6 +22,7 @@ import { PostmanNode } from "../extensions/PostmanNode";
 import { VisualCodeNode } from "../extensions/VisualCodeNode";
 import { ConvertidorNode } from "../extensions/ConvertidorNode";
 import { DiagramNode } from "../extensions/DiagramNode";
+import { FileCompareNode } from "../extensions/FileCompareNode";
 import TableHeader from "@tiptap/extension-table-header";
 import { ImageExtended } from "../extensions/ImageExtended";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -508,6 +509,7 @@ export default function LocalEditor({ onShowConfig }) {
       VisualCodeNode,
       ConvertidorNode,
       DiagramNode,
+      FileCompareNode,
       Heading.configure({ levels: [1, 2, 3, 4, 5, 6] }),
       Underline,
       TextStyle,

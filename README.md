@@ -202,6 +202,56 @@ Escribe `/` en cualquier parte del editor para acceder a comandos rápidos:
 - **`/iconos`** o **`/emoji`** - Selector de emojis
 - **`/tolist`** - Convierte bloque a lista
 
+#### 💻 Desarrollo y Utilidades
+- **`/consola`** - Abre consola completa para ejecutar código y proyectos
+- **`/consola-bloque`** o **`/consola-pagina`** - Inserta consola como bloque en la página
+- **`/centro-ejecucion`** - Abre página centralizada de terminales y gestión de proyectos
+- **`/convertidor`** - Convertir documentos: Markdown a PDF, PDF a Word, Word a PDF
+- **`/diagrama`** - Crear diagramas: flujo, secuencia, clase, estado, Gantt, ER
+- **`/markdown`** - Editor de Markdown con vista previa y exportación a PDF
+- **`/postman`** - Cliente API para probar endpoints REST con colecciones
+
+---
+
+### 📊 Referencia Técnica de Comandos Slash
+
+| Comando | Node Type | Componente que Ejecuta | Tipo |
+|---------|-----------|------------------------|------|
+| `/sql` | - | `SQLFileManager` (modal) | Evento Custom |
+| `/board` o `/kanban` | `tablaNotion` | `TablaNotionStyle` | Node TipTap |
+| `/nota` | - | `QuickNote` (modal) | Evento Custom |
+| `/consola` | - | `ConsolePanel` (modal) | Evento Custom |
+| `/consola-bloque` | `consoleBlock` | `ConsoleBlock` | Node TipTap |
+| `/centro-ejecucion` | - | `CentroEjecucionPage` (modal) | Evento Custom |
+| `/convertidor` | `convertidorBlock` | `ConvertidorBlock` | Node TipTap |
+| `/diagrama` | `diagramBlock` | `DiagramBlock` | Node TipTap |
+| `/tabla` | `tablaNotion` | `TablaNotionStyle` | Node TipTap |
+| `/financiero` | `resumenFinanciero` + `tablaNotion` | `ResumenFinancieroNode` + `TablaNotionStyle` | Node TipTap |
+| `/galeria-imagenes` | `galeriaImagenes` | `GaleriaImagenesNode` | Node TipTap |
+| `/galeria-archivos` | `galeriaArchivos` | `GaleriaArchivosNode` | Node TipTap |
+| `/calendario` | `calendar` | `CalendarNode` | Node TipTap |
+| `/plantilla` | - | `TemplateSelector` (modal) | Evento Custom |
+| `/lista-numerada` | `orderedList` | TipTap estándar | Node TipTap |
+| `/lista-viñetas` | `bulletList` | TipTap estándar | Node TipTap |
+| `/tareas` | `taskList` | TipTap estándar | Node TipTap |
+| `/convertir-tareas` | `taskList` | TipTap estándar | Node TipTap |
+| `/iconos` o `/emoji` | - | `EmojiPicker` (modal) | Evento Custom |
+| `/tolist` | `bulletList` | TipTap estándar | Node TipTap |
+| `/toggle` | `toggle` | `Toggle` (extension) | Node TipTap |
+| `/titulo1` o `/h1` | `heading` (level: 1) | TipTap estándar | Node TipTap |
+| `/titulo2` o `/h2` | `heading` (level: 2) | TipTap estándar | Node TipTap |
+| `/parrafo` | `paragraph` | TipTap estándar | Node TipTap |
+| `/codigo` | `codeBlock` | `CodeBlockWithCopyExtension` | Node TipTap |
+| `/json` | `codeBlock` (language: json) | `CodeBlockWithCopyExtension` | Node TipTap |
+| `/markdown` | `markdown` | `MarkdownNode` | Node TipTap |
+| `/postman` | `postmanBlock` | `PostmanBlock` | Node TipTap |
+| `/imagen` | `image` | `ImageExtended` | Node TipTap |
+| `/enlace` | - | `PageLinkModal` (modal) | Evento Custom |
+
+**Leyenda:**
+- **Node TipTap**: Se inserta un nodo directamente en el editor TipTap
+- **Evento Custom**: Se dispara un evento personalizado que abre un modal o componente
+
 ---
 
 ## 📖 Guía Rápida de Uso
@@ -349,14 +399,6 @@ tu-carpeta-seleccionada/
 - ~150 MB de espacio en disco
 - No requiere Node.js instalado (incluido en el ejecutable)
 
----
-
-## 📚 Documentación Adicional
-
-- **`GUIA_DISTRIBUCION.md`** - Cómo generar el ZIP con el ejecutable
-- **`COMANDOS_Y_SUGERENCIAS.md`** - Lista completa de comandos y sugerencias
-
----
 
 ## 🐛 Solución de Problemas
 
@@ -422,4 +464,4 @@ Este proyecto es de uso libre. Todos los datos son tuyos y se guardan localmente
 
 ---
 
-**¿Necesitas ayuda?** Revisa la documentación adicional o crea un issue en el repositorio.
+

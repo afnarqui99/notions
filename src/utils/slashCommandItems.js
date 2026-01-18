@@ -728,7 +728,26 @@ export function getSlashCommandItems() {
         window.dispatchEvent(event);
       },
     },
+    {
+      icon: '🔀',
+      label: 'Comparar Archivos',
+      description: 'Comparar dos archivos mostrando diferencias lado a lado (como VS Code diff)',
+      keywords: ['comparar', 'diff', 'compare', 'archivos', 'files', 'diferencias', 'vs code'],
+      command: ({ editor, range }) => {
+        editor.chain().focus().deleteRange(range).insertContent({
+          type: 'fileCompareBlock',
+          attrs: {
+            leftContent: '',
+            rightContent: '',
+            leftFileName: 'archivo1.txt',
+            rightFileName: 'archivo2.txt',
+          },
+        }).run();
+      },
+    },
   ];
 }
+
+
 
 
