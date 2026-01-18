@@ -1,5 +1,7 @@
-const accountSid = 'ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
-const authToken = '[AuthToken]';
+// ⚠️ IMPORTANTE: Reemplaza estos valores con tus credenciales reales
+// Usa variables de entorno para mayor seguridad: process.env.TWILIO_ACCOUNT_SID
+const accountSid = 'ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'; // Tu Account SID aquí
+const authToken = '[AuthToken]'; // Tu Auth Token aquí
 const client = require('twilio')(accountSid, authToken);
 
 client.messages
