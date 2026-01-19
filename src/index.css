@@ -168,6 +168,54 @@ html.dark body {
   overflow-wrap: normal !important;
 }
 
+/* Estilos de selección para la vista de comparación */
+.compare-view-container .cm-selectionBackground,
+.compare-view-container .cm-selectionBackground * {
+  background-color: rgba(173, 214, 255, 0.4) !important;
+  color: inherit !important;
+}
+
+.compare-view-container .cm-focused .cm-selectionBackground,
+.compare-view-container .cm-focused .cm-selectionBackground * {
+  background-color: rgba(173, 214, 255, 0.5) !important;
+  color: inherit !important;
+}
+
+.compare-view-container .cm-editor.cm-focused .cm-selectionBackground {
+  background-color: rgba(173, 214, 255, 0.5) !important;
+}
+
+.compare-view-container .cm-content::selection,
+.compare-view-container .cm-content ::selection {
+  background-color: rgba(173, 214, 255, 0.4) !important;
+  color: inherit !important;
+}
+
+.compare-view-container .cm-content::-moz-selection,
+.compare-view-container .cm-content ::-moz-selection {
+  background-color: rgba(173, 214, 255, 0.4) !important;
+  color: inherit !important;
+}
+
+.compare-view-container .cm-content {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+  pointer-events: auto !important;
+  cursor: text !important;
+}
+
+.compare-view-container .cm-editor,
+.compare-view-container .cm-scroller {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+  pointer-events: auto !important;
+  cursor: text !important;
+}
+
 .ProseMirror p.is-editor-empty:first-child::before {
   color: #adb5bd;
   content: attr(data-placeholder);

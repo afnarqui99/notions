@@ -14,7 +14,8 @@ import {
   Type,
   Sparkles,
   Terminal,
-  GitBranch
+  GitBranch,
+  GitCompare
 } from 'lucide-react';
 import { EditorView, basicSetup } from 'codemirror';
 import { ViewPlugin, Decoration } from '@codemirror/view';
@@ -37,6 +38,7 @@ import {
 import AIChatPanel from './AIChatPanel';
 import GitPanel from './GitPanel';
 import GitDiffView from './GitDiffView';
+import CompareView from './CompareView';
 
 // Panel de Extensiones - Estilo VS Code
 function ExtensionsPanel({ extensions, setExtensions }) {
@@ -171,8 +173,15 @@ export default function VisualCodeTab({
   const [showTitleEditor, setShowTitleEditor] = useState(false);
   const [showAIChat, setShowAIChat] = useState(false);
   const [gitDiffFile, setGitDiffFile] = useState(null);
+  const [fileToCompare, setFileToCompare] = useState(null); // Archivo seleccionado para comparar
+  const [comparingFiles, setComparingFiles] = useState(null); // { file1, file2 } cuando se está comparando
+  const [mergedContent, setMergedContent] = useState({ file1: '', file2: '' }); // Contenido editado en la comparación
   const editorViewRef = useRef(null);
   const editorContainerRef = useRef(null);
+  const compareEditor1Ref = useRef(null);
+  const compareEditor2Ref = useRef(null);
+  const compareContainer1Ref = useRef(null);
+  const compareContainer2Ref = useRef(null);
   const [projectPath, setProjectPath] = useState(project?.path || '');
   const [theme, setTheme] = useState(project?.theme || 'cursorDark');
   const [fontSize, setFontSize] = useState(project?.fontSize || 14);
@@ -708,6 +717,84 @@ export default function VisualCodeTab({
     return filePath.split(/[/\\]/).pop() || filePath;
   };
 
+  // Función para calcular diferencias entre dos archivos
+  const calculateDiff = (content1, content2) => {
+    const lines1 = (content1 || '').split('\n');
+    const lines2 = (content2 || '').split('\n');
+    const maxLen = Math.max(lines1.length, lines2.length);
+    const diff = [];
+
+    for (let i = 0; i < maxLen; i++) {
+      const line1 = lines1[i];
+      const line2 = lines2[i];
+
+      if (line1 === undefined) {
+        diff.push({ type: 'added', line: i + 1, content: line2 });
+      } else if (line2 === undefined) {
+        diff.push({ type: 'removed', line: i + 1, content: line1 });
+      } else if (line1 === line2) {
+        diff.push({ type: 'unchanged', line: i + 1, content: line1 });
+      } else {
+        diff.push({ type: 'modified', line: i + 1, oldContent: line1, newContent: line2 });
+      }
+    }
+
+    return diff;
+  };
+
+  // Función para iniciar comparación
+  const startComparison = async (filePath1, filePath2) => {
+    try {
+      // Cargar ambos archivos si no están cargados
+      let content1 = fileContents[filePath1];
+      let content2 = fileContents[filePath2];
+
+      if (!content1) {
+        if (window.electronAPI && window.electronAPI.readFile) {
+          const result = await window.electronAPI.readFile(filePath1);
+          content1 = result.content || '';
+          setFileContents(prev => ({ ...prev, [filePath1]: content1 }));
+        }
+      }
+
+      if (!content2) {
+        if (window.electronAPI && window.electronAPI.readFile) {
+          const result = await window.electronAPI.readFile(filePath2);
+          content2 = result.content || '';
+          setFileContents(prev => ({ ...prev, [filePath2]: content2 }));
+        }
+      }
+
+      setComparingFiles({ file1: filePath1, file2: filePath2 });
+      setMergedContent({ file1: content1 || '', file2: content2 || '' });
+      setFileToCompare(null);
+    } catch (error) {
+      console.error('Error cargando archivos para comparar:', error);
+      alert('Error al cargar archivos para comparar: ' + error.message);
+    }
+  };
+
+  // Guardar resultado de la comparación
+  const saveComparisonResult = async (targetFile) => {
+    try {
+      const content = targetFile === comparingFiles.file1 
+        ? mergedContent.file1 
+        : mergedContent.file2;
+      
+      if (window.electronAPI && window.electronAPI.writeFile) {
+        await window.electronAPI.writeFile(targetFile, content);
+        // Actualizar el contenido en el estado
+        setFileContents(prev => ({ ...prev, [targetFile]: content }));
+        alert('Archivo guardado exitosamente');
+      } else {
+        console.warn('[VisualCodeTab] No se puede guardar archivo sin Electron API');
+      }
+    } catch (error) {
+      console.error('[VisualCodeTab] Error guardando resultado de comparación:', error);
+      alert('Error al guardar el archivo: ' + error.message);
+    }
+  };
+
   // Usar la lista de temas del servicio centralizado
   const themes = AVAILABLE_THEMES;
 
@@ -1009,6 +1096,9 @@ export default function VisualCodeTab({
                   hideHeader={true}
                   vscodeStyle={true}
                   openFiles={openFiles}
+                  onCompareFile={startComparison}
+                  fileToCompare={fileToCompare}
+                  onSetFileToCompare={setFileToCompare}
                 />
               </div>
             )}
@@ -1022,6 +1112,49 @@ export default function VisualCodeTab({
               projectPath={projectPath}
               filePath={gitDiffFile}
               onClose={() => setGitDiffFile(null)}
+            />
+          ) : comparingFiles ? (
+            /* Vista de Comparación Editable */
+            <CompareView
+              file1={comparingFiles.file1}
+              file2={comparingFiles.file2}
+              content1={mergedContent.file1}
+              content2={mergedContent.file2}
+              fileContents={fileContents}
+              theme={theme}
+              fontSize={fontSize}
+              customThemeColors={customThemeColors}
+              onContentChange={(fileKey, content) => {
+                console.log('[VisualCodeTab] onContentChange llamado:', { fileKey, contentLength: content.length });
+                setMergedContent(prev => {
+                  const newContent = {
+                    ...prev,
+                    [fileKey]: content
+                  };
+                  console.log('[VisualCodeTab] Nuevo mergedContent:', {
+                    file1Length: newContent.file1?.length || 0,
+                    file2Length: newContent.file2?.length || 0
+                  });
+                  return newContent;
+                });
+              }}
+              onSave={(targetFile) => saveComparisonResult(targetFile)}
+              onClose={() => {
+                setComparingFiles(null);
+                setFileToCompare(null);
+                if (compareEditor1Ref.current) {
+                  compareEditor1Ref.current.destroy();
+                  compareEditor1Ref.current = null;
+                }
+                if (compareEditor2Ref.current) {
+                  compareEditor2Ref.current.destroy();
+                  compareEditor2Ref.current = null;
+                }
+              }}
+              editor1Ref={compareEditor1Ref}
+              editor2Ref={compareEditor2Ref}
+              container1Ref={compareContainer1Ref}
+              container2Ref={compareContainer2Ref}
             />
           ) : activeFile ? (
             <div 
