@@ -1598,6 +1598,41 @@ app.whenReady().then(() => {
     }
   });
 
+  // Handler para copiar un archivo o directorio
+  ipcMain.handle('copy-file', async (event, sourcePath, targetPath) => {
+    try {
+      if (!fs.existsSync(sourcePath)) {
+        return { error: 'El archivo o carpeta origen no existe', success: false };
+      }
+
+      // Si el destino ya existe, agregar un número al final
+      let finalTargetPath = targetPath;
+      let counter = 1;
+      while (fs.existsSync(finalTargetPath)) {
+        const ext = path.extname(targetPath);
+        const base = path.basename(targetPath, ext);
+        const dir = path.dirname(targetPath);
+        finalTargetPath = path.join(dir, `${base} (${counter})${ext}`);
+        counter++;
+      }
+
+      const stats = fs.statSync(sourcePath);
+      if (stats.isDirectory()) {
+        // Copiar directorio recursivamente
+        fs.cpSync(sourcePath, finalTargetPath, { recursive: true });
+        console.log('[Electron] Directorio copiado exitosamente:', sourcePath, '->', finalTargetPath);
+      } else {
+        // Copiar archivo
+        fs.copyFileSync(sourcePath, finalTargetPath);
+        console.log('[Electron] Archivo copiado exitosamente:', sourcePath, '->', finalTargetPath);
+      }
+      return { success: true, targetPath: finalTargetPath };
+    } catch (error) {
+      console.error('[Electron] Error copiando archivo/carpeta:', sourcePath, '->', targetPath, error);
+      return { error: error.message, success: false };
+    }
+  });
+
   // Handler para crear un archivo nuevo
   ipcMain.handle('create-file', async (event, filePath, initialContent = '') => {
     try {

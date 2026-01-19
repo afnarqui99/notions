@@ -12,7 +12,10 @@ import {
   FolderPlus,
   Edit2,
   Trash2,
-  MoreVertical
+  MoreVertical,
+  GitCompare,
+  Copy,
+  Clipboard
 } from 'lucide-react';
 
 const STORAGE_KEY = 'console-file-explorer-state';
@@ -27,7 +30,10 @@ export default function FileExplorer({
   directoryHandle = null, // Handle del directorio para proyectos del navegador
   hideHeader = false, // Opción para ocultar el header cuando se usa dentro de otro componente
   vscodeStyle = false, // Estilo VS Code/Cursor con colores oscuros
-  openFiles = [] // Lista de archivos abiertos para resaltarlos en amarillo
+  openFiles = [], // Lista de archivos abiertos para resaltarlos en amarillo
+  onCompareFile = null, // Callback para comparar archivos (opcional)
+  fileToCompare = null, // Archivo seleccionado para comparar (opcional)
+  onSetFileToCompare = null // Callback para establecer archivo a comparar (opcional)
 }) {
   const [fileTree, setFileTree] = useState({});
   const [expandedFolders, setExpandedFolders] = useState(() => {
@@ -48,6 +54,7 @@ export default function FileExplorer({
   const [newItemName, setNewItemName] = useState('');
   const [renameItem, setRenameItem] = useState(null);
   const [createParentPath, setCreateParentPath] = useState(null);
+  const [copiedFile, setCopiedFile] = useState(null); // Archivo copiado para pegar
   const contextMenuRef = useRef(null);
 
   // Cargar ruta guardada al abrir
@@ -492,6 +499,208 @@ export default function FileExplorer({
     }
   };
 
+  // Copiar archivo o carpeta
+  const handleCopy = async (item) => {
+    if (!item) return;
+    setCopiedFile(item);
+    setContextMenu(null);
+    // Guardar en localStorage para persistir entre sesiones
+    localStorage.setItem(`${STORAGE_KEY}-copied`, JSON.stringify(item));
+  };
+
+  // Pegar archivo o carpeta
+  const handlePaste = async (targetPath) => {
+    if (!copiedFile) {
+      // Intentar cargar desde localStorage
+      try {
+        const saved = localStorage.getItem(`${STORAGE_KEY}-copied`);
+        if (saved) {
+          const item = JSON.parse(saved);
+          setCopiedFile(item);
+          await performPaste(item, targetPath);
+        } else {
+          alert('No hay ningún archivo copiado');
+        }
+      } catch (error) {
+        alert('No hay ningún archivo copiado');
+      }
+      return;
+    }
+    await performPaste(copiedFile, targetPath);
+  };
+
+  const performPaste = async (item, targetPath) => {
+    try {
+      if (window.electronAPI && window.electronAPI.copyFile) {
+        // Electron: usar API de Electron
+        const targetItemPath = await pathJoin(targetPath, item.name);
+        const result = await window.electronAPI.copyFile(item.path, targetItemPath);
+        if (result.success) {
+          // Recargar el árbol de archivos
+          await loadFilesRecursive(targetPath === projectPath ? projectPath : targetPath, targetPath === projectPath ? null : targetPath);
+          setContextMenu(null);
+          // Limpiar el archivo copiado después de pegar
+          setCopiedFile(null);
+          localStorage.removeItem(`${STORAGE_KEY}-copied`);
+        } else {
+          alert('Error al pegar: ' + result.error);
+        }
+      } else {
+        // Navegador: usar File System Access API
+        // Buscar el handle del archivo/carpeta copiado en el fileTree
+        const findItemInTree = (tree, targetPath) => {
+          for (const [key, items] of Object.entries(tree)) {
+            const found = items.find(item => item.path === targetPath);
+            if (found) return found;
+          }
+          return null;
+        };
+        
+        const sourceItem = findItemInTree(fileTree, item.path);
+        if (!sourceItem || !sourceItem.handle) {
+          alert('No se pudo encontrar el archivo copiado. Por favor, copia el archivo nuevamente.');
+          return;
+        }
+
+        // Buscar el handle del directorio destino
+        const targetItem = findItemInTree(fileTree, targetPath);
+        let targetDirHandle = null;
+        
+        if (targetItem && targetItem.handle && targetItem.handle.kind === 'directory') {
+          targetDirHandle = targetItem.handle;
+        } else if (targetPath === projectPath) {
+          // Si el destino es la raíz del proyecto, buscar el directoryHandle principal
+          if (directoryHandle) {
+            targetDirHandle = directoryHandle;
+          } else if (typeof window !== 'undefined' && window.directoryHandles) {
+            const handle = Array.from(window.directoryHandles.values()).find(
+              h => h.name === projectPath || projectPath.includes(h.name)
+            );
+            if (handle) {
+              targetDirHandle = handle;
+            }
+          }
+        }
+
+        if (!targetDirHandle) {
+          alert('No se pudo encontrar el directorio destino. Por favor, asegúrate de que el directorio esté abierto.');
+          return;
+        }
+
+        // Copiar archivo o carpeta
+        if (item.type === 'file') {
+          // Copiar archivo
+          try {
+            const sourceFile = await sourceItem.handle.getFile();
+            const content = await sourceFile.text();
+            
+            // Generar nombre único si ya existe
+            let newName = item.name;
+            let counter = 1;
+            while (await targetDirHandle.getFileHandle(newName, { create: false }).catch(() => null)) {
+              const ext = item.name.split('.').pop();
+              const base = item.name.substring(0, item.name.lastIndexOf('.')) || item.name;
+              newName = `${base} (${counter})${ext ? '.' + ext : ''}`;
+              counter++;
+            }
+            
+            const newFileHandle = await targetDirHandle.getFileHandle(newName, { create: true });
+            const writable = await newFileHandle.createWritable();
+            await writable.write(content);
+            await writable.close();
+            
+            // Recargar el árbol de archivos
+            if (targetPath === projectPath) {
+              await loadFilesFromBrowserHandle(targetDirHandle, projectPath);
+            } else {
+              // Recargar la carpeta específica
+              await loadFilesFromBrowserHandle(targetDirHandle, targetPath);
+            }
+            
+            setContextMenu(null);
+            setCopiedFile(null);
+            localStorage.removeItem(`${STORAGE_KEY}-copied`);
+            alert('Archivo copiado exitosamente');
+          } catch (error) {
+            console.error('Error copiando archivo:', error);
+            alert('Error al copiar archivo: ' + error.message);
+          }
+        } else if (item.type === 'folder') {
+          // Copiar carpeta recursivamente
+          alert('La copia de carpetas en el navegador aún no está implementada. Por favor, usa la versión Electron para esta funcionalidad.');
+        }
+      }
+    } catch (error) {
+      console.error('Error pegando:', error);
+      alert('Error al pegar: ' + error.message);
+    }
+  };
+
+  // Cargar archivo copiado desde localStorage al montar
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(`${STORAGE_KEY}-copied`);
+      if (saved) {
+        const item = JSON.parse(saved);
+        setCopiedFile(item);
+      }
+    } catch (error) {
+      console.error('Error cargando archivo copiado:', error);
+    }
+  }, []);
+
+  // Manejar Ctrl+C y Ctrl+V
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Solo manejar si el FileExplorer está abierto
+      if (!isOpen) return;
+      
+      // Verificar si el foco está en el FileExplorer (no en un input o textarea)
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key === 'c' && selectedFile) {
+        e.preventDefault();
+        e.stopPropagation();
+        // Buscar el archivo seleccionado en el árbol
+        const findItem = (tree, path) => {
+          for (const [key, items] of Object.entries(tree)) {
+            for (const item of items) {
+              if (item.path === path) {
+                return item;
+              }
+              if (item.type === 'folder' && tree[item.path]) {
+                const found = findItem({ [item.path]: tree[item.path] }, path);
+                if (found) return found;
+              }
+            }
+          }
+          return null;
+        };
+        const item = findItem(fileTree, selectedFile);
+        if (item) {
+          handleCopy(item);
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key === 'v' && copiedFile) {
+        e.preventDefault();
+        e.stopPropagation();
+        // Pegar en la carpeta actual o en la ruta del proyecto
+        const targetPath = contextMenu?.parentPath || (contextMenu?.item?.type === 'folder' ? contextMenu.item.path : projectPath);
+        if (targetPath) {
+          handlePaste(targetPath);
+        }
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown, true);
+      return () => {
+        document.removeEventListener('keydown', handleKeyDown, true);
+      };
+    }
+  }, [isOpen, selectedFile, fileTree, contextMenu, projectPath, copiedFile]);
+
   // Función auxiliar para unir rutas
   const pathJoin = async (base, ...parts) => {
     if (window.electronAPI && window.electronAPI.pathJoin) {
@@ -544,6 +753,7 @@ export default function FileExplorer({
                 backgroundColor: isSelected ? selectedBg : 'transparent',
                 color: textColor
               }}
+              title={item.path} // Tooltip con la ruta completa
               onMouseEnter={(e) => {
                 if (!isSelected) e.currentTarget.style.backgroundColor = hoverBg;
               }}
@@ -596,6 +806,7 @@ export default function FileExplorer({
               ${isSelected ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' : 'text-gray-700 dark:text-gray-300'}
             `}
             style={{ paddingLeft: `${level * 16 + 8}px` }}
+            title={item.path} // Tooltip con la ruta completa
           >
             {isFolder ? (
               <>
@@ -838,6 +1049,22 @@ export default function FileExplorer({
           {/* Opciones para carpeta o espacio vacío */}
           {(!contextMenu.item || contextMenu.item.type === 'folder') && (
             <>
+              {copiedFile && (
+                <>
+                  <button
+                    onClick={() => {
+                      const targetPath = contextMenu.item ? contextMenu.item.path : (contextMenu.parentPath || projectPath);
+                      handlePaste(targetPath);
+                    }}
+                    className="w-full px-3 py-1.5 text-left text-sm hover:bg-[#2a2d2e] flex items-center gap-2 transition-colors"
+                    style={vscodeStyle ? { color: '#cccccc' } : {}}
+                  >
+                    <Clipboard className="w-4 h-4" />
+                    Pegar {copiedFile.name}
+                  </button>
+                  <div className="border-t border-[#3e3e42] my-1" />
+                </>
+              )}
               <button
                 onClick={() => {
                   setCreateParentPath(contextMenu.item ? contextMenu.item.path : contextMenu.parentPath);
@@ -870,6 +1097,64 @@ export default function FileExplorer({
           {/* Opciones para archivo o carpeta seleccionada */}
           {contextMenu.item && (
             <>
+              <div className="border-t border-[#3e3e42] my-1" />
+              {onCompareFile && contextMenu.item.type === 'file' && (
+                <>
+                  {fileToCompare ? (
+                    <button
+                      onClick={() => {
+                        if (onCompareFile && contextMenu.item) {
+                          onCompareFile(fileToCompare, contextMenu.item.path);
+                        }
+                        setContextMenu(null);
+                      }}
+                      className="w-full px-3 py-1.5 text-left text-sm hover:bg-[#2a2d2e] flex items-center gap-2 transition-colors"
+                      style={vscodeStyle ? { color: '#cccccc' } : {}}
+                    >
+                      <GitCompare className="w-4 h-4" />
+                      Comparar con {fileToCompare.split(/[/\\]/).pop()}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        if (onSetFileToCompare && contextMenu.item) {
+                          onSetFileToCompare(contextMenu.item.path);
+                        }
+                        setContextMenu(null);
+                      }}
+                      className="w-full px-3 py-1.5 text-left text-sm hover:bg-[#2a2d2e] flex items-center gap-2 transition-colors"
+                      style={vscodeStyle ? { color: '#cccccc' } : {}}
+                    >
+                      <GitCompare className="w-4 h-4" />
+                      Comparar
+                    </button>
+                  )}
+                  <div className="border-t border-[#3e3e42] my-1" />
+                </>
+              )}
+              <button
+                onClick={() => {
+                  handleCopy(contextMenu.item);
+                }}
+                className="w-full px-3 py-1.5 text-left text-sm hover:bg-[#2a2d2e] flex items-center gap-2 transition-colors"
+                style={vscodeStyle ? { color: '#cccccc' } : {}}
+              >
+                <Copy className="w-4 h-4" />
+                Copiar
+              </button>
+              {copiedFile && (
+                <button
+                  onClick={() => {
+                    const targetPath = contextMenu.parentPath || projectPath;
+                    handlePaste(targetPath);
+                  }}
+                  className="w-full px-3 py-1.5 text-left text-sm hover:bg-[#2a2d2e] flex items-center gap-2 transition-colors"
+                  style={vscodeStyle ? { color: '#cccccc' } : {}}
+                >
+                  <Clipboard className="w-4 h-4" />
+                  Pegar {copiedFile.name}
+                </button>
+              )}
               <div className="border-t border-[#3e3e42] my-1" />
               <button
                 onClick={() => {

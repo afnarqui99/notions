@@ -21,8 +21,12 @@ import {
   Settings,
   Check,
   XCircle,
-  Sparkles
+  Sparkles,
+  Eye,
+  Code,
+  GitCompare
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 import LocalStorageService from '../services/LocalStorageService';
 import { 
   getThemeExtension, 
@@ -189,7 +193,14 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
   const [isExpanded, setIsExpanded] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showFileExplorer, setShowFileExplorer] = useState(true);
+  const [explorerWidth, setExplorerWidth] = useState(256); // 256px = w-64
+  const [isResizingExplorer, setIsResizingExplorer] = useState(false);
   const [showGitPanel, setShowGitPanel] = useState(false);
+  const [contextMenu, setContextMenu] = useState(null); // { x, y, item }
+  const [previewMode, setPreviewMode] = useState(false); // true = preview, false = editor
+  const [fileToCompare, setFileToCompare] = useState(null); // Archivo seleccionado para comparar
+  const [comparingFiles, setComparingFiles] = useState(null); // { file1, file2 } cuando se está comparando
+  const contextMenuRef = useRef(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState(new Set());
   const [fileTree, setFileTree] = useState({});
@@ -286,6 +297,122 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
       window.removeEventListener('focus-visual-code', handleFocusVisualCode);
     };
   }, [projectPath]);
+
+  // Manejar el resizing del explorador
+  const explorerRef = useRef(null);
+
+  useEffect(() => {
+    if (!isResizingExplorer) return;
+
+    const handleMouseMove = (e) => {
+      if (!explorerRef.current) return;
+      
+      const explorerRect = explorerRef.current.getBoundingClientRect();
+      const newWidth = e.clientX - explorerRect.left;
+      
+      // Limitar el ancho entre 150px y 600px
+      if (newWidth >= 150 && newWidth <= 600) {
+        setExplorerWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingExplorer(false);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizingExplorer]);
+
+  // Cerrar menú contextual al hacer clic fuera
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target)) {
+        setContextMenu(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Detectar si el archivo activo es .md para mostrar el botón de preview
+  const isMarkdownFile = activeFile && (activeFile.endsWith('.md') || activeFile.endsWith('.markdown'));
+
+  // Función para calcular diferencias entre dos archivos
+  const calculateDiff = (content1, content2) => {
+    const lines1 = (content1 || '').split('\n');
+    const lines2 = (content2 || '').split('\n');
+    const maxLen = Math.max(lines1.length, lines2.length);
+    const diff = [];
+
+    for (let i = 0; i < maxLen; i++) {
+      const line1 = lines1[i];
+      const line2 = lines2[i];
+
+      if (line1 === undefined) {
+        diff.push({ type: 'added', line: i + 1, content: line2 });
+      } else if (line2 === undefined) {
+        diff.push({ type: 'removed', line: i + 1, content: line1 });
+      } else if (line1 === line2) {
+        diff.push({ type: 'unchanged', line: i + 1, content: line1 });
+      } else {
+        diff.push({ type: 'modified', line: i + 1, oldContent: line1, newContent: line2 });
+      }
+    }
+
+    return diff;
+  };
+
+  // Función para iniciar comparación
+  const startComparison = async (filePath1, filePath2) => {
+    try {
+      // Cargar ambos archivos si no están cargados
+      let content1 = fileContents[filePath1];
+      let content2 = fileContents[filePath2];
+
+      if (!content1) {
+        if (window.electronAPI && window.electronAPI.readFile) {
+          const result = await window.electronAPI.readFile(filePath1);
+          content1 = result.content || '';
+          setFileContents(prev => ({ ...prev, [filePath1]: content1 }));
+        } else {
+          const fileItem = Object.values(fileTree).flat().find(item => item.path === filePath1);
+          if (fileItem?.handle && fileItem.handle.kind === 'file') {
+            const file = await fileItem.handle.getFile();
+            content1 = await file.text();
+            setFileContents(prev => ({ ...prev, [filePath1]: content1 }));
+          }
+        }
+      }
+
+      if (!content2) {
+        if (window.electronAPI && window.electronAPI.readFile) {
+          const result = await window.electronAPI.readFile(filePath2);
+          content2 = result.content || '';
+          setFileContents(prev => ({ ...prev, [filePath2]: content2 }));
+        } else {
+          const fileItem = Object.values(fileTree).flat().find(item => item.path === filePath2);
+          if (fileItem?.handle && fileItem.handle.kind === 'file') {
+            const file = await fileItem.handle.getFile();
+            content2 = await file.text();
+            setFileContents(prev => ({ ...prev, [filePath2]: content2 }));
+          }
+        }
+      }
+
+      setComparingFiles({ file1: filePath1, file2: filePath2 });
+      setFileToCompare(null);
+      setContextMenu(null);
+    } catch (error) {
+      console.error('Error cargando archivos para comparar:', error);
+      alert('Error al cargar archivos para comparar: ' + error.message);
+    }
+  };
 
   // Sincronizar con atributos del nodo
   useEffect(() => {
@@ -631,6 +758,11 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
       
       // Finalmente activar el archivo (esto disparará el useEffect)
       setActiveFile(filePath);
+      // Resetear previewMode si el archivo no es .md
+      const fileExt = filePath.split('.').pop()?.toLowerCase();
+      if (!['md', 'markdown'].includes(fileExt)) {
+        setPreviewMode(false);
+      }
       console.log('[VisualCodeBlock] Archivo abierto y activado:', filePath);
     } catch (error) {
       console.error('[VisualCodeBlock] Error abriendo archivo:', error);
@@ -1141,11 +1273,28 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
                 : 'text-[#cccccc] hover:bg-[#2a2d2e]'
             }`}
             style={{ paddingLeft: `${8 + indent}px`, paddingRight: '8px', paddingTop: '2px', paddingBottom: '2px' }}
+            title={item.path} // Tooltip con la ruta completa
             onClick={() => {
               if (isFolder) {
                 toggleFolder(item.path);
               } else {
                 openFile(item.path);
+              }
+            }}
+            onContextMenu={(e) => {
+              if (!isFolder) {
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation(); // Prevenir que otros listeners capturen el evento
+                console.log('[VisualCodeBlock] Menú contextual abierto para:', item.path, 'item completo:', item);
+                setContextMenu({
+                  x: e.clientX,
+                  y: e.clientY,
+                  item: {
+                    ...item,
+                    type: item.type || (isFolder ? 'folder' : 'file') // Asegurar que tenga type
+                  }
+                });
               }
             }}
           >
@@ -1437,7 +1586,11 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
         <div className={`flex ${isFullscreen ? 'h-[calc(100vh-3.5rem)]' : isExpanded ? 'h-[calc(100vh-8rem)]' : 'h-[600px]'}`}>
           {/* File Explorer Sidebar - Estilo VS Code */}
           {showFileExplorer && (
-            <div className="w-64 flex-shrink-0 border-r border-[#3e3e42] bg-[#252526] overflow-hidden flex flex-col">
+            <div 
+              ref={explorerRef}
+              className="flex-shrink-0 border-r border-[#3e3e42] bg-[#252526] overflow-hidden flex flex-col relative"
+              style={{ width: `${explorerWidth}px` }}
+            >
               {/* Tabs del sidebar - Estilo VS Code */}
               <div className="bg-[#2d2d30] border-b border-[#3e3e42] flex">
                 <button
@@ -1549,6 +1702,17 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
                   </div>
                 </>
               )}
+              {/* Resizer para el explorador */}
+              <div
+                className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-[#007acc] transition-colors z-10"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setIsResizingExplorer(true);
+                }}
+                style={{
+                  backgroundColor: isResizingExplorer ? '#007acc' : 'transparent'
+                }}
+              />
             </div>
           )}
 
@@ -1580,7 +1744,14 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
                           ? 'bg-[#1e1e1e] text-[#cccccc] border-b-2 border-b-[#007acc]'
                           : 'bg-[#2d2d2d] text-[#858585] hover:bg-[#37373d] hover:text-[#cccccc]'
                       }`}
-                      onClick={() => setActiveFile(filePath)}
+                      onClick={() => {
+                        setActiveFile(filePath);
+                        // Resetear previewMode si el archivo no es .md
+                        const fileExt = filePath.split('.').pop()?.toLowerCase();
+                        if (!['md', 'markdown'].includes(fileExt)) {
+                          setPreviewMode(false);
+                        }
+                      }}
                     >
                       <File className={`w-3.5 h-3.5 flex-shrink-0 ${getFileIconColor()}`} />
                       <span className="text-[13px] whitespace-nowrap">{fileName}</span>
@@ -1605,22 +1776,195 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
 
             {/* Editor - Estilo VS Code */}
             <div 
-              className="flex-1 overflow-hidden bg-[#1e1e1e] min-h-0"
+              className="flex-1 overflow-hidden bg-[#1e1e1e] min-h-0 flex flex-col"
               style={{ pointerEvents: 'auto' }}
             >
-              {activeFile ? (
-                <div 
-                  ref={editorContainerRef} 
-                  className="h-full w-full min-h-0"
-                  style={{
-                    userSelect: 'text',
-                    WebkitUserSelect: 'text',
-                    MozUserSelect: 'text',
-                    msUserSelect: 'text',
-                    pointerEvents: 'auto',
-                    cursor: 'text',
-                  }}
-                />
+              {comparingFiles ? (
+                /* Vista de Comparación */
+                <div className="flex-1 flex flex-col overflow-hidden">
+                  {/* Header de comparación */}
+                  <div className="bg-[#252526] border-b border-[#3e3e42] px-3 py-2 flex items-center justify-between">
+                    <div className="flex items-center gap-4 flex-1 min-w-0">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <File className="w-4 h-4 text-[#4ec9b0] flex-shrink-0" />
+                        <span className="text-[13px] text-[#cccccc] truncate" title={comparingFiles.file1}>
+                          {getFileName(comparingFiles.file1)}
+                        </span>
+                      </div>
+                      <GitCompare className="w-4 h-4 text-[#858585] flex-shrink-0" />
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <File className="w-4 h-4 text-[#4ec9b0] flex-shrink-0" />
+                        <span className="text-[13px] text-[#cccccc] truncate" title={comparingFiles.file2}>
+                          {getFileName(comparingFiles.file2)}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setComparingFiles(null);
+                        setFileToCompare(null);
+                      }}
+                      className="p-1.5 hover:bg-[#3e3e42] rounded transition-colors"
+                      title="Cerrar comparación"
+                    >
+                      <X className="w-4 h-4 text-[#cccccc]" />
+                    </button>
+                  </div>
+                  
+                  {/* Vista lado a lado */}
+                  <div className="flex-1 flex overflow-hidden">
+                    {/* Archivo 1 */}
+                    <div className="flex-1 flex flex-col border-r border-[#3e3e42] overflow-hidden">
+                      <div className="bg-[#2d2d30] px-3 py-1.5 border-b border-[#3e3e42] flex items-center justify-between">
+                        <span className="text-[11px] text-[#858585] uppercase font-semibold truncate" title={comparingFiles.file1}>
+                          {getFileName(comparingFiles.file1)}
+                        </span>
+                        <span className="text-[10px] text-[#858585]">
+                          (Original)
+                        </span>
+                      </div>
+                      <div className="flex-1 overflow-y-auto font-mono text-[13px] leading-relaxed">
+                        {(() => {
+                          const content1 = fileContents[comparingFiles.file1] || '';
+                          const content2 = fileContents[comparingFiles.file2] || '';
+                          const diff = calculateDiff(content1, content2);
+                          
+                          return diff.map((item, idx) => {
+                            if (item.type === 'unchanged') {
+                              return (
+                                <div key={idx} className="px-4 py-0.5 text-[#cccccc] whitespace-pre-wrap">
+                                  {item.content || ' '}
+                                </div>
+                              );
+                            } else if (item.type === 'removed') {
+                              return (
+                                <div key={idx} className="bg-[#5a1d1d] text-[#ff6b6b] px-4 py-0.5 whitespace-pre-wrap border-l-4 border-[#ff6b6b]">
+                                  {item.content || ' '}
+                                </div>
+                              );
+                            } else if (item.type === 'added') {
+                              return (
+                                <div key={idx} className="px-4 py-0.5 text-[#858585] whitespace-pre-wrap">
+                                  {' '}
+                                </div>
+                              );
+                            } else {
+                              return (
+                                <div key={idx}>
+                                  <div className="bg-[#5a1d1d] text-[#ff6b6b] px-4 py-0.5 whitespace-pre-wrap border-l-4 border-[#ff6b6b]">
+                                    {item.oldContent || ' '}
+                                  </div>
+                                </div>
+                              );
+                            }
+                          });
+                        })()}
+                      </div>
+                    </div>
+                    
+                    {/* Archivo 2 */}
+                    <div className="flex-1 flex flex-col overflow-hidden">
+                      <div className="bg-[#2d2d30] px-3 py-1.5 border-b border-[#3e3e42] flex items-center justify-between">
+                        <span className="text-[11px] text-[#858585] uppercase font-semibold truncate" title={comparingFiles.file2}>
+                          {getFileName(comparingFiles.file2)}
+                        </span>
+                        <span className="text-[10px] text-[#858585]">
+                          (Comparado)
+                        </span>
+                      </div>
+                      <div className="flex-1 overflow-y-auto font-mono text-[13px] leading-relaxed">
+                        {(() => {
+                          const content1 = fileContents[comparingFiles.file1] || '';
+                          const content2 = fileContents[comparingFiles.file2] || '';
+                          const diff = calculateDiff(content1, content2);
+                          
+                          return diff.map((item, idx) => {
+                            if (item.type === 'unchanged') {
+                              return (
+                                <div key={idx} className="px-4 py-0.5 text-[#cccccc] whitespace-pre-wrap">
+                                  {item.content || ' '}
+                                </div>
+                              );
+                            } else if (item.type === 'removed') {
+                              return (
+                                <div key={idx} className="px-4 py-0.5 text-[#858585] whitespace-pre-wrap">
+                                  {' '}
+                                </div>
+                              );
+                            } else if (item.type === 'added') {
+                              return (
+                                <div key={idx} className="bg-[#1e3a1e] text-[#4ade80] px-4 py-0.5 whitespace-pre-wrap border-l-4 border-[#4ade80]">
+                                  {item.content || ' '}
+                                </div>
+                              );
+                            } else {
+                              return (
+                                <div key={idx}>
+                                  <div className="bg-[#1e3a1e] text-[#4ade80] px-4 py-0.5 whitespace-pre-wrap border-l-4 border-[#4ade80]">
+                                    {item.newContent || ' '}
+                                  </div>
+                                </div>
+                              );
+                            }
+                          });
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : activeFile ? (
+                <>
+                  {/* Barra de herramientas para archivos .md */}
+                  {isMarkdownFile && (
+                    <div className="bg-[#252526] border-b border-[#3e3e42] px-3 py-1.5 flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => setPreviewMode(!previewMode)}
+                        className={`px-2.5 py-1 rounded text-[12px] flex items-center gap-1.5 transition-colors ${
+                          previewMode
+                            ? 'bg-[#0e639c] text-[#ffffff]'
+                            : 'bg-[#2d2d30] text-[#cccccc] hover:bg-[#3e3e42]'
+                        }`}
+                        title={previewMode ? "Ver código" : "Ver preview"}
+                      >
+                        {previewMode ? (
+                          <>
+                            <Code className="w-3.5 h-3.5" />
+                            <span>Código</span>
+                          </>
+                        ) : (
+                          <>
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>Preview</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
+                  
+                  {/* Contenido: Editor o Preview */}
+                  {isMarkdownFile && previewMode ? (
+                    <div className="flex-1 overflow-y-auto p-4 bg-[#1e1e1e]">
+                      <div className="prose prose-invert max-w-none dark:prose-invert">
+                        <ReactMarkdown className="text-[#cccccc]">
+                          {fileContents[activeFile] || ''}
+                        </ReactMarkdown>
+                      </div>
+                    </div>
+                  ) : (
+                    <div 
+                      ref={editorContainerRef} 
+                      className="h-full w-full min-h-0"
+                      style={{
+                        userSelect: 'text',
+                        WebkitUserSelect: 'text',
+                        MozUserSelect: 'text',
+                        msUserSelect: 'text',
+                        pointerEvents: 'auto',
+                        cursor: 'text',
+                      }}
+                    />
+                  )}
+                </>
               ) : (
                 <div className="h-full flex items-center justify-center text-[#858585]">
                   <div className="text-center">
@@ -1834,6 +2178,117 @@ export default function VisualCodeBlock({ node, updateAttributes, deleteNode, ed
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Menú contextual */}
+      {contextMenu && (
+        <div
+          ref={contextMenuRef}
+          className="fixed bg-[#252526] border border-[#3e3e42] rounded shadow-lg py-1 min-w-[180px]"
+          style={{
+            left: `${contextMenu.x}px`,
+            top: `${contextMenu.y}px`,
+            zIndex: 100000, // z-index muy alto para asegurar que esté por encima de todo
+          }}
+        >
+          {(() => {
+            const fileExt = contextMenu.item?.name.split('.').pop()?.toLowerCase();
+            const isMarkdown = ['md', 'markdown'].includes(fileExt);
+            const hasFileToCompare = fileToCompare !== null;
+            
+            console.log('[VisualCodeBlock] Renderizando menú contextual:', {
+              item: contextMenu.item?.name,
+              isMarkdown,
+              hasFileToCompare,
+              fileToCompare
+            });
+            
+            return (
+              <>
+                {/* Opción Comparar - siempre visible para archivos */}
+                {contextMenu.item && contextMenu.item.type !== 'folder' && (
+                  <>
+                    {hasFileToCompare ? (
+                      <button
+                        onClick={() => {
+                          if (contextMenu.item) {
+                            startComparison(fileToCompare, contextMenu.item.path);
+                          }
+                          setContextMenu(null);
+                        }}
+                        className="w-full px-3 py-1.5 text-left text-sm hover:bg-[#2a2d2e] flex items-center gap-2 transition-colors text-[#cccccc]"
+                      >
+                        <GitCompare className="w-4 h-4" />
+                        Comparar con {getFileName(fileToCompare)}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          if (contextMenu.item) {
+                            setFileToCompare(contextMenu.item.path);
+                            setContextMenu(null);
+                          }
+                        }}
+                        className="w-full px-3 py-1.5 text-left text-sm hover:bg-[#2a2d2e] flex items-center gap-2 transition-colors text-[#cccccc]"
+                      >
+                        <GitCompare className="w-4 h-4" />
+                        Comparar
+                      </button>
+                    )}
+                    <div className="border-t border-[#3e3e42] my-1" />
+                  </>
+                )}
+                {isMarkdown && (
+                  <>
+                    <button
+                      onClick={() => {
+                        if (contextMenu.item) {
+                          openFile(contextMenu.item.path);
+                          setPreviewMode(true);
+                        }
+                        setContextMenu(null);
+                      }}
+                      className="w-full px-3 py-1.5 text-left text-sm hover:bg-[#2a2d2e] flex items-center gap-2 transition-colors text-[#cccccc]"
+                    >
+                      <Eye className="w-4 h-4" />
+                      Abrir en Preview
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (contextMenu.item) {
+                          openFile(contextMenu.item.path);
+                          setPreviewMode(false);
+                        }
+                        setContextMenu(null);
+                      }}
+                      className="w-full px-3 py-1.5 text-left text-sm hover:bg-[#2a2d2e] flex items-center gap-2 transition-colors text-[#cccccc]"
+                    >
+                      <Code className="w-4 h-4" />
+                      Abrir en Editor
+                    </button>
+                    <div className="border-t border-[#3e3e42] my-1" />
+                  </>
+                )}
+              </>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* Indicador cuando hay un archivo seleccionado para comparar */}
+      {fileToCompare && !comparingFiles && (
+        <div className="fixed bottom-4 right-4 bg-[#0e639c] text-white px-4 py-2 rounded-lg shadow-lg z-[99999] flex items-center gap-2">
+          <GitCompare className="w-4 h-4" />
+          <span className="text-sm">
+            Archivo seleccionado: {getFileName(fileToCompare)}
+          </span>
+          <button
+            onClick={() => setFileToCompare(null)}
+            className="ml-2 p-1 hover:bg-[#1177bb] rounded"
+          >
+            <X className="w-3 h-3" />
+          </button>
         </div>
       )}
 

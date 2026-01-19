@@ -84,6 +84,9 @@ const electronAPI = {
         createFile: (filePath, initialContent = '') => {
           return ipcRenderer.invoke('create-file', filePath, initialContent);
         },
+        copyFile: (sourcePath, targetPath) => {
+          return ipcRenderer.invoke('copy-file', sourcePath, targetPath);
+        },
         renameFile: (oldPath, newPath) => {
           return ipcRenderer.invoke('rename-file', oldPath, newPath);
         },
