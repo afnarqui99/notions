@@ -5032,7 +5032,7 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
               }}
             />
             <div 
-              className="bg-white shadow-2xl"
+              className="bg-white dark:bg-gray-900 shadow-2xl transition-colors"
               style={{ 
                 animation: 'fadeIn 0.3s ease-out',
                 zIndex: drawerZIndex + 1,
@@ -5051,8 +5051,8 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
               data-drawer="table-drawer-modal"
             >
             {/* Header del modal con botón de guardar */}
-            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center z-10 shadow-sm">
-              <h2 className="text-lg font-semibold text-gray-900">
+            <div className="sticky top-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex justify-between items-center z-10 shadow-sm">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
                 {filaSeleccionada !== null ? filas[filaSeleccionada]?.Name || "Sin nombre" : "Editar fila"}
               </h2>
               <div className="flex items-center gap-2">
@@ -5130,7 +5130,7 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
           <div className="mb-6" onClick={(e) => e.stopPropagation()}>
             <input
               type="text"
-              className="w-full text-2xl font-semibold border-none outline-none focus:bg-gray-50 px-2 py-1 rounded transition-colors"
+              className="w-full text-2xl font-semibold border-none outline-none focus:bg-gray-50 dark:focus:bg-gray-800 px-2 py-1 rounded transition-colors bg-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
               value={filas[filaSeleccionada]?.Name || ""}
               placeholder="Sin título"
               onClick={(e) => e.stopPropagation()}
@@ -5446,7 +5446,7 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
           />
           {/* Panel lateral con animación */}
           <div 
-            className={`fixed top-0 bottom-0 bg-white shadow-2xl overflow-y-auto transition-all duration-300 ease-out ${
+            className={`fixed top-0 bottom-0 bg-white dark:bg-gray-900 shadow-2xl overflow-y-auto transition-all duration-300 ease-out ${
               drawerExpandido ? 'right-0 w-full' : 'right-0 w-1/2'
             }`}
             style={{ 
@@ -5457,8 +5457,8 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
             onClick={(e) => e.stopPropagation()}
             data-drawer="table-drawer"
           >
-            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center z-10">
-              <h2 className="text-lg font-semibold text-gray-900">
+            <div className="sticky top-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex justify-between items-center z-10">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
                 {filaSeleccionada !== null ? filas[filaSeleccionada]?.Name || "Sin nombre" : "Editar fila"}
               </h2>
               <div className="flex items-center gap-2">
@@ -5523,7 +5523,7 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                   <div className="mb-6">
                     <input
                       type="text"
-                      className="w-full text-2xl font-semibold border-none outline-none focus:bg-gray-50 px-2 py-1 rounded transition-colors"
+                      className="w-full text-2xl font-semibold border-none outline-none focus:bg-gray-50 dark:focus:bg-gray-800 px-2 py-1 rounded transition-colors bg-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                       value={filas[filaSeleccionada]?.Name || ""}
                       placeholder="Sin título"
                       onChange={(e) => {
@@ -5537,7 +5537,7 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                   </div>
                   
                   <div className="mb-4">
-                    <label className="block text-xs text-gray-600 mb-1">Imagen</label>
+                    <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Imagen</label>
                     <div className="flex items-center gap-3">
                       {filas[filaSeleccionada]?.imageFilename || filas[filaSeleccionada]?.image ? (
                         <div className="relative">
@@ -5590,11 +5590,11 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                       const formulaPreview = formula.length > 30 ? formula.substring(0, 30) + "..." : formula;
                       
                       return (
-                      <div key={pi} className="border-b border-gray-100 pb-2 last:border-b-0">
+                      <div key={pi} className="border-b border-gray-100 dark:border-gray-700 pb-2 last:border-b-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           {/* Nombre y badges */}
                           <div className="flex items-center gap-1.5 flex-shrink-0 w-[120px]">
-                            <label className="text-sm font-medium text-gray-900">
+                            <label className="text-sm font-medium text-gray-900 dark:text-white">
                               {prop.name}
                             </label>
                             {prop.type === "formula" && (
@@ -5618,7 +5618,7 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                                   setEsNuevoCampo(false);
                                   setShowFormulaModal(true);
                                 }}
-                                className="w-full text-left border border-gray-300 bg-white hover:bg-gray-50 rounded px-2 py-1 text-xs font-mono text-gray-700 transition-colors truncate"
+                                className="w-full text-left border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 rounded px-2 py-1 text-xs font-mono text-gray-700 dark:text-gray-300 transition-colors truncate"
                                 title={formula || "Clic para editar fórmula"}
                               >
                                 {formulaPreview || "Clic para editar fórmula..."}
@@ -5631,7 +5631,7 @@ export default function TablaNotionStyle({ node, updateAttributes, getPos, edito
                             ) : prop.type === "number" || prop.type === "percent" ? (
                               <input
                                 type="number"
-                                className="border border-gray-300 w-full px-2 py-1 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent"
+                                className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white w-full px-2 py-1 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent"
                                 value={filas[filaSeleccionada]?.properties?.[prop.name]?.value || 0}
                                 onChange={(e) => actualizarValor(filaSeleccionada, prop.name, Number(e.target.value))}
                               />

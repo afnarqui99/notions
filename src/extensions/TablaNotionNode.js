@@ -23,6 +23,13 @@ export const TablaNotionNode = Node.create({
             'data-filas': JSON.stringify(attributes.filas),
           };
         },
+        // Asegurar que se serialice correctamente en JSON
+        toJSON: (value) => {
+          return Array.isArray(value) ? value : [];
+        },
+        fromJSON: (value) => {
+          return Array.isArray(value) ? value : [];
+        },
       },
       propiedades: {
         default: [],
@@ -37,6 +44,13 @@ export const TablaNotionNode = Node.create({
           return {
             'data-propiedades': JSON.stringify(attributes.propiedades),
           };
+        },
+        // Asegurar que se serialice correctamente en JSON
+        toJSON: (value) => {
+          return Array.isArray(value) ? value : [];
+        },
+        fromJSON: (value) => {
+          return Array.isArray(value) ? value : [];
         },
       },
       sprintConfig: {
@@ -145,10 +159,9 @@ export const TablaNotionNode = Node.create({
     return ['tabla-notion', HTMLAttributes];
   },
 
-
-addNodeView() {
-  return ReactNodeViewRenderer(TablaNotionStyle);
-}
+  addNodeView() {
+    return ReactNodeViewRenderer(TablaNotionStyle);
+  }
 });
 
 
