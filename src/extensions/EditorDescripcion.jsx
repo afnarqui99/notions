@@ -125,9 +125,58 @@ export default function EditorDescripcion({ content, onChange, autoFocus = false
       // Pero asegurar que los eventos de teclado se propaguen correctamente
       handleDOMEvents: {
         keydown: (view, event) => {
+          // Si el evento viene de un textarea dentro de un MarkdownNode, no interceptarlo
+          const target = event.target;
+          if (target && target.tagName === 'TEXTAREA') {
+            // Verificar si el textarea está dentro de un MarkdownNode
+            const markdownNode = target.closest('.markdown-node-wrapper, .markdown-node');
+            if (markdownNode) {
+              // Permitir que el textarea maneje el evento normalmente
+              return false; // false significa que no interceptamos el evento
+            }
+          }
           // Permitir que el plugin Suggestion maneje el evento '/'
           // No interceptar el evento, solo asegurar que se propague
           return false; // false significa que no interceptamos el evento
+        },
+        mousedown: (view, event) => {
+          // Si el evento viene de un textarea dentro de un MarkdownNode, no interceptarlo
+          const target = event.target;
+          if (target && target.tagName === 'TEXTAREA') {
+            // Verificar si el textarea está dentro de un MarkdownNode
+            const markdownNode = target.closest('.markdown-node-wrapper, .markdown-node');
+            if (markdownNode) {
+              // Permitir que el textarea maneje el evento normalmente
+              return false; // false significa que no interceptamos el evento
+            }
+          }
+          return false;
+        },
+        click: (view, event) => {
+          // Si el evento viene de un textarea dentro de un MarkdownNode, no interceptarlo
+          const target = event.target;
+          if (target && target.tagName === 'TEXTAREA') {
+            // Verificar si el textarea está dentro de un MarkdownNode
+            const markdownNode = target.closest('.markdown-node-wrapper, .markdown-node');
+            if (markdownNode) {
+              // Permitir que el textarea maneje el evento normalmente
+              return false; // false significa que no interceptamos el evento
+            }
+          }
+          return false;
+        },
+        focus: (view, event) => {
+          // Si el evento viene de un textarea dentro de un MarkdownNode, no interceptarlo
+          const target = event.target;
+          if (target && target.tagName === 'TEXTAREA') {
+            // Verificar si el textarea está dentro de un MarkdownNode
+            const markdownNode = target.closest('.markdown-node-wrapper, .markdown-node');
+            if (markdownNode) {
+              // Permitir que el textarea maneje el evento normalmente
+              return false; // false significa que no interceptamos el evento
+            }
+          }
+          return false;
         },
       },
     },
@@ -203,6 +252,16 @@ export default function EditorDescripcion({ content, onChange, autoFocus = false
         
         // Agregar un listener directo para el evento '/' para debug
         const handleKeyDown = (e) => {
+          // Si el evento viene de un textarea dentro de un MarkdownNode, no hacer nada
+          const target = e.target;
+          if (target && target.tagName === 'TEXTAREA') {
+            const markdownNode = target.closest('.markdown-node-wrapper, .markdown-node');
+            if (markdownNode) {
+              // No interferir con el textarea del MarkdownNode
+              return;
+            }
+          }
+          
           // Si el usuario presiona '/', asegurar que el editor tenga focus
           if (e.key === '/' && document.activeElement !== dom) {
             dom.focus();

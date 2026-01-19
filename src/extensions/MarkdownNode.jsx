@@ -429,16 +429,16 @@ export default function MarkdownNode({ node, updateAttributes, editor, getPos })
     const showPreview = viewMode === 'preview' || viewMode === 'split';
 
     return (
-      <div className="markdown-node-wrapper border border-gray-300 rounded-lg overflow-hidden bg-white">
+      <div className="markdown-node-wrapper border border-gray-300 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-900">
         {/* Barra de herramientas */}
-        <div className="flex items-center justify-between bg-gray-50 border-b border-gray-200 px-4 py-2">
+        <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-2">
           <div className="flex items-center gap-2">
             <button
               onClick={() => setViewMode('edit')}
               className={`p-2 rounded transition-colors ${
                 viewMode === 'edit'
-                  ? 'bg-blue-100 text-blue-700'
-                  : 'text-gray-600 hover:bg-gray-100'
+                  ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
+                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
               }`}
               title="Solo edición"
             >
@@ -448,8 +448,8 @@ export default function MarkdownNode({ node, updateAttributes, editor, getPos })
               onClick={() => setViewMode('split')}
               className={`p-2 rounded transition-colors ${
                 viewMode === 'split'
-                  ? 'bg-blue-100 text-blue-700'
-                  : 'text-gray-600 hover:bg-gray-100'
+                  ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
+                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
               }`}
               title="Dividido"
             >
@@ -459,8 +459,8 @@ export default function MarkdownNode({ node, updateAttributes, editor, getPos })
               onClick={() => setViewMode('preview')}
               className={`p-2 rounded transition-colors ${
                 viewMode === 'preview'
-                  ? 'bg-blue-100 text-blue-700'
-                  : 'text-gray-600 hover:bg-gray-100'
+                  ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
+                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
               }`}
               title="Solo preview"
             >
@@ -475,7 +475,7 @@ export default function MarkdownNode({ node, updateAttributes, editor, getPos })
                 e.stopPropagation();
                 setShowDeleteModal(true);
               }}
-              className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors"
+              className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors"
               title="Eliminar bloque"
             >
               <Trash2 className="w-4 h-4" />
@@ -483,7 +483,7 @@ export default function MarkdownNode({ node, updateAttributes, editor, getPos })
             {showPreview && (
               <button
                 onClick={handleExportPDF}
-                className="p-2 text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
                 title="Exportar a PDF"
               >
                 <Download className="w-4 h-4" />
@@ -492,7 +492,7 @@ export default function MarkdownNode({ node, updateAttributes, editor, getPos })
             {showEditor && (
               <button
                 onClick={toggleEditorFullscreen}
-                className="p-2 text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
                 title="Pantalla completa editor"
               >
                 {isEditorFullscreen ? (
@@ -505,7 +505,7 @@ export default function MarkdownNode({ node, updateAttributes, editor, getPos })
             {showPreview && (
               <button
                 onClick={togglePreviewFullscreen}
-                className="p-2 text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
                 title="Pantalla completa preview"
               >
                 {isPreviewFullscreen ? (
@@ -525,16 +525,16 @@ export default function MarkdownNode({ node, updateAttributes, editor, getPos })
             <div
               className={`${
                 viewMode === 'split' ? 'w-1/2' : 'w-full'
-              } border-r border-gray-200 flex flex-col ${
-                isEditorFullscreen ? 'fixed inset-0 z-[10000] bg-white' : ''
+              } border-r border-gray-200 dark:border-gray-700 flex flex-col ${
+                isEditorFullscreen ? 'fixed inset-0 z-[10000] bg-white dark:bg-gray-900' : ''
               }`}
             >
               {isEditorFullscreen && (
-                <div className="flex items-center justify-between bg-gray-50 border-b border-gray-200 px-4 py-2">
-                  <span className="font-semibold text-gray-700">Editor Markdown</span>
+                <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-2">
+                  <span className="font-semibold text-gray-700 dark:text-gray-200">Editor Markdown</span>
                   <button
                     onClick={toggleEditorFullscreen}
-                    className="p-2 text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                    className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
                   >
                     <X className="w-5 h-5" />
                   </button>
@@ -544,8 +544,31 @@ export default function MarkdownNode({ node, updateAttributes, editor, getPos })
                 ref={textareaRef}
                 value={content}
                 onChange={handleContentChange}
+                onFocus={(e) => {
+                  // Prevenir que el editor de TipTap intercepte el focus
+                  e.stopPropagation();
+                  e.stopImmediatePropagation();
+                }}
+                onMouseDown={(e) => {
+                  // Prevenir que el editor de TipTap intercepte el click
+                  e.stopPropagation();
+                  e.stopImmediatePropagation();
+                }}
+                onClick={(e) => {
+                  // Prevenir que el editor de TipTap intercepte el click
+                  e.stopPropagation();
+                  e.stopImmediatePropagation();
+                }}
+                onKeyDown={(e) => {
+                  // Permitir que todas las teclas funcionen en el textarea
+                  e.stopPropagation();
+                }}
+                onInput={(e) => {
+                  // Asegurar que los eventos de input no sean interceptados
+                  e.stopPropagation();
+                }}
                 placeholder="Escribe tu markdown aquí..."
-                className="flex-1 w-full p-4 font-mono text-sm border-0 resize-none focus:outline-none"
+                className="flex-1 w-full p-4 font-mono text-sm border-0 resize-none focus:outline-none bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                 style={{ fontFamily: 'monospace' }}
               />
             </div>
@@ -557,16 +580,16 @@ export default function MarkdownNode({ node, updateAttributes, editor, getPos })
               ref={previewRef}
               className={`${
                 viewMode === 'split' ? 'w-1/2' : 'w-full'
-              } overflow-y-auto p-4 bg-gray-50 ${
-                isPreviewFullscreen ? 'fixed inset-0 z-[10000] bg-white' : ''
+              } overflow-y-auto p-4 bg-gray-50 dark:bg-gray-800 ${
+                isPreviewFullscreen ? 'fixed inset-0 z-[10000] bg-white dark:bg-gray-900' : ''
               }`}
             >
               {isPreviewFullscreen && (
-                <div className="flex items-center justify-between bg-gray-50 border-b border-gray-200 px-4 py-2 sticky top-0">
-                  <span className="font-semibold text-gray-700">Vista Previa Markdown</span>
+                <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-2 sticky top-0">
+                  <span className="font-semibold text-gray-700 dark:text-gray-200">Vista Previa Markdown</span>
                   <button
                     onClick={togglePreviewFullscreen}
-                    className="p-2 text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                    className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
                   >
                     <X className="w-5 h-5" />
                   </button>
@@ -574,7 +597,7 @@ export default function MarkdownNode({ node, updateAttributes, editor, getPos })
               )}
               <div 
                 ref={previewRef}
-                className="prose prose-sm max-w-none markdown-preview"
+                className="prose prose-sm dark:prose-invert max-w-none markdown-preview"
                 style={{
                   color: '#374151',
                 }}
