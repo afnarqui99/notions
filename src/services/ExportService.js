@@ -202,8 +202,10 @@ class ExportService {
       p { margin: 1em 0; }
       img { max-width: 100%; height: auto; }
       table { border-collapse: collapse; width: 100%; margin: 1em 0; }
-      table td, table th { border: 1px solid #ddd; padding: 8px; }
-      table th { background-color: #f2f2f2; }
+      table td, table th { border: 1px solid #ddd; padding: 8px; text-align: left; }
+      table th { background-color: #f2f2f2; font-weight: 600; }
+      table tbody tr:nth-child(even) { background-color: #f9f9f9; }
+      table tbody tr:hover { background-color: #f5f5f5; }
       code { background-color: #f4f4f4; padding: 2px 4px; border-radius: 3px; }
       pre { background-color: #f4f4f4; padding: 1em; border-radius: 5px; overflow-x: auto; }
       blockquote { border-left: 4px solid #ddd; padding-left: 1em; margin: 1em 0; }
@@ -343,6 +345,132 @@ class ExportService {
           );
           return `<th>${headerContent.join('')}</th>`;
 
+        case 'tablaNotion':
+          // Convertir tabla Notion a HTML estándar
+          // Los atributos pueden venir como arrays o como strings JSON
+          let propiedades = node.attrs?.propiedades || [];
+          let filas = node.attrs?.filas || [];
+          const nombreTabla = node.attrs?.nombreTabla || '';
+          
+          // Si propiedades es un string, parsearlo
+          if (typeof propiedades === 'string') {
+            try {
+              propiedades = JSON.parse(propiedades);
+            } catch (e) {
+              console.error('Error parseando propiedades:', e);
+              propiedades = [];
+            }
+          }
+          
+          // Si filas es un string, parsearlo
+          if (typeof filas === 'string') {
+            try {
+              filas = JSON.parse(filas);
+            } catch (e) {
+              console.error('Error parseando filas:', e);
+              filas = [];
+            }
+          }
+          
+          // Asegurar que sean arrays
+          if (!Array.isArray(propiedades)) {
+            propiedades = [];
+          }
+          if (!Array.isArray(filas)) {
+            filas = [];
+          }
+          
+          console.log('Tabla Notion - propiedades:', propiedades.length, 'filas:', filas.length);
+          console.log('Tabla Notion - nombreTabla:', nombreTabla);
+          console.log('Tabla Notion - node.attrs:', JSON.stringify(node.attrs, null, 2).substring(0, 500));
+          
+          let tablaHTML = '';
+          
+          // Agregar nombre de la tabla si existe
+          if (nombreTabla) {
+            tablaHTML += `<h3>${this.escapeHtml(nombreTabla)}</h3>\n`;
+          }
+          
+          // Si no hay propiedades o filas, mostrar mensaje
+          if (propiedades.length === 0 && filas.length === 0) {
+            tablaHTML += '<p style="color: #999; font-style: italic;">Tabla vacía</p>\n';
+            return tablaHTML;
+          }
+          
+          tablaHTML += '<table style="border-collapse: collapse; width: 100%; margin: 1em 0;">\n';
+          
+          // Encabezados
+          if (propiedades.length > 0) {
+            tablaHTML += '<thead><tr>\n';
+            propiedades.forEach(prop => {
+              if (prop.visible !== false) {
+                tablaHTML += `<th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2; text-align: left;">${this.escapeHtml(prop.name || '')}</th>\n`;
+              }
+            });
+            tablaHTML += '</tr></thead>\n';
+          }
+          
+          // Filas
+          tablaHTML += '<tbody>\n';
+          if (filas.length > 0) {
+            filas.forEach(fila => {
+              tablaHTML += '<tr>\n';
+              propiedades.forEach(prop => {
+                if (prop.visible !== false) {
+                  const propName = prop.name || '';
+                  let valor = '';
+                  
+                  // Obtener el valor de la propiedad
+                  if (fila.properties && fila.properties[propName]) {
+                    const propData = fila.properties[propName];
+                    valor = propData.value !== undefined && propData.value !== null ? propData.value : '';
+                  } else if (fila[propName] !== undefined && fila[propName] !== null) {
+                    valor = fila[propName];
+                  }
+                  
+                  // Formatear el valor según el tipo
+                  let valorFormateado = '';
+                  if (Array.isArray(valor)) {
+                    valorFormateado = valor.join(', ');
+                  } else if (typeof valor === 'object' && valor !== null) {
+                    valorFormateado = JSON.stringify(valor);
+                  } else if (prop.type === 'date' && valor) {
+                    // Formatear fecha
+                    try {
+                      const fecha = new Date(valor);
+                      valorFormateado = fecha.toLocaleDateString('es-ES');
+                    } catch (e) {
+                      valorFormateado = String(valor);
+                    }
+                  } else if (prop.type === 'checkbox') {
+                    valorFormateado = valor ? '✓' : '';
+                  } else if (prop.type === 'image' && valor) {
+                    // Para imágenes, mostrar el nombre del archivo o un indicador
+                    valorFormateado = '[Imagen]';
+                  } else {
+                    valorFormateado = String(valor || '');
+                  }
+                  
+                  tablaHTML += `<td style="border: 1px solid #ddd; padding: 8px;">${this.escapeHtml(valorFormateado)}</td>\n`;
+                }
+              });
+              tablaHTML += '</tr>\n';
+            });
+          } else {
+            // Si no hay filas, mostrar una fila vacía
+            tablaHTML += '<tr>';
+            propiedades.forEach(prop => {
+              if (prop.visible !== false) {
+                tablaHTML += '<td style="border: 1px solid #ddd; padding: 8px;"></td>';
+              }
+            });
+            tablaHTML += '</tr>';
+          }
+          tablaHTML += '</tbody>\n';
+          tablaHTML += '</table>\n';
+          
+          return tablaHTML;
+
         case 'horizontalRule':
           return '<hr>\n';
 
@@ -379,70 +507,206 @@ class ExportService {
    */
   async exportToPDF(content, pageTitle = '') {
     return new Promise(async (resolve, reject) => {
+      let tempDiv = null;
+      let tempIframe = null;
+      
       try {
         // Convertir contenido a HTML primero
         const html = await this.convertToHTML(content, pageTitle);
         
+        // Verificar que el HTML tenga contenido
+        if (!html || html.trim() === '') {
+          reject(new Error('No se pudo generar el contenido HTML'));
+          return;
+        }
+        
+        // Extraer el contenido del body del HTML
+        const bodyMatch = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+        let bodyContent = bodyMatch ? bodyMatch[1] : null;
+        
+        // Si no se encuentra body, intentar extraer el contenido después de </head>
+        if (!bodyContent) {
+          const headEndMatch = html.match(/<\/head>\s*<body[^>]*>([\s\S]*)<\/body>/i);
+          if (headEndMatch) {
+            bodyContent = headEndMatch[1];
+          } else {
+            // Último recurso: extraer todo después de </head> hasta </body> o </html>
+            const afterHead = html.match(/<\/head>([\s\S]*)/i);
+            if (afterHead) {
+              bodyContent = afterHead[1].replace(/<\/body>[\s\S]*$/i, '').replace(/<\/html>[\s\S]*$/i, '').trim();
+            }
+          }
+        }
+        
+        // Si aún no hay contenido, usar el HTML completo
+        const contentToUse = bodyContent || html;
+        
         // Crear un elemento temporal para renderizar el HTML
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = html;
-        tempDiv.style.position = 'absolute';
-        tempDiv.style.left = '-9999px';
+        // Usar un contenedor con el contenido del body
+        tempDiv = document.createElement('div');
+        tempDiv.innerHTML = contentToUse;
+        
+        // Aplicar estilos para que el contenido sea visible y se renderice correctamente
+        // html2canvas necesita que el elemento esté en el viewport visible
+        tempDiv.style.position = 'fixed';
+        tempDiv.style.top = '0';
+        tempDiv.style.left = '0';
+        tempDiv.style.width = '800px';
+        tempDiv.style.maxWidth = '800px';
+        tempDiv.style.minHeight = '100px'; // Asegurar altura mínima
+        tempDiv.style.padding = '20px';
+        tempDiv.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+        tempDiv.style.lineHeight = '1.6';
+        tempDiv.style.color = '#333';
+        tempDiv.style.backgroundColor = '#ffffff';
+        tempDiv.style.zIndex = '999999';
+        tempDiv.style.opacity = '1';
+        tempDiv.style.visibility = 'visible';
+        tempDiv.style.pointerEvents = 'none';
+        tempDiv.style.overflow = 'visible';
+        tempDiv.style.boxSizing = 'border-box';
+        tempDiv.style.display = 'block';
+        // Mantener visible en el viewport para html2canvas
         document.body.appendChild(tempDiv);
+        
+        // Guardar posición de scroll original
+        const originalScrollX = window.scrollX;
+        const originalScrollY = window.scrollY;
+        
+        // Asegurar que el elemento esté visible para html2canvas
+        window.scrollTo(0, 0);
+        
+        // Forzar reflow para asegurar que el navegador calcule las dimensiones
+        void tempDiv.offsetHeight;
+
+        // Esperar un momento para que el DOM se renderice completamente
+        await new Promise(resolve => setTimeout(resolve, 300));
 
         // Esperar a que las imágenes se carguen
         const images = tempDiv.querySelectorAll('img');
         await Promise.all(
           Array.from(images).map(img => {
             return new Promise((imgResolve) => {
-              if (img.complete) {
+              if (img.complete && img.naturalHeight !== 0) {
                 imgResolve();
               } else {
                 img.onload = imgResolve;
                 img.onerror = imgResolve; // Continuar aunque falle la imagen
+                // Timeout de seguridad
+                setTimeout(imgResolve, 5000);
               }
             });
           })
         );
 
-        // Obtener el body del HTML generado
-        const bodyElement = tempDiv.querySelector('body');
-        if (!bodyElement) {
-          document.body.removeChild(tempDiv);
-          reject(new Error('No se pudo generar el contenido HTML'));
+        // Verificar que el contenido tenga algo
+        const textContent = tempDiv.textContent || tempDiv.innerText || '';
+        const innerHTML = tempDiv.innerHTML || '';
+        
+        console.log('Validación de contenido:');
+        console.log('- TextContent length:', textContent.length);
+        console.log('- InnerHTML length:', innerHTML.length);
+        console.log('- TextContent preview:', textContent.substring(0, 200));
+        console.log('- InnerHTML preview:', innerHTML.substring(0, 500));
+        console.log('- Element children:', tempDiv.children.length);
+        
+        if (!textContent || textContent.trim() === '') {
+          console.error('Contenido vacío para PDF.');
+          console.error('HTML completo:', html.substring(0, 1000));
+          console.error('ContentToUse:', contentToUse.substring(0, 1000));
+          console.error('Content JSON:', JSON.stringify(content, null, 2).substring(0, 1000));
+          if (tempDiv) document.body.removeChild(tempDiv);
+          reject(new Error('El contenido está vacío'));
           return;
         }
 
         // Verificar que html2pdf esté disponible
         if (typeof window.html2pdf === 'undefined') {
-          document.body.removeChild(tempDiv);
+          if (tempDiv) document.body.removeChild(tempDiv);
           reject(new Error('html2pdf.js no está disponible'));
           return;
         }
 
+        // Esperar un frame más para asegurar que todo esté renderizado
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        
+        // Obtener dimensiones reales del contenido
+        // Forzar un reflow completo antes de medir
+        tempDiv.style.display = 'block';
+        const contentWidth = tempDiv.scrollWidth || tempDiv.offsetWidth || 800;
+        const contentHeight = tempDiv.scrollHeight || tempDiv.offsetHeight || 1000;
+        
+        console.log('Dimensiones del contenido:', { 
+          offsetWidth: tempDiv.offsetWidth,
+          offsetHeight: tempDiv.offsetHeight,
+          scrollWidth: tempDiv.scrollWidth,
+          scrollHeight: tempDiv.scrollHeight,
+          contentWidth,
+          contentHeight
+        });
+        console.log('Contenido texto:', textContent.substring(0, 200));
+        
         // Configuración de html2pdf
         const opt = {
-          margin: 1,
+          margin: [0.5, 0.5, 0.5, 0.5],
           filename: `${pageTitle || 'pagina'}.pdf`,
           image: { type: 'jpeg', quality: 0.98 },
-          html2canvas: { scale: 2, useCORS: true },
+          html2canvas: { 
+            scale: 2, 
+            useCORS: true,
+            allowTaint: false,
+            logging: false,
+            backgroundColor: '#ffffff',
+            width: contentWidth,
+            height: contentHeight,
+            windowWidth: contentWidth,
+            windowHeight: contentHeight,
+            x: 0,
+            y: 0,
+            scrollX: 0,
+            scrollY: 0,
+            removeContainer: false
+          },
           jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
         };
 
         // Generar PDF
         window.html2pdf()
           .set(opt)
-          .from(bodyElement)
+          .from(tempDiv)
           .save()
           .then(() => {
-            document.body.removeChild(tempDiv);
+            // Restaurar scroll original
+            window.scrollTo(originalScrollX, originalScrollY);
+            
+            // Esperar un momento antes de remover para asegurar que el PDF se genere
+            setTimeout(() => {
+              if (tempDiv && tempDiv.parentNode) {
+                document.body.removeChild(tempDiv);
+              }
+              if (tempIframe && tempIframe.parentNode) {
+                document.body.removeChild(tempIframe);
+              }
+            }, 500);
             resolve();
           })
           .catch((error) => {
-            document.body.removeChild(tempDiv);
+            console.error('Error generando PDF:', error);
+            // Restaurar scroll original
+            window.scrollTo(originalScrollX, originalScrollY);
+            
+            if (tempDiv && tempDiv.parentNode) {
+              document.body.removeChild(tempDiv);
+            }
+            if (tempIframe && tempIframe.parentNode) {
+              document.body.removeChild(tempIframe);
+            }
             reject(error);
           });
       } catch (error) {
+        console.error('Error en exportToPDF:', error);
+        if (tempDiv) document.body.removeChild(tempDiv);
+        if (tempIframe) document.body.removeChild(tempIframe);
         reject(error);
       }
     });

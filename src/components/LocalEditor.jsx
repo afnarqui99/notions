@@ -539,6 +539,74 @@ export default function LocalEditor({ onShowConfig }) {
     content: "",
   });
 
+  // Actualizar posición del botón de comandos considerando el sidebar
+  useEffect(() => {
+    if (!editor) return;
+
+    const updateCursorPosition = () => {
+      try {
+        const { from } = editor.state.selection;
+        const coords = editor.view.coordsAtPos(from);
+        const editorContainer = editorContainerRef.current;
+        
+        if (editorContainer && coords) {
+          // Encontrar el contenedor del editor (max-w-4xl) que ahora es el padre del botón
+          const editorContent = editorContainer.querySelector('.max-w-4xl');
+          
+          if (editorContent) {
+            const contentRect = editorContent.getBoundingClientRect();
+            const scrollTop = editorContainer.scrollTop;
+            
+            // Posición horizontal: fija a la izquierda del área de escritura (80px desde el inicio del max-w-4xl)
+            const leftPos = 80;
+            
+            // Posición vertical: sigue el cursor (20px debajo del cursor)
+            // Calcular relativo al contenedor max-w-4xl
+            let topPos = coords.top - contentRect.top + scrollTop + 20;
+            
+            // Asegurar que el botón no se salga por arriba
+            if (topPos < 20) {
+              topPos = 20;
+            }
+            
+            setCursorPosition({ top: topPos, left: leftPos });
+          }
+        }
+      } catch (e) {
+        // Ignorar errores al obtener posición del cursor
+      }
+    };
+
+    const handleUpdate = () => {
+      updateCursorPosition();
+    };
+
+    const handleSelectionUpdate = () => {
+      updateCursorPosition();
+    };
+
+    editor.on('selectionUpdate', handleSelectionUpdate);
+    editor.on('update', handleUpdate);
+    editor.on('focus', handleUpdate);
+
+    const scrollContainer = editorContainerRef.current;
+    if (scrollContainer) {
+      scrollContainer.addEventListener('scroll', updateCursorPosition, { passive: true });
+    }
+
+    // Actualizar también cuando cambia el estado del sidebar
+    updateCursorPosition();
+
+    return () => {
+      editor.off('selectionUpdate', handleSelectionUpdate);
+      editor.off('update', handleUpdate);
+      editor.off('focus', handleUpdate);
+      if (scrollContainer) {
+        scrollContainer.removeEventListener('scroll', updateCursorPosition);
+      }
+    };
+  }, [editor, sidebarColapsado]);
+
   // Ref para evitar cargas simultáneas
   const cargandoPaginasRef = useRef(false);
   const rebuildIndexTimeoutRef = useRef(null);
@@ -2995,33 +3063,33 @@ export default function LocalEditor({ onShowConfig }) {
 
           {/* Área de edición */}
           <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-900 transition-colors relative" ref={editorContainerRef}>
-            {/* Botón flotante de comandos - sigue el cursor y respeta el sidebar */}
-            {paginaSeleccionada && editor && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  e.preventDefault();
-                  setShowSlashCommandModal(true);
-                }}
-                onMouseDown={(e) => {
-                  e.stopPropagation();
-                  e.preventDefault();
-                }}
-                className="absolute z-50 bg-pink-600 hover:bg-pink-700 text-white rounded-full shadow-2xl transition-all hover:scale-110 flex items-center justify-center border-2 border-white pointer-events-auto"
-                style={{
-                  top: `${cursorPosition.top}px`,
-                  left: `${cursorPosition.left}px`,
-                  width: '44px',
-                  height: '44px',
-                  boxShadow: '0 4px 12px rgba(219, 39, 119, 0.4)',
-                }}
-                title="Insertar comando"
-              >
-                <Command className="w-5 h-5" />
-              </button>
-            )}
-            
-            <div className="max-w-4xl mx-auto px-4 py-4">
+            <div className="max-w-4xl mx-auto px-4 py-4 relative">
+              {/* Botón flotante de comandos - sigue el cursor y respeta el sidebar */}
+              {paginaSeleccionada && editor && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    setShowSlashCommandModal(true);
+                  }}
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                  }}
+                  className="absolute z-50 bg-pink-600 hover:bg-pink-700 text-white rounded-full shadow-2xl transition-all hover:scale-110 flex items-center justify-center border-2 border-white pointer-events-auto"
+                  style={{
+                    top: `${cursorPosition.top}px`,
+                    left: `${cursorPosition.left}px`,
+                    width: '44px',
+                    height: '44px',
+                    boxShadow: '0 4px 12px rgba(219, 39, 119, 0.4)',
+                  }}
+                  title="Insertar comando"
+                >
+                  <Command className="w-5 h-5" />
+                </button>
+              )}
+              
               <EditorContent editor={editor} className="tiptap" ref={editorRef} />
             </div>
           </div>

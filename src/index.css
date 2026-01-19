@@ -40,6 +40,18 @@ html.dark body {
   color: inherit;
 }
 
+/* Asegurar que el texto sea blanco en modo oscuro */
+.dark .ProseMirror {
+  color: #ffffff;
+}
+
+.dark .ProseMirror p,
+.dark .ProseMirror li,
+.dark .ProseMirror span,
+.dark .ProseMirror div {
+  color: #ffffff;
+}
+
 /* Estilos para CodeMirror - Asegurar selección de texto */
 .cm-editor,
 .cm-editor *,
@@ -578,6 +590,190 @@ tabla-notion {
   color: rgba(55, 53, 47, 0.4);
 }
 
+/* Estilos para modo oscuro - Las tablas Notion mantienen fondo claro y texto oscuro */
+.dark .notion-table-desktop {
+  background: white;
+  border-color: rgba(55, 53, 47, 0.16);
+}
+
+.dark .notion-table-desktop th {
+  color: rgba(55, 53, 47, 0.65) !important;
+  background-color: rgba(55, 53, 47, 0.03) !important;
+  border-right-color: rgba(55, 53, 47, 0.09);
+  border-bottom-color: rgba(55, 53, 47, 0.09);
+}
+
+.dark .notion-table-desktop th:hover {
+  background-color: rgba(55, 53, 47, 0.06) !important;
+}
+
+.dark .notion-table-desktop th:first-child {
+  background-color: rgba(55, 53, 47, 0.03) !important;
+}
+
+.dark .notion-table-desktop th:first-child:hover {
+  background-color: rgba(55, 53, 47, 0.06) !important;
+}
+
+.dark .notion-table-desktop td {
+  color: rgb(55, 53, 47) !important;
+  background-color: white !important;
+  border-right-color: rgba(55, 53, 47, 0.09);
+  border-bottom-color: rgba(55, 53, 47, 0.09);
+}
+
+.dark .notion-table-desktop td:first-child,
+.dark .notion-table-desktop td.sticky-name-cell {
+  background-color: white !important;
+}
+
+.dark .notion-table-desktop tr.bg-gray-200 td:first-child,
+.dark .notion-table-desktop tr.bg-gray-200 td.sticky-name-cell {
+  background-color: #e5e7eb !important;
+}
+
+.dark .notion-table-desktop tr:hover td:first-child,
+.dark .notion-table-desktop tr:hover td.sticky-name-cell {
+  background-color: rgba(55, 53, 47, 0.03) !important;
+}
+
+.dark .notion-table-desktop tr.bg-gray-200:hover td:first-child,
+.dark .notion-table-desktop tr.bg-gray-200:hover td.sticky-name-cell {
+  background-color: #d1d5db !important;
+}
+
+.dark .notion-table-desktop tbody tr:hover {
+  background-color: rgba(55, 53, 47, 0.03) !important;
+}
+
+.dark .notion-table-desktop tbody tr:hover td {
+  background-color: rgba(55, 53, 47, 0.03) !important;
+}
+
+.dark .notion-table-desktop td input[type="text"],
+.dark .notion-table-desktop td input[type="number"] {
+  color: rgb(55, 53, 47) !important;
+  background: transparent;
+}
+
+.dark .notion-table-desktop td input[type="text"]:hover,
+.dark .notion-table-desktop td input[type="number"]:hover {
+  background-color: rgba(55, 53, 47, 0.03) !important;
+}
+
+.dark .notion-table-desktop td input[type="text"]:focus,
+.dark .notion-table-desktop td input[type="number"]:focus {
+  background-color: white !important;
+  border-color: rgb(46, 170, 220);
+  box-shadow: 0 0 0 1px rgb(46, 170, 220);
+}
+
+.dark .notion-table-desktop td input[type="text"]::placeholder,
+.dark .notion-table-desktop td input[type="number"]::placeholder {
+  color: rgba(55, 53, 47, 0.4) !important;
+}
+
+.dark .notion-table-desktop thead {
+  background-color: rgba(55, 53, 47, 0.03) !important;
+}
+
+.dark .notion-pill {
+  background-color: rgba(206, 205, 202, 0.3) !important;
+  color: rgb(55, 53, 47) !important;
+}
+
+/* Estilos para EditorDescripcion dentro de drawers/modos de tablas Notion */
+[data-drawer="table-drawer"] .ProseMirror,
+[data-drawer="table-drawer-modal"] .ProseMirror {
+  color: inherit;
+}
+
+.dark [data-drawer="table-drawer"] .ProseMirror,
+.dark [data-drawer="table-drawer-modal"] .ProseMirror {
+  color: #ffffff;
+}
+
+.dark [data-drawer="table-drawer"] .ProseMirror p,
+.dark [data-drawer="table-drawer-modal"] .ProseMirror p,
+.dark [data-drawer="table-drawer"] .ProseMirror li,
+.dark [data-drawer="table-drawer-modal"] .ProseMirror li,
+.dark [data-drawer="table-drawer"] .ProseMirror span,
+.dark [data-drawer="table-drawer-modal"] .ProseMirror span,
+.dark [data-drawer="table-drawer"] .ProseMirror div,
+.dark [data-drawer="table-drawer-modal"] .ProseMirror div {
+  color: #ffffff;
+}
+
+.dark [data-drawer="table-drawer"] .ProseMirror h1,
+.dark [data-drawer="table-drawer-modal"] .ProseMirror h1,
+.dark [data-drawer="table-drawer"] .ProseMirror h2,
+.dark [data-drawer="table-drawer-modal"] .ProseMirror h2,
+.dark [data-drawer="table-drawer"] .ProseMirror h3,
+.dark [data-drawer="table-drawer-modal"] .ProseMirror h3 {
+  color: #ffffff;
+}
+
+.dark [data-drawer="table-drawer"] .ProseMirror a,
+.dark [data-drawer="table-drawer-modal"] .ProseMirror a {
+  color: #60a5fa;
+}
+
+.dark [data-drawer="table-drawer"] .ProseMirror a:hover,
+.dark [data-drawer="table-drawer-modal"] .ProseMirror a:hover {
+  color: #93c5fd;
+}
+
+/* Asegurar que todo el contenido dentro de las tablas Notion mantenga texto oscuro */
+.dark .notion-table-desktop th *,
+.dark .notion-table-desktop td * {
+  color: rgb(55, 53, 47) !important;
+}
+
+.dark .notion-table-desktop th span,
+.dark .notion-table-desktop td span,
+.dark .notion-table-desktop th div,
+.dark .notion-table-desktop td div,
+.dark .notion-table-desktop th p,
+.dark .notion-table-desktop td p {
+  color: rgb(55, 53, 47) !important;
+}
+
+/* Asegurar que los elementos con opacidad también mantengan el color oscuro */
+.dark .notion-table-desktop th span[class*="opacity"],
+.dark .notion-table-desktop td span[class*="opacity"] {
+  color: rgb(55, 53, 47) !important;
+}
+
+/* Asegurar que los elementos con clases de texto de Tailwind mantengan color oscuro */
+.dark .notion-table-desktop th.text-gray-400,
+.dark .notion-table-desktop td.text-gray-400,
+.dark .notion-table-desktop th.text-gray-500,
+.dark .notion-table-desktop td.text-gray-500,
+.dark .notion-table-desktop th.text-gray-600,
+.dark .notion-table-desktop td.text-gray-600,
+.dark .notion-table-desktop th.text-gray-700,
+.dark .notion-table-desktop td.text-gray-700,
+.dark .notion-table-desktop th.text-gray-900,
+.dark .notion-table-desktop td.text-gray-900 {
+  color: rgb(55, 53, 47) !important;
+}
+
+/* Asegurar que los inputs y otros elementos interactivos mantengan color oscuro */
+.dark .notion-table-desktop th input,
+.dark .notion-table-desktop td input,
+.dark .notion-table-desktop th select,
+.dark .notion-table-desktop td select,
+.dark .notion-table-desktop th button,
+.dark .notion-table-desktop td button {
+  color: rgb(55, 53, 47) !important;
+}
+
+/* Asegurar que los elementos con estilos inline también respeten el color oscuro */
+.dark .notion-table-desktop th[style*="color"],
+.dark .notion-table-desktop td[style*="color"] {
+  color: rgb(55, 53, 47) !important;
+}
+
 /* Estilos para tarjetas móviles de tablas */
 .notion-table-card {
   border: 1px solid #e5e7eb;
@@ -703,6 +899,46 @@ tabla-notion {
   margin: 0.75rem 0;
 }
 
+/* Estilos para modo oscuro */
+.dark .tiptap {
+  color: #ffffff;
+}
+
+.dark .tiptap p {
+  color: #ffffff;
+  border-left-color: #4b5563;
+}
+
+.dark .tiptap h1 {
+  color: #ffffff;
+  background-color: #1e293b;
+  border-left-color: #3b82f6;
+}
+
+.dark .tiptap h2 {
+  color: #ffffff;
+  background-color: #1e293b;
+  border-left-color: #6366f1;
+}
+
+.dark .tiptap h3 {
+  color: #ffffff;
+  background-color: #1e293b;
+  border-left-color: #8b5cf6;
+}
+
+.dark .tiptap li {
+  color: #ffffff;
+}
+
+.dark .tiptap a {
+  color: #60a5fa;
+}
+
+.dark .tiptap a:hover {
+  color: #93c5fd;
+}
+
 /* Estilos para listas */
 .tiptap ul {
   list-style-type: disc;
@@ -718,6 +954,12 @@ tabla-notion {
 
 .tiptap li {
   margin: 0.25rem 0;
+  color: #374151;
+}
+
+.dark .tiptap ul li,
+.dark .tiptap ol li {
+  color: #ffffff;
 }
 
 /* Estilos para código */
@@ -783,12 +1025,23 @@ tabla-notion {
   padding: 3px 5px;
   position: relative;
   vertical-align: top;
+  color: #374151;
 }
 
 .tiptap table th {
   background-color: #f1f3f5;
   font-weight: bold;
   text-align: left;
+}
+
+.dark .tiptap table td,
+.dark .tiptap table th {
+  color: #ffffff;
+  border-color: #4b5563;
+}
+
+.dark .tiptap table th {
+  background-color: #374151;
 }
 
 /* Estilos para bloques toggle */

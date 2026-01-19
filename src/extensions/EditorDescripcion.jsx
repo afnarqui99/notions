@@ -458,7 +458,8 @@ export default function EditorDescripcion({ content, onChange, autoFocus = false
           const containerRect = editorContainer.getBoundingClientRect();
           const scrollTop = editorContainer.scrollTop;
           
-          // Posición horizontal: fija a la izquierda (80px)
+          // Posición horizontal: fija a la izquierda del área de escritura (80px)
+          // El botón está dentro del contenedor del editor, así que la posición es relativa a ese contenedor
           const leftPos = 80;
           
           // Posición vertical: sigue el cursor (20px debajo del cursor)
@@ -534,7 +535,7 @@ export default function EditorDescripcion({ content, onChange, autoFocus = false
   return (
     <div 
       ref={editorContainerRef}
-      className="w-full h-full px-4 py-6 overflow-y-auto flex flex-col relative" 
+      className="w-full h-full px-4 py-6 overflow-y-auto flex flex-col relative bg-white dark:bg-gray-900 text-gray-900 dark:text-white transition-colors" 
       style={{ 
         position: 'relative',
         width: '100%',
