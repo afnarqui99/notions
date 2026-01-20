@@ -10,6 +10,7 @@ export default function TerminalSettingsModal({
   const [name, setName] = useState(terminal?.name || '');
   const [shell, setShell] = useState(terminal?.shell || 'bash');
   const [currentDirectory, setCurrentDirectory] = useState(terminal?.currentDirectory || '~');
+  const [dockerInstalled, setDockerInstalled] = useState(null); // null = checking, true/false = result
   const [styles, setStyles] = useState(terminal?.styles || {
     backgroundColor: '#1a0d2e', // Purple theme por defecto
     textColor: '#e0b0ff',
@@ -23,6 +24,27 @@ export default function TerminalSettingsModal({
     headerBackgroundColor: '#1f2937', // Color de fondo del header por defecto
     headerTextColor: '#ffffff' // Color de texto del header por defecto
   });
+
+  // Verificar Docker al abrir el modal
+  useEffect(() => {
+    const checkDocker = async () => {
+      if (typeof window !== 'undefined' && window.electronAPI && window.electronAPI.checkDockerInstalled) {
+        try {
+          const result = await window.electronAPI.checkDockerInstalled();
+          setDockerInstalled(result.installed);
+        } catch (error) {
+          console.error('[TerminalSettingsModal] Error verificando Docker:', error);
+          setDockerInstalled(false);
+        }
+      } else {
+        setDockerInstalled(false);
+      }
+    };
+    
+    if (isOpen) {
+      checkDocker();
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (terminal) {
@@ -209,7 +231,22 @@ export default function TerminalSettingsModal({
                 <option value="zsh">Zsh</option>
                 <option value="cmd">CMD (Windows)</option>
                 <option value="powershell">PowerShell (Windows)</option>
+                {dockerInstalled !== null && (
+                  <option value="docker" disabled={!dockerInstalled}>
+                    Docker {dockerInstalled ? '✓' : '(No instalado)'}
+                  </option>
+                )}
               </select>
+              {shell === 'docker' && dockerInstalled === false && (
+                <p className="text-xs text-red-500 mt-1">
+                  Docker no está instalado. Por favor, instala Docker Desktop para usar esta opción.
+                </p>
+              )}
+              {shell === 'docker' && dockerInstalled === true && (
+                <p className="text-xs text-green-500 mt-1">
+                  Docker está instalado y listo para usar.
+                </p>
+              )}
             </div>
           </div>
 

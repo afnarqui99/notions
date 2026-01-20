@@ -15,7 +15,8 @@ import {
   Sparkles,
   Terminal,
   GitBranch,
-  GitCompare
+  GitCompare,
+  Eye
 } from 'lucide-react';
 import { EditorView, basicSetup } from 'codemirror';
 import { ViewPlugin, Decoration } from '@codemirror/view';
@@ -39,6 +40,7 @@ import AIChatPanel from './AIChatPanel';
 import GitPanel from './GitPanel';
 import GitDiffView from './GitDiffView';
 import CompareView from './CompareView';
+import ReactMarkdown from 'react-markdown';
 
 // Panel de Extensiones - Estilo VS Code
 function ExtensionsPanel({ extensions, setExtensions }) {
@@ -176,12 +178,16 @@ export default function VisualCodeTab({
   const [fileToCompare, setFileToCompare] = useState(null); // Archivo seleccionado para comparar
   const [comparingFiles, setComparingFiles] = useState(null); // { file1, file2 } cuando se está comparando
   const [mergedContent, setMergedContent] = useState({ file1: '', file2: '' }); // Contenido editado en la comparación
+  const [previewMarkdown, setPreviewMarkdown] = useState(null); // { filePath, content } para previsualización de markdown
+  const [explorerWidth, setExplorerWidth] = useState(256); // 256px = w-64
+  const [isResizingExplorer, setIsResizingExplorer] = useState(false);
   const editorViewRef = useRef(null);
   const editorContainerRef = useRef(null);
   const compareEditor1Ref = useRef(null);
   const compareEditor2Ref = useRef(null);
   const compareContainer1Ref = useRef(null);
   const compareContainer2Ref = useRef(null);
+  const explorerRef = useRef(null);
   const [projectPath, setProjectPath] = useState(project?.path || '');
   const [theme, setTheme] = useState(project?.theme || 'cursorDark');
   const [fontSize, setFontSize] = useState(project?.fontSize || 14);
@@ -235,6 +241,35 @@ export default function VisualCodeTab({
     }, 1000);
     return () => clearTimeout(timeoutId);
   }, [customThemeColors]);
+
+  // Manejar el resizing del explorador
+  useEffect(() => {
+    if (!isResizingExplorer) return;
+
+    const handleMouseMove = (e) => {
+      if (!explorerRef.current) return;
+      
+      const explorerRect = explorerRef.current.getBoundingClientRect();
+      const newWidth = e.clientX - explorerRect.left;
+      
+      // Limitar el ancho entre 150px y 600px
+      if (newWidth >= 150 && newWidth <= 600) {
+        setExplorerWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingExplorer(false);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizingExplorer]);
 
   // Limpiar archivos cuando cambia el proyecto
   useEffect(() => {
@@ -338,7 +373,7 @@ export default function VisualCodeTab({
         // getThemeExtension ahora viene del servicio CodeMirrorThemeService
 
         const editorExtensions = [
-          basicSetup,
+          basicSetup, // basicSetup ya incluye los keymaps estándar (Ctrl+C, Ctrl+V, Ctrl+X, etc.)
           closeBrackets(),
           getLanguage(activeFile),
           EditorView.updateListener.of((update) => {
@@ -606,7 +641,7 @@ export default function VisualCodeTab({
   }, [activeFile, fileContents]); // Solo cuando cambia el archivo activo
 
   // Manejar Ctrl+S para guardar y Ctrl+/Ctrl- para zoom
-  // IMPORTANTE: Solo manejar estos atajos específicos y NO bloquear otros como Ctrl+A
+  // IMPORTANTE: Solo manejar estos atajos específicos y NO bloquear otros como Ctrl+A, Ctrl+C, Ctrl+V
   useEffect(() => {
     const handleKeyDown = (e) => {
       // Solo manejar si el editor está enfocado o si es un atajo global que queremos capturar
@@ -618,6 +653,12 @@ export default function VisualCodeTab({
       // Si no es el editor el que está enfocado, no interferir (excepto para atajos globales específicos)
       if (!isEditorFocused && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
         // Permitir que otros componentes manejen sus propios atajos
+        return;
+      }
+      
+      // NO interferir con Ctrl+C, Ctrl+V, Ctrl+X, Ctrl+A - dejar que CodeMirror los maneje
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'v' || e.key === 'x' || e.key === 'a')) {
+        // Permitir que CodeMirror maneje estos atajos
         return;
       }
       
@@ -641,7 +682,7 @@ export default function VisualCodeTab({
         return;
       }
       
-      // Para todos los demás eventos (incluyendo Ctrl+A), NO hacer preventDefault
+      // Para todos los demás eventos, NO hacer preventDefault
       // Esto permite que CodeMirror maneje sus propios atajos de teclado
     };
 
@@ -987,7 +1028,11 @@ export default function VisualCodeTab({
       <div className="flex-1 flex overflow-hidden">
         {/* File Explorer Sidebar */}
         {showFileExplorer && (
-          <div className="w-64 flex-shrink-0 border-r border-[#3e3e42] bg-[#252526] overflow-hidden flex flex-col">
+          <div 
+            ref={explorerRef}
+            className="flex-shrink-0 border-r border-[#3e3e42] bg-[#252526] overflow-hidden flex flex-col relative"
+            style={{ width: `${explorerWidth}px` }}
+          >
             {/* Tabs del sidebar */}
             <div className="bg-[#2d2d30] border-b border-[#3e3e42] flex">
               <button
@@ -1099,15 +1144,66 @@ export default function VisualCodeTab({
                   onCompareFile={startComparison}
                   fileToCompare={fileToCompare}
                   onSetFileToCompare={setFileToCompare}
+                  onPreviewMarkdown={(filePath, content) => {
+                    console.log('[VisualCodeTab] onPreviewMarkdown llamado:', { filePath, contentLength: content?.length || 0 });
+                    setPreviewMarkdown({ filePath, content });
+                  }}
                 />
               </div>
             )}
+            {/* Resizer para el explorador */}
+            <div
+              className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-[#007acc] transition-colors z-10"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                setIsResizingExplorer(true);
+              }}
+              style={{
+                backgroundColor: isResizingExplorer ? '#007acc' : 'transparent'
+              }}
+            />
           </div>
         )}
 
         {/* Editor */}
         <div className="flex-1 flex flex-col overflow-hidden" style={{ position: 'relative' }}>
-          {gitDiffFile ? (
+          {previewMarkdown ? (
+            /* Vista de Previsualización de Markdown */
+            (() => {
+              console.log('[VisualCodeTab] Renderizando previsualización:', { 
+                filePath: previewMarkdown.filePath, 
+                contentLength: previewMarkdown.content?.length || 0 
+              });
+              return (
+              <div className="flex-1 flex flex-col overflow-hidden">
+              {/* Header de previsualización */}
+              <div className="bg-[#252526] border-b border-[#3e3e42] px-3 py-2 flex items-center justify-between">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Eye className="w-4 h-4 text-[#4ec9b0] flex-shrink-0" />
+                  <span className="text-[13px] text-[#cccccc] truncate" title={previewMarkdown.filePath}>
+                    {previewMarkdown.filePath.split(/[/\\]/).pop()}
+                  </span>
+                </div>
+                <button
+                  onClick={() => setPreviewMarkdown(null)}
+                  className="p-1.5 hover:bg-[#3e3e42] rounded transition-colors"
+                  title="Cerrar previsualización"
+                >
+                  <X className="w-4 h-4 text-[#cccccc]" />
+                </button>
+              </div>
+              {/* Contenido de previsualización */}
+              <div className="flex-1 overflow-y-auto p-6 bg-[#1e1e1e]">
+                <div className="prose prose-invert max-w-none dark:prose-invert prose-headings:text-[#cccccc] prose-p:text-[#cccccc] prose-strong:text-[#ffffff] prose-code:text-[#4ec9b0] prose-pre:bg-[#252526] prose-pre:text-[#cccccc] prose-a:text-[#4ec9b0] prose-blockquote:text-[#858585]">
+                  <ReactMarkdown>
+                    {previewMarkdown.content || ''}
+                  </ReactMarkdown>
+                </div>
+              </div>
+            </div>
+              );
+            })()
+          ) : gitDiffFile ? (
             <GitDiffView
               projectPath={projectPath}
               filePath={gitDiffFile}

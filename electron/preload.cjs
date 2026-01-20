@@ -153,6 +153,10 @@ const electronAPI = {
         // Normalizar una ruta
         normalizePath: (inputPath) => {
           return ipcRenderer.invoke('normalize-path', inputPath);
+        },
+        // Verificar si Docker está instalado
+        checkDockerInstalled: () => {
+          return ipcRenderer.invoke('check-docker-installed');
         }
 };
 
