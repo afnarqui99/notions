@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { X, Terminal, Settings, Copy, Check, Edit, Search, Replace, Clock, ChevronDown, ChevronUp, Trash2, Square, RotateCw, Network, Folder } from 'lucide-react';
+import { X, Terminal, Settings, Copy, Check, Edit, Search, Replace, Clock, ChevronDown, ChevronUp, Trash2, Square, RotateCw, Network, Folder, ExternalLink } from 'lucide-react';
 import terminalCommandService from '../services/TerminalCommandService';
 import TerminalCommandGroupsModal from './TerminalCommandGroupsModal';
 import gitService from '../services/GitService';
@@ -46,6 +46,81 @@ const stripAnsiCodes = (text) => {
   if (!text) return text;
   // Eliminar códigos ANSI: [\x1b\x9b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]
   return text.replace(/\x1b\[[0-9;]*m/g, '').replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');
+};
+
+// Función para detectar URLs en el texto
+const detectUrls = (text) => {
+  if (!text) return [];
+  const cleanText = stripAnsiCodes(text);
+  const urlPattern = /(https?:\/\/[^\s]+|localhost:\d+|127\.0\.0\.1:\d+|0\.0\.0\.0:\d+)/gi;
+  const matches = [...cleanText.matchAll(urlPattern)];
+  const urls = [];
+  
+  matches.forEach(match => {
+    let url = match[0];
+    // Si la URL no tiene protocolo, agregar http://
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = `http://${url}`;
+    }
+    // Remover caracteres finales que no son parte de la URL
+    url = url.replace(/[.,;:!?]+$/, '');
+    if (url && !urls.includes(url)) {
+      urls.push(url);
+    }
+  });
+  
+  return urls;
+};
+
+// Función para renderizar texto con URLs como enlaces
+const renderTextWithUrls = (text) => {
+  if (!text) return text;
+  const cleanText = stripAnsiCodes(text);
+  const urlPattern = /(https?:\/\/[^\s]+|localhost:\d+|127\.0\.0\.1:\d+|0\.0\.0\.0:\d+)/gi;
+  
+  const parts = [];
+  let lastIndex = 0;
+  let match;
+  
+  while ((match = urlPattern.exec(cleanText)) !== null) {
+    // Agregar texto antes de la URL
+    if (match.index > lastIndex) {
+      parts.push(cleanText.substring(lastIndex, match.index));
+    }
+    
+    // Agregar la URL como enlace
+    let url = match[0].replace(/[.,;:!?]+$/, '');
+    let originalUrl = url;
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = `http://${url}`;
+    }
+    
+    parts.push(
+      <a
+        key={match.index}
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(e) => {
+          e.preventDefault();
+          window.open(url, '_blank');
+        }}
+        className="text-blue-400 hover:text-blue-300 underline cursor-pointer"
+        style={{ wordBreak: 'break-all' }}
+      >
+        {originalUrl}
+      </a>
+    );
+    
+    lastIndex = urlPattern.lastIndex;
+  }
+  
+  // Agregar texto restante
+  if (lastIndex < cleanText.length) {
+    parts.push(cleanText.substring(lastIndex));
+  }
+  
+  return parts.length > 0 ? parts : cleanText;
 };
 
 // Helper para manejar rutas (compatible con navegador y Electron)
@@ -115,8 +190,34 @@ export default function TerminalTab({
   const [portToCheck, setPortToCheck] = useState('');
   const [portProcesses, setPortProcesses] = useState([]);
   const [gitBranch, setGitBranch] = useState(null);
+  const [detectedUrls, setDetectedUrls] = useState([]);
+  const [showUrlMenu, setShowUrlMenu] = useState(false);
   const inputRef = useRef(null);
   const outputRef = useRef(null);
+
+  // Detectar URLs en el output cuando cambia
+  useEffect(() => {
+    if (terminal.output) {
+      const urls = detectUrls(terminal.output);
+      setDetectedUrls(urls);
+    } else {
+      setDetectedUrls([]);
+    }
+  }, [terminal.output]);
+
+  // Cerrar menú de URLs al hacer clic fuera
+  useEffect(() => {
+    if (!showUrlMenu) return;
+    
+    const handleClickOutside = (e) => {
+      if (!e.target.closest('.relative')) {
+        setShowUrlMenu(false);
+      }
+    };
+    
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [showUrlMenu]);
 
   // Actualizar estilos y shell cuando cambia el terminal
   useEffect(() => {
@@ -987,11 +1088,86 @@ export default function TerminalTab({
               >
                 <Edit className="w-4 h-4" />
               </button>
+              {/* Botón para abrir URLs detectadas */}
+              {detectedUrls.length > 0 && (
+                <div className="relative">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowUrlMenu(!showUrlMenu);
+                    }}
+                    className="p-2 rounded-lg transition-colors"
+                    style={{
+                      backgroundColor: showUrlMenu ? 'rgba(59, 130, 246, 0.3)' : 'rgba(0, 0, 0, 0.3)',
+                      color: showUrlMenu ? '#3b82f6' : terminalStyles.textColor,
+                    }}
+                    title={`Abrir ${detectedUrls.length} URL${detectedUrls.length > 1 ? 's' : ''} detectada${detectedUrls.length > 1 ? 's' : ''}`}
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                  </button>
+                  {showUrlMenu && (
+                    <div 
+                      className="absolute right-0 top-full mt-2 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 min-w-[250px] max-w-[400px]"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="px-3 py-2 border-b border-gray-700 bg-gray-900">
+                        <div className="text-xs font-semibold text-gray-300">
+                          URLs Detectadas ({detectedUrls.length})
+                        </div>
+                      </div>
+                      <div className="py-1 max-h-[300px] overflow-y-auto">
+                        {detectedUrls.map((url, index) => {
+                          // Obtener URL para mostrar (sin http:// si fue agregado)
+                          const displayUrl = url.replace(/^https?:\/\//, '');
+                          return (
+                            <button
+                              key={index}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                window.open(url, '_blank');
+                                setShowUrlMenu(false);
+                              }}
+                              className="w-full px-3 py-2 text-left hover:bg-gray-700 transition-colors flex items-center justify-between group"
+                            >
+                              <div className="flex-1 min-w-0">
+                                <div className="text-sm text-blue-400 font-mono truncate group-hover:text-blue-300">
+                                  {displayUrl}
+                                </div>
+                              </div>
+                              <ExternalLink className="w-3.5 h-3.5 text-gray-400 flex-shrink-0 ml-2" />
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {detectedUrls.length === 1 && (
+                        <div className="px-3 py-2 border-t border-gray-700 bg-gray-900">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              window.open(detectedUrls[0], '_blank');
+                              setShowUrlMenu(false);
+                            }}
+                            className="w-full px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors text-sm flex items-center justify-center gap-2"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                            Abrir URL
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>
         {terminal.output ? (
-          <pre className="whitespace-pre-wrap break-words" style={{ fontSize: `${terminalStyles.outputFontSize || terminalStyles.fontSize || 14}px` }}>{stripAnsiCodes(terminal.output)}</pre>
+          <div 
+            className="whitespace-pre-wrap break-words font-mono" 
+            style={{ fontSize: `${terminalStyles.outputFontSize || terminalStyles.fontSize || 14}px` }}
+          >
+            {renderTextWithUrls(terminal.output)}
+          </div>
         ) : (
           <div className="text-gray-500" style={{ fontSize: `${terminalStyles.outputFontSize || terminalStyles.fontSize || 14}px` }}>
             Terminal {terminal.name || terminal.id} listo. Escribe comandos para comenzar.
@@ -1229,15 +1405,15 @@ export default function TerminalTab({
       {/* Modal de editor con buscar y reemplazar */}
       {showEditor && (
         <div 
-          className="fixed inset-0 bg-black/50 z-[60000] flex items-center justify-center p-4"
+          className="fixed inset-0 bg-black/50 z-[60000] flex items-center justify-center p-2"
           onClick={() => setShowEditor(false)}
         >
           <div 
-            className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-6xl max-h-[95vh] overflow-hidden flex flex-col"
+            className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full h-full max-w-[98vw] max-h-[98vh] overflow-hidden flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800 px-6 py-4 flex items-center justify-between">
+            <div className="bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800 px-6 py-3 flex items-center justify-between flex-shrink-0">
               <div className="flex items-center gap-3">
                 <Edit className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                 <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
@@ -1253,7 +1429,7 @@ export default function TerminalTab({
             </div>
 
             {/* Buscar y Reemplazar */}
-            <div className="border-b border-gray-200 dark:border-gray-700 px-6 py-4 bg-gray-50 dark:bg-gray-900/50">
+            <div className="border-b border-gray-200 dark:border-gray-700 px-6 py-3 bg-gray-50 dark:bg-gray-900/50 flex-shrink-0">
               <div className="flex items-center gap-2 mb-3">
                 <Search className="w-4 h-4 text-gray-500" />
                 <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
@@ -1307,21 +1483,22 @@ export default function TerminalTab({
             </div>
 
             {/* Editor de texto */}
-            <div className="flex-1 overflow-hidden flex flex-col p-6">
+            <div className="flex-1 overflow-hidden flex flex-col p-4 min-h-0">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Contenido editado:
               </label>
               <textarea
                 value={editedText}
                 onChange={(e) => setEditedText(e.target.value)}
-                className="flex-1 w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-sm resize-none"
+                className="flex-1 w-full min-h-0 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-base resize-none"
                 placeholder="Edita el texto aquí..."
                 spellCheck={false}
+                style={{ minHeight: '400px' }}
               />
             </div>
 
             {/* Footer */}
-            <div className="border-t border-gray-200 dark:border-gray-700 px-6 py-4 flex justify-end gap-3">
+            <div className="border-t border-gray-200 dark:border-gray-700 px-6 py-3 flex justify-end gap-3 flex-shrink-0">
               <button
                 onClick={() => setShowEditor(false)}
                 className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"

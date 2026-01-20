@@ -1711,15 +1711,20 @@ app.whenReady().then(() => {
         let spawnCommand = commandToExecute;
         let spawnArgs = [];
         
-        if (shellCommand === 'powershell') {
+        // Si el shell es 'docker', usar bash/cmd como base pero mantener Docker CLI disponible
+        const actualShell = shellCommand === 'docker' 
+          ? (process.platform === 'win32' ? 'cmd' : 'bash')
+          : shellCommand;
+        
+        if (actualShell === 'powershell') {
           spawnCommand = 'powershell';
           spawnArgs = ['-Command', command];
           spawnShell = false;
-        } else if (shellCommand === 'cmd') {
+        } else if (actualShell === 'cmd') {
           spawnCommand = 'cmd';
           spawnArgs = ['/c', command];
           spawnShell = false;
-        } else if (process.platform === 'win32' && shellCommand === 'bash') {
+        } else if (process.platform === 'win32' && actualShell === 'bash') {
           // En Windows con bash, usar Git Bash o WSL
           const gitBashPath = 'C:\\Program Files\\Git\\bin\\bash.exe';
           if (fs.existsSync(gitBashPath)) {
@@ -1734,7 +1739,7 @@ app.whenReady().then(() => {
           }
         } else {
           // Unix/Linux/Mac o bash nativo
-          spawnCommand = shellCommand || 'bash';
+          spawnCommand = actualShell || 'bash';
           spawnArgs = ['-c', command];
           spawnShell = false;
         }
@@ -1758,11 +1763,20 @@ app.whenReady().then(() => {
         const childProcess = spawn(spawnCommand, spawnArgs, spawnOptions);
 
         // Detectar comandos que no terminan (servidores de desarrollo) o que producen salida en tiempo real
-        const isLongRunningCommand = /^(npm|yarn|pnpm)\s+(run\s+)?(dev|start|serve|watch|test)/i.test(command) ||
-                                    /^(python|node|nodemon|ts-node|tsx)\s+.*(dev|start|serve|watch|test)/i.test(command) ||
+        // Incluir comandos de build que pueden tardar mucho tiempo
+        // Incluir comandos de Docker que pueden tardar o seguir ejecutándose
+        const isLongRunningCommand = /^(npm|yarn|pnpm)\s+(run\s+)?(dev|start|serve|watch|test|build)/i.test(command) ||
+                                    /^(npm|yarn|pnpm)\s+(run\s+)?electron:build/i.test(command) ||
+                                    /^(python|node|nodemon|ts-node|tsx)\s+.*(dev|start|serve|watch|test|build)/i.test(command) ||
                                     /^npm\s+test/i.test(command) ||
                                     /^yarn\s+test/i.test(command) ||
-                                    /^pnpm\s+test/i.test(command);
+                                    /^pnpm\s+test/i.test(command) ||
+                                    /electron:build/i.test(command) ||
+                                    /docker\s+(compose|logs)/i.test(command) ||
+                                    /docker\s+compose\s+(up|down|build|start|stop|restart)/i.test(command) ||
+                                    /docker\s+logs\s+-f/i.test(command) ||
+                                    /docker\s+(build|pull|push|run|exec|attach)/i.test(command) ||
+                                    /(build|compile|package|dist|bundle)/i.test(command);
 
         let hasOutput = false;
         let lastOutputTime = Date.now();
@@ -1827,6 +1841,8 @@ app.whenReady().then(() => {
           });
           
           // Timeout inicial para comandos sin output
+          // Para comandos de build o Docker, dar más tiempo antes de mostrar "Iniciando proceso..."
+          const initialDelay = /(build|compile|package|dist|bundle|electron:build|docker)/i.test(command) ? 5000 : 2000;
           setTimeout(() => {
             if (!hasOutput && !initialOutputSent) {
               resolve({ 
@@ -1837,37 +1853,85 @@ app.whenReady().then(() => {
                 streaming: true
               });
             }
-          }, 2000);
+          }, initialDelay);
           
           return; // Salir temprano para comandos de larga duración
         }
 
         // Para comandos normales, comportamiento original
+        // Aumentar timeout para comandos que pueden tardar mucho (como builds)
         let output = '';
         let errorOutput = '';
-        const timeout = 120000;
+        // Detectar si es un comando que puede tardar mucho (builds, compilaciones, Docker, etc.)
+        const isPotentiallyLongCommand = /(build|compile|package|dist|bundle|install|electron:build|docker)/i.test(command);
+        // Timeout mucho más largo para comandos de build (60 minutos), normal para otros (2 minutos)
+        const timeout = isPotentiallyLongCommand ? 3600000 : 120000; // 60 minutos para builds, 2 minutos para otros
         let timeoutId = null;
+        let lastDataTime = Date.now(); // Track cuando se recibió el último output
 
         childProcess.stdout.on('data', (data) => {
           hasOutput = true;
           lastOutputTime = Date.now();
+          lastDataTime = Date.now();
           output += data.toString();
+          // Resetear timeout cada vez que hay output (el proceso está activo)
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
+          // Solo matar si no hay output por un tiempo muy largo (10 minutos para builds)
+          timeoutId = setTimeout(() => {
+            const timeSinceLastData = Date.now() - lastDataTime;
+            const maxSilenceTime = isPotentiallyLongCommand ? 600000 : 120000; // 10 min para builds, 2 min para otros
+            if (timeSinceLastData > maxSilenceTime) {
+              childProcess.kill('SIGTERM');
+              resolve({ 
+                error: 'Comando excedió el tiempo de espera sin producir output',
+                exitCode: -1,
+                currentDirectory: workingDir
+              });
+            }
+          }, timeout);
         });
 
         childProcess.stderr.on('data', (data) => {
           hasOutput = true;
           lastOutputTime = Date.now();
+          lastDataTime = Date.now();
           errorOutput += data.toString();
+          // Resetear timeout cada vez que hay output (el proceso está activo)
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
+          // Solo matar si no hay output por un tiempo muy largo
+          timeoutId = setTimeout(() => {
+            const timeSinceLastData = Date.now() - lastDataTime;
+            const maxSilenceTime = isPotentiallyLongCommand ? 600000 : 120000;
+            if (timeSinceLastData > maxSilenceTime) {
+              childProcess.kill('SIGTERM');
+              resolve({ 
+                error: 'Comando excedió el tiempo de espera sin producir output',
+                exitCode: -1,
+                currentDirectory: workingDir
+              });
+            }
+          }, timeout);
         });
 
+        // Timeout inicial solo si no hay output
         timeoutId = setTimeout(() => {
           if (!hasOutput) {
-            childProcess.kill('SIGTERM');
-            resolve({ 
-              error: 'Comando excedió el tiempo de espera sin producir output',
-              exitCode: -1,
-              currentDirectory: workingDir
-            });
+            // Para comandos de build, dar más tiempo antes de considerar que no hay output
+            const noOutputTimeout = isPotentiallyLongCommand ? 600000 : 120000; // 10 minutos para builds, 2 minutos para otros
+            setTimeout(() => {
+              if (!hasOutput) {
+                childProcess.kill('SIGTERM');
+                resolve({ 
+                  error: 'Comando excedió el tiempo de espera sin producir output',
+                  exitCode: -1,
+                  currentDirectory: workingDir
+                });
+              }
+            }, noOutputTimeout);
           }
         }, timeout);
 
@@ -2204,6 +2268,34 @@ app.whenReady().then(() => {
   // Handler para obtener estadísticas de procesos
   ipcMain.handle('get-process-stats', async () => {
     return ProcessManager.getStats();
+  });
+
+  // Handler para verificar si Docker está instalado
+  ipcMain.handle('check-docker-installed', async () => {
+    return new Promise((resolve) => {
+      // Ejecutar docker --version para verificar si está instalado
+      exec('docker --version', { timeout: 5000 }, (error, stdout, stderr) => {
+        if (error || !stdout) {
+          resolve({ installed: false, version: null, error: error?.message || 'Docker no encontrado' });
+          return;
+        }
+        
+        // Extraer versión del output (ej: "Docker version 24.0.7, build afdd53b")
+        const versionMatch = stdout.match(/Docker version ([\d.]+)/);
+        const version = versionMatch ? versionMatch[1] : stdout.trim();
+        
+        // Verificar si Docker daemon está corriendo
+        exec('docker info', { timeout: 5000 }, (error2, stdout2, stderr2) => {
+          const isRunning = !error2 && stdout2 && !stdout2.includes('Cannot connect');
+          resolve({ 
+            installed: true, 
+            version: version,
+            daemonRunning: isRunning,
+            output: stdout.trim()
+          });
+        });
+      });
+    });
   });
 
   app.on('activate', () => {

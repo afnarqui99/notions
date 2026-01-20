@@ -30,7 +30,12 @@ export default function MultiTerminalView({
         onUpdateTerminals(prev => prev.map(t => {
           if (t.id === data.terminalId) {
             const currentOutput = t.output || '';
-            const closedMessage = `\n\n[Proceso terminado con código ${data.exitCode}]\n`;
+            // Solo mostrar mensaje si el proceso terminó con error (código diferente de 0)
+            // Para comandos exitosos, no mostrar mensaje (como en una terminal normal)
+            let closedMessage = '';
+            if (data.exitCode !== 0 && data.exitCode !== null) {
+              closedMessage = `\n\n[✗ Proceso terminado con código de error ${data.exitCode}]\n`;
+            }
             return {
               ...t,
               output: currentOutput + closedMessage
@@ -533,7 +538,9 @@ Para comandos completos del sistema, usa la versión Electron de la aplicación.
     const cwd = terminal.currentDirectory || '~';
     const shell = terminal.shell || 'bash';
     
-    if (shell === 'powershell') {
+    if (shell === 'docker') {
+      return `🐳 docker ${cwd}$ `;
+    } else if (shell === 'powershell') {
       return `PS ${cwd}> `;
     } else if (shell === 'cmd') {
       return `${cwd}>`;

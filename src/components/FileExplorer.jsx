@@ -15,7 +15,8 @@ import {
   MoreVertical,
   GitCompare,
   Copy,
-  Clipboard
+  Clipboard,
+  Eye
 } from 'lucide-react';
 
 const STORAGE_KEY = 'console-file-explorer-state';
@@ -33,7 +34,8 @@ export default function FileExplorer({
   openFiles = [], // Lista de archivos abiertos para resaltarlos en amarillo
   onCompareFile = null, // Callback para comparar archivos (opcional)
   fileToCompare = null, // Archivo seleccionado para comparar (opcional)
-  onSetFileToCompare = null // Callback para establecer archivo a comparar (opcional)
+  onSetFileToCompare = null, // Callback para establecer archivo a comparar (opcional)
+  onPreviewMarkdown = null // Callback para previsualizar archivos markdown (opcional)
 }) {
   const [fileTree, setFileTree] = useState({});
   const [expandedFolders, setExpandedFolders] = useState(() => {
@@ -1132,6 +1134,85 @@ export default function FileExplorer({
                   <div className="border-t border-[#3e3e42] my-1" />
                 </>
               )}
+              {/* Opción de previsualizar para archivos .md */}
+              {onPreviewMarkdown && contextMenu.item && contextMenu.item.type === 'file' && (() => {
+                const fileName = contextMenu.item.name || '';
+                const fileExt = fileName.split('.').pop()?.toLowerCase();
+                const isMarkdown = fileExt && ['md', 'markdown'].includes(fileExt);
+                console.log('[FileExplorer] Verificando previsualización:', { 
+                  fileName, 
+                  fileExt, 
+                  isMarkdown, 
+                  hasOnPreviewMarkdown: !!onPreviewMarkdown,
+                  itemPath: contextMenu.item.path 
+                });
+                return isMarkdown ? (
+                  <>
+                    <button
+                      onClick={async () => {
+                        console.log('[FileExplorer] Click en Previsualizar:', contextMenu.item);
+                        if (onPreviewMarkdown && contextMenu.item) {
+                          // Cargar el contenido del archivo si no está disponible
+                          let content = null;
+                          try {
+                            if (window.electronAPI && window.electronAPI.readFile) {
+                              // Electron: usar API de Electron
+                              console.log('[FileExplorer] Leyendo archivo con Electron API:', contextMenu.item.path);
+                              const result = await window.electronAPI.readFile(contextMenu.item.path);
+                              content = result.content !== undefined ? result.content : result;
+                              console.log('[FileExplorer] Contenido cargado (Electron):', content ? `${content.length} caracteres` : 'vacío');
+                            } else {
+                              console.log('[FileExplorer] Leyendo archivo con File System API');
+                              // Navegador: buscar el handle en el fileTree recursivamente
+                              const findItemInTree = (tree, targetPath) => {
+                                for (const [key, items] of Object.entries(tree)) {
+                                  for (const item of items) {
+                                    if (item.path === targetPath) {
+                                      return item;
+                                    }
+                                    // Si es una carpeta, buscar recursivamente (aunque para archivos no debería ser necesario)
+                                    if (item.type === 'folder' && tree[item.path]) {
+                                      const found = findItemInTree({ [item.path]: tree[item.path] }, targetPath);
+                                      if (found) return found;
+                                    }
+                                  }
+                                }
+                                return null;
+                              };
+                              
+                              const fileItem = findItemInTree(fileTree, contextMenu.item.path);
+                              if (fileItem?.handle && fileItem.handle.kind === 'file') {
+                                const file = await fileItem.handle.getFile();
+                                content = await file.text();
+                              } else {
+                                console.error('No se encontró el handle del archivo en el fileTree:', contextMenu.item.path);
+                                alert('No se pudo cargar el archivo. Asegúrate de que el archivo esté disponible.');
+                                setContextMenu(null);
+                                return;
+                              }
+                            }
+                            if (content !== null && content !== undefined) {
+                              onPreviewMarkdown(contextMenu.item.path, content);
+                            } else {
+                              alert('No se pudo cargar el contenido del archivo.');
+                            }
+                          } catch (error) {
+                            console.error('Error cargando archivo para previsualizar:', error);
+                            alert('Error al cargar el archivo: ' + error.message);
+                          }
+                        }
+                        setContextMenu(null);
+                      }}
+                      className="w-full px-3 py-1.5 text-left text-sm hover:bg-[#2a2d2e] flex items-center gap-2 transition-colors"
+                      style={vscodeStyle ? { color: '#cccccc' } : {}}
+                    >
+                      <Eye className="w-4 h-4" />
+                      Previsualizar
+                    </button>
+                    <div className="border-t border-[#3e3e42] my-1" />
+                  </>
+                ) : null;
+              })()}
               <button
                 onClick={() => {
                   handleCopy(contextMenu.item);
