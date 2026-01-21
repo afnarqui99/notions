@@ -509,20 +509,76 @@ export default function EditorDescripcion({ content, onChange, autoFocus = false
 
     const updateCursorPosition = () => {
       try {
-        const { from } = editor.state.selection;
-        const coords = editor.view.coordsAtPos(from);
+        const { state, view } = editor;
+        const { from, $from } = state.selection;
+        const coords = view.coordsAtPos(from);
         const editorContainer = editorContainerRef.current;
         
         if (editorContainer && coords) {
           const containerRect = editorContainer.getBoundingClientRect();
-          const scrollTop = editorContainer.scrollTop;
           
           // Posición horizontal: fija a la izquierda del área de escritura (80px)
           // El botón está dentro del contenedor del editor, así que la posición es relativa a ese contenedor
           const leftPos = 80;
           
-          // Posición vertical: sigue el cursor (20px debajo del cursor)
-          let topPos = coords.top - containerRect.top + scrollTop + 20;
+            // Detectar si el cursor está dentro de un nodo especial (tabla, markdown, postman)
+            let topPos;
+            const depth = $from.depth;
+            
+            // Buscar nodos especiales en la jerarquía desde el más externo
+            let specialNode = null;
+            let specialNodePos = null;
+            
+            // Lista de nodos especiales en orden de prioridad (más externos primero)
+            const specialNodeTypes = ['table', 'tablaNotion', 'markdownNode', 'postmanBlock', 'consoleBlock'];
+            
+            // Buscar desde el nivel más alto hacia abajo
+            for (let i = depth; i >= 0; i--) {
+              const node = $from.node(i);
+              const nodePos = $from.start(i) - 1;
+              const nodeType = node.type.name;
+              
+              // Verificar si es un nodo especial de nivel bloque
+              if (specialNodeTypes.includes(nodeType)) {
+                specialNode = node;
+                specialNodePos = nodePos;
+                break;
+              }
+              
+              // También verificar si estamos dentro de una tabla (tableRow o tableCell indica que estamos en una tabla)
+              if ((nodeType === 'tableRow' || nodeType === 'tableCell' || nodeType === 'tableHeader') && !specialNode) {
+                // Buscar el nodo table padre
+                for (let j = i - 1; j >= 0; j--) {
+                  const parentNode = $from.node(j);
+                  if (parentNode.type.name === 'table') {
+                    specialNode = parentNode;
+                    specialNodePos = $from.start(j) - 1;
+                    break;
+                  }
+                }
+                if (specialNode) break;
+              }
+            }
+          
+          if (specialNode && specialNodePos !== null) {
+            // Si el cursor está dentro de un nodo especial, posicionar el botón debajo del nodo
+            try {
+              const nodeStart = specialNodePos + 1;
+              const nodeEnd = nodeStart + specialNode.nodeSize - 1;
+              const nodeEndCoords = view.coordsAtPos(nodeEnd);
+              
+              // Calcular posición relativa al contenedor sin acumular scroll
+              topPos = nodeEndCoords.bottom - containerRect.top + 20;
+            } catch (e) {
+              // Fallback: usar posición del cursor
+              topPos = coords.bottom - containerRect.top + 20;
+            }
+          } else {
+            // Si no está en un nodo especial, seguir el cursor
+            // Usar coords.bottom para posicionar debajo del cursor
+            // Calcular posición relativa al contenedor sin acumular scroll
+            topPos = coords.bottom - containerRect.top + 20;
+          }
           
           // Asegurar que el botón no se salga por arriba
           if (topPos < 20) {
@@ -533,6 +589,7 @@ export default function EditorDescripcion({ content, onChange, autoFocus = false
         }
       } catch (e) {
         // Ignorar errores al obtener posición del cursor
+        console.warn('Error al actualizar posición del cursor:', e);
       }
     };
 
