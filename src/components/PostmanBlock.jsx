@@ -48,6 +48,7 @@ export default function PostmanBlock({ node, updateAttributes, editor, getPos })
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [toast, setToast] = useState(null);
   const responseRef = useRef(null);
+  const abortControllerRef = useRef(null);
 
   const confirmDelete = () => {
     if (editor && typeof getPos === 'function') {
@@ -109,6 +110,16 @@ export default function PostmanBlock({ node, updateAttributes, editor, getPos })
     }
   }, [response]);
 
+  // Limpiar petición pendiente al desmontar el componente
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+    };
+  }, []);
+
   const saveCollections = (newCollections) => {
     setCollections(newCollections);
     updateAttributes({
@@ -130,11 +141,33 @@ export default function PostmanBlock({ node, updateAttributes, editor, getPos })
     setHeaders(newHeaders);
   };
 
+  const cancelRequest = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+      setIsExecuting(false);
+      setResponse({
+        error: 'Petición cancelada por el usuario',
+        cancelled: true
+      });
+      setStatusCode(null);
+    }
+  };
+
   const executeRequest = async () => {
     if (!url.trim()) {
       setResponse({ error: 'Por favor, ingresa una URL' });
       return;
     }
+
+    // Cancelar petición anterior si existe
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    // Crear nuevo AbortController para esta petición
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
 
     setIsExecuting(true);
     setResponse(null);
@@ -164,7 +197,8 @@ export default function PostmanBlock({ node, updateAttributes, editor, getPos })
         method: method,
         headers: requestHeaders,
         mode: 'cors', // Permitir CORS
-        credentials: 'omit'
+        credentials: 'omit',
+        signal: abortController.signal // Agregar señal de cancelación
       };
 
       // Agregar body para métodos que lo requieren
@@ -187,6 +221,11 @@ export default function PostmanBlock({ node, updateAttributes, editor, getPos })
       const endTime = Date.now();
       setResponseTime(endTime - startTime);
       setStatusCode(fetchResponse.status);
+
+      // Verificar si fue cancelada
+      if (abortController.signal.aborted) {
+        return;
+      }
 
       // Obtener respuesta
       const contentType = fetchResponse.headers.get('content-type');
@@ -220,8 +259,16 @@ export default function PostmanBlock({ node, updateAttributes, editor, getPos })
         };
       }
 
-      setResponse(responseData);
+      // Verificar nuevamente si fue cancelada antes de actualizar el estado
+      if (!abortController.signal.aborted) {
+        setResponse(responseData);
+      }
     } catch (error) {
+      // Si fue cancelada, no actualizar el estado (ya se actualizó en cancelRequest)
+      if (error.name === 'AbortError') {
+        return;
+      }
+
       const endTime = Date.now();
       setResponseTime(endTime - startTime);
       setResponse({
@@ -230,7 +277,11 @@ export default function PostmanBlock({ node, updateAttributes, editor, getPos })
       });
       setStatusCode(null);
     } finally {
-      setIsExecuting(false);
+      // Solo cambiar isExecuting si no fue cancelada
+      if (!abortController.signal.aborted) {
+        setIsExecuting(false);
+      }
+      abortControllerRef.current = null;
     }
   };
 
@@ -598,15 +649,26 @@ export default function PostmanBlock({ node, updateAttributes, editor, getPos })
               placeholder="https://api.ejemplo.com/endpoint"
               className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
             />
-            <button
-              onClick={executeRequest}
-              disabled={isExecuting || !url.trim()}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium flex items-center gap-2"
-              title="Ejecutar petición"
-            >
-              <Send className="w-4 h-4" />
-              {isExecuting ? 'Enviando...' : 'Enviar'}
-            </button>
+            {isExecuting ? (
+              <button
+                onClick={cancelRequest}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors font-medium flex items-center gap-2"
+                title="Cancelar petición"
+              >
+                <X className="w-4 h-4" />
+                Cancelar
+              </button>
+            ) : (
+              <button
+                onClick={executeRequest}
+                disabled={!url.trim()}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium flex items-center gap-2"
+                title="Ejecutar petición"
+              >
+                <Send className="w-4 h-4" />
+                Enviar
+              </button>
+            )}
             <button
               onClick={resetRequest}
               className="px-3 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors font-medium flex items-center gap-2"
@@ -841,13 +903,13 @@ export default function PostmanBlock({ node, updateAttributes, editor, getPos })
                   </div>
                 ) : response ? (
                   response.error ? (
-                    <div className="text-red-400">
+                    <div className={`${response.cancelled ? 'text-yellow-400' : 'text-red-400'}`}>
                       <div className="flex items-center gap-2 mb-2">
                         <AlertCircle className="w-4 h-4" />
-                        <span className="font-semibold">Error</span>
+                        <span className="font-semibold">{response.cancelled ? 'Cancelado' : 'Error'}</span>
                       </div>
                       <div>{response.error}</div>
-                      {response.details && (
+                      {response.details && !response.cancelled && (
                         <div className="mt-2 text-xs text-red-300">{response.details}</div>
                       )}
                     </div>
