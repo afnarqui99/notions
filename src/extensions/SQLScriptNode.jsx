@@ -1,6 +1,7 @@
 import { NodeViewWrapper } from '@tiptap/react';
 import { useState, useEffect, useRef } from 'react';
-import { Save, History, X, GitBranch, Eye, CheckCircle, AlertCircle, FolderOpen, FileText, Download, FileDown } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Save, History, X, GitBranch, Eye, CheckCircle, AlertCircle, FolderOpen, FileText, Download, FileDown, Copy, Check, Maximize2, Minimize2 } from 'lucide-react';
 import BlockWithDeleteButton from '../components/BlockWithDeleteButton';
 import SQLVersionService from '../services/SQLVersionService';
 import SQLFileService from '../services/SQLFileService';
@@ -21,7 +22,11 @@ export default function SQLScriptNode({ node, updateAttributes, editor, getPos }
   const [showDiff, setShowDiff] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [toast, setToast] = useState(null);
+  const [copied, setCopied] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [fullscreenContent, setFullscreenContent] = useState('');
   const textareaRef = useRef(null);
+  const fullscreenRef = useRef(null);
 
   // Cargar información del archivo si existe scriptId
   useEffect(() => {
@@ -279,6 +284,59 @@ export default function SQLScriptNode({ node, updateAttributes, editor, getPos }
     }
   };
 
+  const handleCopy = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      const textToCopy = isFullscreen ? fullscreenContent : content;
+      await navigator.clipboard.writeText(textToCopy);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Error al copiar:', err);
+      setToast({
+        message: 'Error al copiar el contenido',
+        type: 'error'
+      });
+      setTimeout(() => setToast(null), 3000);
+    }
+  };
+
+  const handleFullscreen = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setFullscreenContent(content);
+    setIsFullscreen(true);
+  };
+
+  const handleExitFullscreen = () => {
+    // Guardar cambios antes de cerrar
+    if (fullscreenContent !== content) {
+      setContent(fullscreenContent);
+      updateAttributes({
+        content: fullscreenContent,
+        version,
+        scriptId,
+        fileName,
+        fileDescription,
+        pageId,
+        pageName,
+      });
+    }
+    setIsFullscreen(false);
+  };
+
+  const handleFullscreenContentChange = (e) => {
+    setFullscreenContent(e.target.value);
+  };
+
+  // Actualizar el contenido del modal cuando se abre
+  useEffect(() => {
+    if (isFullscreen && !fullscreenContent) {
+      setFullscreenContent(content);
+    }
+  }, [isFullscreen]);
+
   return (
     <NodeViewWrapper className="sql-script-node my-4">
       <BlockWithDeleteButton editor={editor} getPos={getPos} node={node}>
@@ -323,17 +381,33 @@ export default function SQLScriptNode({ node, updateAttributes, editor, getPos }
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             {content && content.trim() && (
-              <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleExportTXT();
-                }}
-                className="p-1.5 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
-                title="Descargar como .txt"
-              >
-                <FileDown className="w-4 h-4" />
-              </button>
+              <>
+                <button
+                  onClick={handleCopy}
+                  className="p-1.5 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+                  title="Copiar contenido"
+                >
+                  {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                </button>
+                <button
+                  onClick={handleFullscreen}
+                  className="p-1.5 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+                  title="Ampliar pantalla"
+                >
+                  <Maximize2 className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleExportTXT();
+                  }}
+                  className="p-1.5 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+                  title="Descargar como .txt"
+                >
+                  <FileDown className="w-4 h-4" />
+                </button>
+              </>
             )}
             <button
               onClick={handleSaveVersion}
@@ -485,6 +559,112 @@ export default function SQLScriptNode({ node, updateAttributes, editor, getPos }
         initialName={fileName}
         initialDescription={fileDescription}
       />
+
+      {/* Modal Fullscreen */}
+      {isFullscreen && createPortal(
+        <div className="fixed inset-0 z-[50000] bg-gray-900 flex flex-col">
+          {/* Header del modal */}
+          <div className="bg-gray-800 border-b border-gray-700 px-6 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <FileText className="w-5 h-5 text-blue-400" />
+              <div>
+                <h2 className="text-lg font-semibold text-white">
+                  {fileName || 'Script SQL'}
+                </h2>
+                {fileDescription && (
+                  <p className="text-sm text-gray-400">{fileDescription}</p>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={async (e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  try {
+                    await navigator.clipboard.writeText(fullscreenContent || content);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  } catch (err) {
+                    console.error('Error al copiar:', err);
+                  }
+                }}
+                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors flex items-center gap-2"
+                title="Copiar código"
+                type="button"
+              >
+                {copied ? (
+                  <>
+                    <Check className="w-4 h-4" />
+                    <span>Copiado</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4" />
+                    <span>Copiar</span>
+                  </>
+                )}
+              </button>
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (fullscreenContent !== content) {
+                    setContent(fullscreenContent);
+                    updateAttributes({
+                      content: fullscreenContent,
+                      version,
+                      scriptId,
+                      fileName,
+                      fileDescription,
+                      pageId,
+                      pageName,
+                    });
+                  }
+                }}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors flex items-center gap-2"
+                title="Guardar cambios"
+                type="button"
+              >
+                <Check className="w-4 h-4" />
+                <span>Guardar</span>
+              </button>
+              <button
+                onClick={handleExitFullscreen}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition-colors flex items-center gap-2"
+                title="Cerrar"
+                type="button"
+              >
+                <Minimize2 className="w-4 h-4" />
+                <span>Cerrar</span>
+              </button>
+            </div>
+          </div>
+          
+          {/* Contenido del editor editable */}
+          <div className="flex-1 overflow-auto p-6">
+            <textarea
+              ref={fullscreenRef}
+              value={fullscreenContent || content}
+              onChange={handleFullscreenContentChange}
+              className="w-full h-full bg-gray-900 text-gray-100 rounded-lg p-6 font-mono text-base resize-none border-none outline-none focus:ring-2 focus:ring-blue-500"
+              style={{
+                fontFamily: 'monospace',
+                fontSize: '1rem',
+                lineHeight: '1.6',
+                color: '#e5e7eb',
+                whiteSpace: 'pre',
+                wordBreak: 'normal',
+                overflowWrap: 'normal',
+                tabSize: 2,
+              }}
+              spellCheck={false}
+              placeholder="Escribe o pega tu script SQL aquí..."
+            />
+          </div>
+        </div>,
+        document.body
+      )}
       </BlockWithDeleteButton>
     </NodeViewWrapper>
   );
