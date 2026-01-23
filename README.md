@@ -2,6 +2,18 @@
 
 Editor de Notion completamente offline que funciona sin internet, sin login y guarda todo localmente en archivos JSON y carpetas del sistema. Ideal para gestión de proyectos, notas, sprints Scrum, tablas dinámicas y más.
 
+## 🐛 Debugger Integrado
+
+La aplicación incluye un **debugger integrado** para proyectos Node.js y Python dentro del Centro de Ejecución. 
+
+👉 **Ver la [Guía Completa del Debugger](DEBUGGER_README.md)** para aprender a configurar y usar el debugger en tus proyectos.
+
+**Resumen rápido:**
+- **Node.js**: No requiere configuración adicional, funciona automáticamente
+- **Python**: `debugpy` se instala automáticamente si no está disponible
+- Coloca breakpoints haciendo clic en el gutter del editor
+- Usa los controles del panel Debugger para ejecutar paso a paso
+
 ---
 
 ## 🚀 Cómo Ejecutar la Aplicación

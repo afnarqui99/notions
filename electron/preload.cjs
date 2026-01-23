@@ -157,6 +157,63 @@ const electronAPI = {
         // Verificar si Docker está instalado
         checkDockerInstalled: () => {
           return ipcRenderer.invoke('check-docker-installed');
+        },
+        // ==================== DEBUGGING APIs ====================
+        // Iniciar debugging
+        startDebugging: (projectPath, projectType) => {
+          return ipcRenderer.invoke('start-debugging', projectPath, projectType);
+        },
+        // Detener debugging
+        stopDebugging: (projectId) => {
+          return ipcRenderer.invoke('stop-debugging', projectId);
+        },
+        // Establecer breakpoint
+        setBreakpoint: (projectId, file, line, condition) => {
+          return ipcRenderer.invoke('set-breakpoint', projectId, file, line, condition);
+        },
+        // Remover breakpoint
+        removeBreakpoint: (projectId, file, line) => {
+          return ipcRenderer.invoke('remove-breakpoint', projectId, file, line);
+        },
+        // Continuar ejecución
+        debugContinue: (projectId) => {
+          return ipcRenderer.invoke('debug-continue', projectId);
+        },
+        // Pausar ejecución
+        debugPause: (projectId) => {
+          return ipcRenderer.invoke('debug-pause', projectId);
+        },
+        // Step over
+        debugStepOver: (projectId) => {
+          return ipcRenderer.invoke('debug-step-over', projectId);
+        },
+        // Step into
+        debugStepInto: (projectId) => {
+          return ipcRenderer.invoke('debug-step-into', projectId);
+        },
+        // Step out
+        debugStepOut: (projectId) => {
+          return ipcRenderer.invoke('debug-step-out', projectId);
+        },
+        // Obtener variables
+        getDebugVariables: (projectId, frameId) => {
+          return ipcRenderer.invoke('get-debug-variables', projectId, frameId);
+        },
+        // Obtener call stack
+        getDebugCallStack: (projectId) => {
+          return ipcRenderer.invoke('get-debug-call-stack', projectId);
+        },
+        // Evaluar expresión
+        evaluateDebugExpression: (projectId, expression) => {
+          return ipcRenderer.invoke('evaluate-debug-expression', projectId, expression);
+        },
+        // Escuchar eventos de debugging
+        onDebugEvent: (callback) => {
+          ipcRenderer.on('debug-event', (event, data) => callback(data));
+        },
+        // Remover listeners de debugging
+        removeDebugListeners: () => {
+          ipcRenderer.removeAllListeners('debug-event');
         }
 };
 
