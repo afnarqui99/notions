@@ -4,6 +4,11 @@ const { spawn, exec } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const AutoLaunch = require('auto-launch');
+const net = require('net');
+const http = require('http');
+const https = require('https');
+const url = require('url');
+const WebSocket = require('ws');
 
 // Configurar auto-inicio en Windows
 let autoLauncher;
@@ -689,7 +694,8 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       enableRemoteModule: false,
-      webSecurity: false, // Temporalmente deshabilitado para debug
+      webSecurity: false, // Necesario para archivos locales (file://) y Vite HMR
+      allowRunningInsecureContent: isDev ? true : false, // Solo en desarrollo
       devTools: true, // Permitir DevTools siempre (F12)
       preload: path.join(__dirname, 'preload.cjs'),
     },
@@ -698,58 +704,33 @@ function createWindow() {
     autoHideMenuBar: true, // Ocultar barra de menú por defecto
   });
 
-  // Configurar Content Security Policy mediante webRequest
-  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-    const isDev = !app.isPackaged;
-    
-    let csp = '';
-    if (isDev) {
-      // En desarrollo: CSP más permisivo para Vite HMR
-      csp = "default-src 'self' http://localhost:5174 ws://localhost:5174; " +
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:5174; " +
-            "style-src 'self' 'unsafe-inline' http://localhost:5174; " +
-            "img-src 'self' data: blob: http://localhost:5174; " +
-            "connect-src 'self' http://localhost:5174 ws://localhost:5174 wss://localhost:5174; " +
-            "font-src 'self' data:; " +
-            "object-src 'none'; " +
-            "media-src 'self'; " +
-            "frame-src 'self';";
-    } else {
-      // En producción: CSP temporalmente más permisivo para debug
-      // TODO: Restringir después de resolver el problema
-      csp = "default-src * 'unsafe-inline' 'unsafe-eval' data: blob: file: https:; " +
-            "script-src * 'unsafe-inline' 'unsafe-eval' data: blob: file: https:; " +
-            "style-src * 'unsafe-inline' data: blob: file: https:; " +
-            "img-src * data: blob: file: https:; " +
-            "connect-src * data: blob: file: https:; " +
-            "font-src * data: blob: file: https:; " +
-            "object-src 'none'; " +
-            "media-src * data: blob: file: https:; " +
-            "frame-src * data: blob: file: https:;";
-    }
-    
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        'Content-Security-Policy': [csp]
-      }
+  // Configurar Content Security Policy solo en desarrollo
+  // En producción, webSecurity: false es suficiente para archivos locales
+  if (isDev) {
+    session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+      const csp = "default-src 'self' http://localhost:5174 ws://localhost:5174; " +
+                  "script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:5174; " +
+                  "style-src 'self' 'unsafe-inline' http://localhost:5174; " +
+                  "img-src 'self' data: blob: http://localhost:5174; " +
+                  "connect-src 'self' http://localhost:5174 ws://localhost:5174 wss://localhost:5174; " +
+                  "font-src 'self' data:; " +
+                  "object-src 'none'; " +
+                  "media-src 'self'; " +
+                  "frame-src 'self';";
+      
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          'Content-Security-Policy': [csp]
+        }
+      });
     });
-  });
+  }
 
   // Cargar la aplicación
-  // isDev ya está definido arriba
-  
-  // Permitir DevTools en producción (F12 habilitado)
-  // Comentado para permitir F12 siempre
-  // if (!isDev) {
-  //   mainWindow.webContents.closeDevTools();
-  // }
-  
   if (isDev) {
     // En desarrollo, cargar desde Vite
     mainWindow.loadURL('http://localhost:5174');
-    // Solo abrir DevTools en desarrollo explícitamente
-    mainWindow.webContents.openDevTools();
   } else {
     // En producción, cargar desde los archivos estáticos
     // Cuando está empaquetada, __dirname apunta a resources/app.asar/electron o resources/app/electron
@@ -856,10 +837,30 @@ function createWindow() {
       // Si es el frame principal y hay un error, mostrar información
       if (isMainFrame) {
         console.error('Error crítico al cargar la página principal');
-        // Intentar mostrar información de error en la ventana
-        mainWindow.webContents.executeJavaScript(`
-          document.body.innerHTML = '<div style="padding: 20px; font-family: Arial; text-align: center; color: red;"><h1>Error al cargar la aplicación</h1><p>Código: ${errorCode}</p><p>Descripción: ${errorDescription}</p><p>URL: ${validatedURL}</p><p>Por favor, revisa la consola para más detalles.</p></div>';
-        `).catch(e => console.error('Error ejecutando JavaScript:', e));
+        // Asegurar que la ventana esté visible para mostrar el error
+        if (!mainWindow.isVisible()) {
+          mainWindow.show();
+        }
+        
+        // En desarrollo, si es error de conexión, mostrar mensaje específico
+        if (isDev && (errorCode === -105 || errorCode === -106 || errorCode === -3 || errorDescription.includes('localhost') || errorDescription.includes('ECONNREFUSED'))) {
+          setTimeout(() => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.show();
+              mainWindow.focus();
+              mainWindow.loadURL('data:text/html,<html><head><meta charset="UTF-8"><title>Servidor no disponible</title></head><body style="padding:40px;font-family:Arial;text-align:center;background:#1e1e1e;color:#fff;margin:0;"><div style="max-width:600px;margin:0 auto;"><h1 style="color:#ff6b6b;">⚠️ Servidor Vite no disponible</h1><p style="font-size:16px;line-height:1.6;">El servidor de desarrollo no está corriendo.</p><p style="margin-top:30px;font-size:14px;">Por favor, ejecuta en otra terminal:</p><code style="background:#2d2d2d;padding:15px;display:block;margin:20px auto;max-width:400px;border-radius:4px;white-space:pre;font-size:14px;color:#4ecdc4;">npm run dev</code><p style="margin-top:20px;font-size:14px;">Luego recarga esta ventana con <strong>F5</strong></p><p style="margin-top:30px;font-size:12px;color:#888;">Error: ' + errorDescription + ' (Código: ' + errorCode + ')</p></div></body></html>');
+            }
+          }, 500);
+        } else {
+          // Otros errores: intentar mostrar información de error
+          setTimeout(() => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.show();
+              mainWindow.focus();
+              mainWindow.loadURL('data:text/html,<html><head><meta charset="UTF-8"><title>Error</title></head><body style="padding:20px;font-family:Arial;text-align:center;background:#1e1e1e;color:#fff;"><h1 style="color:#ff6b6b;">Error al cargar la aplicación</h1><p>Código: ' + errorCode + '</p><p>Descripción: ' + errorDescription + '</p><p>URL: ' + validatedURL + '</p><p>Por favor, revisa la consola para más detalles.</p></body></html>');
+            }
+          }, 500);
+        }
       }
     });
     
@@ -871,31 +872,17 @@ function createWindow() {
       }
     });
     
-    // Deshabilitar DevTools en producción
-    // Bloquear F12 y Ctrl+Shift+I
-    if (!isDev) {
-      mainWindow.webContents.on('before-input-event', (event, input) => {
-        if (input.key === 'F12' || (input.control && input.shift && input.key === 'I')) {
-          event.preventDefault();
-        }
-      });
-      
-      // Deshabilitar el menú contextual (clic derecho -> Inspeccionar)
-      mainWindow.webContents.on('context-menu', (event) => {
-        event.preventDefault();
-      });
-    }
+    // Permitir F12 siempre (DevTools se puede abrir manualmente)
+    // No bloquear ninguna tecla - el usuario puede usar F12 cuando quiera
     
     // Escuchar cuando la página termine de cargar
     mainWindow.webContents.on('did-finish-load', () => {
       console.log('✓ Página cargada correctamente');
       
-      // Asegurar que DevTools esté cerrado en producción (después de cargar)
-      if (!isDev) {
-        if (mainWindow.webContents.isDevToolsOpened()) {
-          console.log('⚠️ DevTools detectado abierto en producción, cerrando...');
-          mainWindow.webContents.closeDevTools();
-        }
+      // Asegurar que la ventana esté visible
+      if (!mainWindow.isVisible()) {
+        mainWindow.show();
+        mainWindow.focus();
       }
       
       // Verificar que el contenido se haya cargado
@@ -927,30 +914,14 @@ function createWindow() {
 
   // Mostrar ventana cuando esté lista
   mainWindow.once('ready-to-show', () => {
-    // Permitir DevTools en producción (F12 habilitado)
-    // Comentado para permitir F12 siempre
-    // if (!isDev) {
-    //   if (mainWindow.webContents.isDevToolsOpened()) {
-    //     console.log('⚠️ DevTools detectado abierto antes de mostrar ventana, cerrando...');
-    //     mainWindow.webContents.closeDevTools();
-    //   }
-    // }
-    
     mainWindow.show();
     
     // Enfocar la ventana
     if (isDev) {
       mainWindow.focus();
-    } else {
-      // Verificación final en producción después de mostrar
-      setTimeout(() => {
-        if (mainWindow && mainWindow.webContents && mainWindow.webContents.isDevToolsOpened()) {
-          console.log('⚠️ DevTools detectado abierto después de mostrar, cerrando...');
-          mainWindow.webContents.closeDevTools();
-        }
-      }, 100);
     }
   });
+
 
   // Manejar enlaces externos
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -1180,7 +1151,31 @@ app.whenReady().then(() => {
           return { type: 'Node.js', command: 'npm start' };
         }
       } else if (hasRequirements) {
-        return { type: 'Python', command: 'python main.py' };
+        // Buscar archivo principal de Python
+        const mainPy = path.join(projectPath, 'main.py');
+        const appPy = path.join(projectPath, 'app.py');
+        const runPy = path.join(projectPath, 'run.py');
+        
+        let pythonCommand = 'python main.py';
+        if (fs.existsSync(mainPy)) {
+          pythonCommand = 'python main.py';
+        } else if (fs.existsSync(appPy)) {
+          pythonCommand = 'python app.py';
+        } else if (fs.existsSync(runPy)) {
+          pythonCommand = 'python run.py';
+        } else {
+          // Buscar cualquier archivo .py en la raíz
+          try {
+            const files = fs.readdirSync(projectPath);
+            const pyFile = files.find(f => f.endsWith('.py') && !f.startsWith('_'));
+            if (pyFile) {
+              pythonCommand = `python ${pyFile}`;
+            }
+          } catch (err) {
+            // Si no se encuentra, usar main.py por defecto
+          }
+        }
+        return { type: 'Python', command: pythonCommand };
       } else if (hasCsproj) {
         return { type: '.NET Core', command: 'dotnet run' };
       } else if (hasPomXml) {
@@ -2127,6 +2122,643 @@ app.whenReady().then(() => {
         }
       }
     });
+  });
+
+  // ==================== DEBUGGING HANDLERS ====================
+  
+  // Gestor de sesiones de debugging
+  const DebugManager = {
+    sessions: new Map(), // projectId -> { process, debugPort, type, breakpoints }
+    nextDebugPort: 9229, // Puerto inicial para Node.js debugging
+    
+    // Encontrar puerto disponible
+    findAvailablePort(startPort = 9229) {
+      return new Promise((resolve) => {
+        const server = net.createServer();
+        server.listen(startPort, () => {
+          const port = server.address().port;
+          server.close(() => resolve(port));
+        });
+        server.on('error', () => {
+          // Puerto ocupado, intentar siguiente
+          this.findAvailablePort(startPort + 1).then(resolve);
+        });
+      });
+    },
+    
+    // Iniciar debugging para Node.js
+    async startNodeDebugging(projectId, projectPath) {
+      try {
+        // Encontrar puerto disponible
+        const debugPort = await this.findAvailablePort(this.nextDebugPort);
+        this.nextDebugPort = debugPort + 1;
+        
+        // Detectar archivo principal
+        const packageJsonPath = path.join(projectPath, 'package.json');
+        let entryPoint = 'index.js';
+        
+        if (fs.existsSync(packageJsonPath)) {
+          try {
+            const packageData = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+            if (packageData.main) {
+              entryPoint = packageData.main;
+            } else if (packageData.scripts && packageData.scripts.start) {
+              // Extraer archivo del script start
+              const startScript = packageData.scripts.start;
+              const match = startScript.match(/node\s+(.+)/);
+              if (match) {
+                entryPoint = match[1].trim();
+              }
+            }
+          } catch (e) {
+            console.warn('Error leyendo package.json:', e);
+          }
+        }
+        
+        // Verificar si existe el archivo
+        const entryPath = path.join(projectPath, entryPoint);
+        if (!fs.existsSync(entryPath)) {
+          // Buscar archivos .js en la raíz
+          const files = fs.readdirSync(projectPath).filter(f => f.endsWith('.js') && !f.startsWith('.'));
+          if (files.length > 0) {
+            entryPoint = files[0];
+          } else {
+            throw new Error(`No se encontró archivo de entrada (${entryPoint})`);
+          }
+        }
+        
+        // Iniciar proceso con debugging
+        const childProcess = spawn('node', [
+          `--inspect=${debugPort}`,
+          '--inspect-brk', // Pausar al inicio
+          entryPoint
+        ], {
+          cwd: projectPath,
+          shell: true,
+          stdio: 'pipe'
+        });
+        
+        const session = {
+          projectId,
+          projectPath,
+          type: 'nodejs',
+          process: childProcess,
+          debugPort,
+          breakpoints: new Map(), // file:line -> breakpointId
+          status: 'paused', // Pausado al inicio por --inspect-brk
+        };
+        
+        this.sessions.set(projectId, session);
+        
+        // Conectar con Chrome DevTools Protocol usando WebSocket
+        setTimeout(async () => {
+          try {
+            await this.connectToNodeDebugger(projectId, debugPort);
+          } catch (error) {
+            console.error('[DebugManager] Error conectando a debugger:', error);
+          }
+        }, 1500);
+        
+        // Enviar evento de debugging iniciado
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('debug-event', {
+            projectId,
+            type: 'started',
+            debugPort
+          });
+        }
+        
+        return { success: true, debugPort, processId: childProcess.pid };
+      } catch (error) {
+        console.error('[DebugManager] Error iniciando debugging Node.js:', error);
+        throw error;
+      }
+    },
+    
+    // Conectar con Node.js debugger usando Chrome DevTools Protocol (HTTP)
+    async connectToNodeDebugger(projectId, debugPort) {
+      const session = this.sessions.get(projectId);
+      if (!session) return;
+      
+      try {
+        // Obtener la URL del WebSocket del inspector desde /json/list usando http.get
+        const listUrl = `http://127.0.0.1:${debugPort}/json/list`;
+        
+        return new Promise((resolve, reject) => {
+          http.get(listUrl, (res) => {
+            let data = '';
+            
+            res.on('data', (chunk) => {
+              data += chunk;
+            });
+            
+            res.on('end', () => {
+              try {
+                const targets = JSON.parse(data);
+                
+                if (targets && targets.length > 0 && WebSocket) {
+                  const wsUrl = targets[0].webSocketDebuggerUrl;
+                  const ws = new WebSocket(wsUrl);
+                  
+                  ws.on('open', () => {
+                    console.log(`[DebugManager] Conectado al debugger de Node.js en puerto ${debugPort}`);
+                    session.wsConnection = ws;
+                    
+                    // Habilitar Runtime y Debugger
+                    this.sendDebuggerCommand(ws, 'Runtime.enable', {});
+                    this.sendDebuggerCommand(ws, 'Debugger.enable', {});
+                    
+                    // Configurar listeners para eventos
+                    ws.on('message', (data) => {
+                      try {
+                        const message = JSON.parse(data.toString());
+                        this.handleNodeDebuggerMessage(projectId, message);
+                      } catch (e) {
+                        console.error('[DebugManager] Error parseando mensaje:', e);
+                      }
+                    });
+                    
+                    ws.on('error', (error) => {
+                      console.error('[DebugManager] Error en WebSocket:', error);
+                    });
+                    
+                    ws.on('close', () => {
+                      console.log('[DebugManager] Conexión WebSocket cerrada');
+                      session.wsConnection = null;
+                    });
+                    
+                    resolve(true);
+                  });
+                  
+                  ws.on('error', (error) => {
+                    console.error('[DebugManager] Error conectando WebSocket:', error);
+                    reject(error);
+                  });
+                } else {
+                  console.warn('[DebugManager] No se encontraron targets o WebSocket no disponible');
+                  resolve(false);
+                }
+              } catch (error) {
+                console.error('[DebugManager] Error parseando respuesta:', error);
+                reject(error);
+              }
+            });
+          }).on('error', (error) => {
+            console.error('[DebugManager] Error obteniendo lista de targets:', error);
+            reject(error);
+          });
+        });
+      } catch (error) {
+        console.error('[DebugManager] Error conectando a debugger:', error);
+        return false;
+      }
+    },
+    
+    // Enviar comando al debugger
+    sendDebuggerCommand(ws, method, params = {}) {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      
+      const id = Date.now();
+      const message = {
+        id,
+        method,
+        params
+      };
+      
+      ws.send(JSON.stringify(message));
+      return id;
+    },
+    
+    // Manejar mensajes del debugger
+    handleNodeDebuggerMessage(projectId, message) {
+      const session = this.sessions.get(projectId);
+      if (!session) return;
+      
+      // Manejar eventos
+      if (message.method) {
+        switch (message.method) {
+          case 'Debugger.paused':
+            // Ejecución pausada en un breakpoint
+            const callFrames = message.params.callFrames || [];
+            if (callFrames.length > 0) {
+              const frame = callFrames[0];
+              const location = frame.location;
+              const scriptId = location.scriptId;
+              
+              // Obtener información del script
+              this.sendDebuggerCommand(session.wsConnection, 'Debugger.getScriptSource', {
+                scriptId: scriptId
+              });
+              
+              // Por ahora, usar información básica
+              session.status = 'paused';
+              
+              if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('debug-event', {
+                  projectId,
+                  type: 'breakpoint',
+                  line: location.lineNumber + 1, // CodeMirror usa base 1
+                  file: session.projectPath // Por ahora, usar projectPath
+                });
+              }
+            }
+            break;
+            
+          case 'Debugger.resumed':
+            session.status = 'running';
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('debug-event', {
+                projectId,
+                type: 'continue'
+              });
+            }
+            break;
+        }
+      }
+    },
+    
+    // Iniciar debugging para Python
+    async startPythonDebugging(projectId, projectPath) {
+      try {
+        // Encontrar puerto disponible para debugpy
+        const debugPort = await this.findAvailablePort(5678);
+        
+        // Detectar archivo principal
+        const mainPy = path.join(projectPath, 'main.py');
+        const appPy = path.join(projectPath, 'app.py');
+        let entryPoint = 'main.py';
+        
+        if (fs.existsSync(appPy)) {
+          entryPoint = 'app.py';
+        } else if (!fs.existsSync(mainPy)) {
+          // Buscar archivos .py en la raíz
+          const files = fs.readdirSync(projectPath).filter(f => f.endsWith('.py') && !f.startsWith('_'));
+          if (files.length > 0) {
+            entryPoint = files[0];
+          } else {
+            throw new Error('No se encontró archivo Python de entrada');
+          }
+        }
+        
+        // Verificar si hay venv
+        const venvPath = path.join(projectPath, 'venv');
+        const pythonCmd = fs.existsSync(venvPath) 
+          ? (process.platform === 'win32' 
+              ? path.join(venvPath, 'Scripts', 'python.exe')
+              : path.join(venvPath, 'bin', 'python'))
+          : 'python';
+        
+        // Verificar si debugpy está instalado, si no, instalarlo automáticamente
+        const checkDebugpy = async () => {
+          return new Promise((resolve) => {
+            exec(`${pythonCmd} -c "import debugpy; print('OK')"`, (error) => {
+              if (error) {
+                // debugpy no está instalado, instalarlo
+                console.log('[DebugManager] Instalando debugpy...');
+                exec(`${pythonCmd} -m pip install debugpy -q`, (installError) => {
+                  if (installError) {
+                    console.error('[DebugManager] Error instalando debugpy:', installError);
+                    resolve(false);
+                  } else {
+                    console.log('[DebugManager] debugpy instalado correctamente');
+                    resolve(true);
+                  }
+                });
+              } else {
+                resolve(true);
+              }
+            });
+          });
+        };
+        
+        const debugpyAvailable = await checkDebugpy();
+        
+        if (!debugpyAvailable) {
+          throw new Error('No se pudo instalar debugpy. Por favor, instálalo manualmente: pip install debugpy');
+        }
+        
+        // Crear script temporal con debugpy
+        const entryPath = path.join(projectPath, entryPoint);
+        const originalContent = fs.readFileSync(entryPath, 'utf8');
+        
+        // Código para iniciar debugpy
+        const debugpyCode = `import debugpy
+import sys
+debugpy.listen(${debugPort})
+print(f"🐛 Debugger escuchando en puerto {debugPort}", file=sys.stderr)
+debugpy.wait_for_client()
+print("✅ Cliente de debugging conectado", file=sys.stderr)
+
+`;
+        
+        // Crear archivo temporal con debugpy
+        const tempFile = path.join(projectPath, `.debug_${entryPoint}`);
+        fs.writeFileSync(tempFile, debugpyCode + originalContent);
+        
+        const childProcess = spawn(pythonCmd, [tempFile], {
+          cwd: projectPath,
+          shell: true,
+          stdio: 'pipe'
+        });
+        
+        const session = {
+          projectId,
+          projectPath,
+          type: 'python',
+          process: childProcess,
+          debugPort,
+          breakpoints: new Map(),
+          status: 'paused', // Esperando conexión
+          tempFile
+        };
+        
+        this.sessions.set(projectId, session);
+        
+        // Enviar evento
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('debug-event', {
+            projectId,
+            type: 'started',
+            debugPort
+          });
+        }
+        
+        return { success: true, debugPort, processId: childProcess.pid };
+      } catch (error) {
+        console.error('[DebugManager] Error iniciando debugging Python:', error);
+        throw error;
+      }
+    },
+    
+    // Detener debugging
+    stopDebugging(projectId) {
+      const session = this.sessions.get(projectId);
+      if (!session) return { success: true };
+      
+      // Matar proceso
+      if (session.process && !session.process.killed) {
+        try {
+          if (process.platform === 'win32') {
+            exec(`taskkill /PID ${session.process.pid} /T /F`, () => {});
+          } else {
+            session.process.kill('SIGTERM');
+            setTimeout(() => {
+              if (!session.process.killed) {
+                session.process.kill('SIGKILL');
+              }
+            }, 1000);
+          }
+        } catch (e) {
+          console.error('Error matando proceso de debugging:', e);
+        }
+      }
+      
+      // Limpiar archivo temporal si existe (Python)
+      if (session.tempFile && fs.existsSync(session.tempFile)) {
+        try {
+          fs.unlinkSync(session.tempFile);
+        } catch (e) {
+          console.warn('Error eliminando archivo temporal:', e);
+        }
+      }
+      
+      this.sessions.delete(projectId);
+      
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('debug-event', {
+          projectId,
+          type: 'stopped'
+        });
+      }
+      
+      return { success: true };
+    }
+  };
+  
+  // Handler para iniciar debugging
+  ipcMain.handle('start-debugging', async (event, projectPath, projectType) => {
+    try {
+      const projectId = projectPath.replace(/[<>:"/\\|?*]/g, '_') + '_' + Date.now();
+      
+      let result;
+      if (projectType === 'nodejs' || projectType === 'react' || projectType === 'Angular') {
+        result = await DebugManager.startNodeDebugging(projectId, projectPath);
+      } else if (projectType === 'python') {
+        result = await DebugManager.startPythonDebugging(projectId, projectPath);
+      } else {
+        return { error: `Tipo de proyecto no soportado para debugging: ${projectType}` };
+      }
+      
+      return { ...result, projectId };
+    } catch (error) {
+      return { error: error.message };
+    }
+  });
+  
+  // Handler para detener debugging
+  ipcMain.handle('stop-debugging', async (event, projectId) => {
+    try {
+      return DebugManager.stopDebugging(projectId);
+    } catch (error) {
+      return { error: error.message };
+    }
+  });
+  
+  // Handler para establecer breakpoint
+  ipcMain.handle('set-breakpoint', async (event, projectId, file, line, condition) => {
+    try {
+      const session = DebugManager.sessions.get(projectId);
+      if (!session) {
+        return { error: 'No hay sesión de debugging activa' };
+      }
+      
+      // Guardar el breakpoint
+      const breakpointKey = `${file}:${line}`;
+      const breakpointId = Date.now();
+      
+      // Si es Node.js y tenemos conexión WebSocket, establecer el breakpoint real
+      if (session.type === 'nodejs' && session.wsConnection) {
+        // Encontrar el scriptId correspondiente al archivo
+        // Por ahora, establecer el breakpoint con el número de línea
+        const bpResult = await new Promise((resolve) => {
+          const requestId = DebugManager.sendDebuggerCommand(session.wsConnection, 'Debugger.setBreakpointByUrl', {
+            url: `file://${file}`,
+            lineNumber: line - 1, // Protocolo usa base 0
+            columnNumber: 0,
+            condition: condition || undefined
+          });
+          
+          // Esperar respuesta (simplificado, en producción deberías usar un sistema de callbacks)
+          setTimeout(() => {
+            resolve({ success: true, breakpointId: requestId });
+          }, 100);
+        });
+        
+        session.breakpoints.set(breakpointKey, { file, line, condition, id: bpResult.breakpointId || breakpointId });
+      } else {
+        // Para Python u otros, solo guardar el breakpoint
+        session.breakpoints.set(breakpointKey, { file, line, condition, id: breakpointId });
+      }
+      
+      return { success: true, breakpointId };
+    } catch (error) {
+      return { error: error.message };
+    }
+  });
+  
+  // Handler para remover breakpoint
+  ipcMain.handle('remove-breakpoint', async (event, projectId, file, line) => {
+    try {
+      const session = DebugManager.sessions.get(projectId);
+      if (!session) return { success: true };
+      
+      const breakpointKey = `${file}:${line}`;
+      session.breakpoints.delete(breakpointKey);
+      
+      return { success: true };
+    } catch (error) {
+      return { error: error.message };
+    }
+  });
+  
+  // Handler para continuar ejecución
+  ipcMain.handle('debug-continue', async (event, projectId) => {
+    try {
+      const session = DebugManager.sessions.get(projectId);
+      if (!session) return { error: 'No hay sesión activa' };
+      
+      // Si es Node.js, usar el protocolo de debugging
+      if (session.type === 'nodejs' && session.wsConnection) {
+        DebugManager.sendDebuggerCommand(session.wsConnection, 'Debugger.resume', {});
+      }
+      
+      session.status = 'running';
+      
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('debug-event', {
+          projectId,
+          type: 'continue'
+        });
+      }
+      
+      return { success: true };
+    } catch (error) {
+      return { error: error.message };
+    }
+  });
+  
+  // Handler para pausar ejecución
+  ipcMain.handle('debug-pause', async (event, projectId) => {
+    try {
+      const session = DebugManager.sessions.get(projectId);
+      if (!session) return { error: 'No hay sesión activa' };
+      
+      session.status = 'paused';
+      
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('debug-event', {
+          projectId,
+          type: 'paused'
+        });
+      }
+      
+      return { success: true };
+    } catch (error) {
+      return { error: error.message };
+    }
+  });
+  
+  // Handler para step over
+  ipcMain.handle('debug-step-over', async (event, projectId) => {
+    try {
+      const session = DebugManager.sessions.get(projectId);
+      if (!session) return { error: 'No hay sesión activa' };
+      
+      // Si es Node.js, usar el protocolo de debugging
+      if (session.type === 'nodejs' && session.wsConnection) {
+        DebugManager.sendDebuggerCommand(session.wsConnection, 'Debugger.stepOver', {});
+      }
+      
+      return { success: true };
+    } catch (error) {
+      return { error: error.message };
+    }
+  });
+  
+  // Handler para step into
+  ipcMain.handle('debug-step-into', async (event, projectId) => {
+    try {
+      const session = DebugManager.sessions.get(projectId);
+      if (!session) return { error: 'No hay sesión activa' };
+      
+      // Si es Node.js, usar el protocolo de debugging
+      if (session.type === 'nodejs' && session.wsConnection) {
+        DebugManager.sendDebuggerCommand(session.wsConnection, 'Debugger.stepInto', {});
+      }
+      
+      return { success: true };
+    } catch (error) {
+      return { error: error.message };
+    }
+  });
+  
+  // Handler para step out
+  ipcMain.handle('debug-step-out', async (event, projectId) => {
+    try {
+      const session = DebugManager.sessions.get(projectId);
+      if (!session) return { error: 'No hay sesión activa' };
+      
+      // Si es Node.js, usar el protocolo de debugging
+      if (session.type === 'nodejs' && session.wsConnection) {
+        DebugManager.sendDebuggerCommand(session.wsConnection, 'Debugger.stepOut', {});
+      }
+      
+      return { success: true };
+    } catch (error) {
+      return { error: error.message };
+    }
+  });
+  
+  // Handler para obtener variables
+  ipcMain.handle('get-debug-variables', async (event, projectId, frameId) => {
+    try {
+      const session = DebugManager.sessions.get(projectId);
+      if (!session) return [];
+      
+      // Por ahora, retornar array vacío
+      // En una implementación completa, obtener variables del protocolo
+      return [];
+    } catch (error) {
+      console.error('[DebugManager] Error obteniendo variables:', error);
+      return [];
+    }
+  });
+  
+  // Handler para obtener call stack
+  ipcMain.handle('get-debug-call-stack', async (event, projectId) => {
+    try {
+      const session = DebugManager.sessions.get(projectId);
+      if (!session) return [];
+      
+      // Por ahora, retornar array vacío
+      return [];
+    } catch (error) {
+      console.error('[DebugManager] Error obteniendo call stack:', error);
+      return [];
+    }
+  });
+  
+  // Handler para evaluar expresión
+  ipcMain.handle('evaluate-debug-expression', async (event, projectId, expression) => {
+    try {
+      const session = DebugManager.sessions.get(projectId);
+      if (!session) return { error: 'No hay sesión activa' };
+      
+      // Por ahora, retornar error
+      return { error: 'Evaluación no implementada aún' };
+    } catch (error) {
+      return { error: error.message };
+    }
   });
 
   // Handler para matar todos los procesos usando un puerto específico

@@ -1,0 +1,110 @@
+{
+  "info": {
+    "_postman_id": "a312173a-f757-4508-b10b-891f70617422",
+    "name": "ws-san",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "398670",
+    "_collection_link": "https://go.postman.co/collection/398670-a312173a-f757-4508-b10b-891f70617422?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "procedure POST",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{   \"name\": \"buscarMenuWs\",\r\n        \"parameters\": {\r\n          \"companiasId\": 2,\r\n          \"estadoActual\": \"estadoActual\"\r\n        }}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://san.sancolombia.com/procedure",
+          "protocol": "https",
+          "host": [
+            "san",
+            "sancolombia",
+            "com"
+          ],
+          "path": [
+            "procedure"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "login POST",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"clave\": \"afn\",\r\n    \"usuario\": \"afn\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://san.sancolombia.com/login",
+          "protocol": "https",
+          "host": [
+            "san",
+            "sancolombia",
+            "com"
+          ],
+          "path": [
+            "login"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "datadynamic",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"name\": \"dataDynamicCrud\",\r\n    \"parameters\": {\r\n      \"json\": {\r\n        \"nombreTipo\": \"Empresa Grande\",\r\n        \"companiasId\": 2\r\n      },\r\n      \"queHago\": \"I\",\r\n      \"nombreTabla\": \"tipos\"\r\n    }\r\n  }",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://san.sancolombia.com/procedure",
+          "protocol": "https",
+          "host": [
+            "san",
+            "sancolombia",
+            "com"
+          ],
+          "path": [
+            "procedure"
+          ]
+        },
+        "description": "Generated from cURL: curl -X POST https://san.sancolombia.com/procedure \\\r\n  -H \"Content-Type: application/json\" \\\r\n  -d '{\r\n    \"name\": \"dataDynamicCrud\",\r\n    \"parameters\": {\r\n      \"json\": {\r\n        \"nombreTipo\": \"Empresa Grande\",\r\n        \"companiasId\": 2\r\n      },\r\n      \"queHago\": \"I\",\r\n      \"nombreTabla\": \"tipos\"\r\n    }\r\n  }'"
+      },
+      "response": []
+    }
+  ]
+}

@@ -16,10 +16,13 @@ import {
   Terminal,
   GitBranch,
   GitCompare,
-  Eye
+  Eye,
+  Bug
 } from 'lucide-react';
 import { EditorView, basicSetup } from 'codemirror';
-import { ViewPlugin, Decoration } from '@codemirror/view';
+import { ViewPlugin, Decoration, WidgetType } from '@codemirror/view';
+import { StateField, StateEffect } from '@codemirror/state';
+import { gutter, GutterMarker } from '@codemirror/view';
 import { closeBrackets } from '@codemirror/autocomplete';
 import { javascript } from '@codemirror/lang-javascript';
 import { python } from '@codemirror/lang-python';
@@ -41,6 +44,8 @@ import GitPanel from './GitPanel';
 import GitDiffView from './GitDiffView';
 import CompareView from './CompareView';
 import ReactMarkdown from 'react-markdown';
+import DebuggerPanel from './DebuggerPanel';
+import debuggerService from '../services/DebuggerService';
 
 // Panel de Extensiones - Estilo VS Code
 function ExtensionsPanel({ extensions, setExtensions }) {
@@ -170,6 +175,10 @@ export default function VisualCodeTab({
   const [showFileExplorer, setShowFileExplorer] = useState(true);
   const [showExtensionsPanel, setShowExtensionsPanel] = useState(false);
   const [showGitPanel, setShowGitPanel] = useState(false);
+  const [showDebuggerPanel, setShowDebuggerPanel] = useState(false);
+  const [breakpoints, setBreakpoints] = useState([]);
+  const [currentDebugLine, setCurrentDebugLine] = useState(null);
+  const [debugProjectId, setDebugProjectId] = useState(null);
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showTitleEditor, setShowTitleEditor] = useState(false);
@@ -323,7 +332,7 @@ export default function VisualCodeTab({
     }
   }, [theme, fontSize, projectColor, projectTitle, extensions]);
 
-  // Inicializar editor - Solo cuando cambia activeFile, theme, fontSize, customThemeColors o isActive
+  // Inicializar editor - Solo cuando cambia activeFile, theme, fontSize, customThemeColors, breakpoints, currentDebugLine o isActive
   useEffect(() => {
     if (!editorContainerRef.current || !isActive) return;
 
@@ -372,10 +381,61 @@ export default function VisualCodeTab({
         // Usar el servicio centralizado para temas
         // getThemeExtension ahora viene del servicio CodeMirrorThemeService
 
+        // Gutter para breakpoints
+        class BreakpointMarker extends GutterMarker {
+          constructor(active) {
+            super();
+            this.active = active;
+          }
+          eq(other) {
+            return this.active === other.active;
+          }
+          toDOM() {
+            const marker = document.createElement('div');
+            marker.className = `cm-breakpoint ${this.active ? 'cm-breakpoint-active' : ''}`;
+            marker.innerHTML = '●';
+            marker.style.cssText = `
+              width: 16px;
+              height: 16px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              color: ${this.active ? '#f48771' : '#858585'};
+              font-size: 12px;
+              cursor: pointer;
+            `;
+            return marker;
+          }
+        }
+
+        const breakpointGutter = gutter({
+          class: 'cm-breakpoint-gutter',
+          renderEmptyElements: false,
+          markers(view) {
+            const fileBreakpoints = breakpoints.filter(bp => bp.file === activeFile);
+            return fileBreakpoints.map(bp => {
+              try {
+                const line = view.state.doc.line(bp.line);
+                const isCurrentLine = currentDebugLine && 
+                  currentDebugLine.file === activeFile && 
+                  currentDebugLine.line === bp.line;
+                return new BreakpointMarker(isCurrentLine).range(line.from);
+              } catch (e) {
+                // Si la línea no existe, retornar null
+                return null;
+              }
+            }).filter(Boolean);
+          },
+          initialSpacer() {
+            return new BreakpointMarker(false);
+          }
+        });
+
         const editorExtensions = [
           basicSetup, // basicSetup ya incluye los keymaps estándar (Ctrl+C, Ctrl+V, Ctrl+X, etc.)
           closeBrackets(),
           getLanguage(activeFile),
+          breakpointGutter,
           EditorView.updateListener.of((update) => {
             if (update.docChanged && activeFile) {
               const newContent = update.state.doc.toString();
@@ -472,6 +532,39 @@ export default function VisualCodeTab({
               fontStyle: 'italic',
               // color se establece en el tema específico
             },
+            // Estilos para debugging
+            '.cm-breakpoint-line': {
+              backgroundColor: 'rgba(244, 135, 113, 0.1)',
+            },
+            '.cm-debug-current-line': {
+              backgroundColor: 'rgba(78, 201, 176, 0.2)',
+              borderLeft: '3px solid #4ec9b0',
+              paddingLeft: '9px',
+            },
+            '.cm-breakpoint-gutter': {
+              width: '20px',
+              minWidth: '20px',
+            },
+            '.cm-breakpoint': {
+              cursor: 'pointer',
+            },
+            '.cm-breakpoint-active': {
+              color: '#f48771 !important',
+            },
+          }),
+          EditorView.domEventHandlers({
+            click(view, event) {
+              const target = event.target;
+              if (target.classList.contains('cm-breakpoint') || target.closest('.cm-breakpoint')) {
+                const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+                if (pos) {
+                  const line = view.state.doc.lineAt(pos);
+                  handleBreakpointToggle(activeFile, line.number);
+                }
+                return true;
+              }
+              return false;
+            }
           }),
           
           // Tema de colores AL FINAL para que tenga prioridad sobre los estilos de layout
@@ -590,7 +683,7 @@ export default function VisualCodeTab({
     return () => {
       // Limpiar listener de clic
       if (editorContainerRef.current && editorContainerRef.current._clickHandler) {
-        editorContainerRef.current.removeEventListener('click', editorContainerRef.current._clickHandler, true);
+        editorContainerRef.current.removeEventListener('click', editorContainerRef.current._clickHandler, false);
         delete editorContainerRef.current._clickHandler;
       }
       
@@ -599,7 +692,7 @@ export default function VisualCodeTab({
         editorViewRef.current = null;
       }
     };
-  }, [activeFile, isActive, theme, fontSize, customThemeColors]); // Incluir customThemeColors para que se actualice cuando cambien los colores
+  }, [activeFile, isActive, theme, fontSize, customThemeColors, breakpoints, currentDebugLine]); // Incluir breakpoints y currentDebugLine para actualizar cuando cambien
 
   // Actualizar contenido del editor cuando se carga un archivo nuevo
   // NOTA: El updateListener ya maneja las actualizaciones durante la escritura
@@ -644,11 +737,22 @@ export default function VisualCodeTab({
   // IMPORTANTE: Solo manejar estos atajos específicos y NO bloquear otros como Ctrl+A, Ctrl+C, Ctrl+V
   useEffect(() => {
     const handleKeyDown = (e) => {
+      // Verificar si hay texto seleccionado - en ese caso, permitir copiar/pegar sin interferencia
+      const selection = window.getSelection();
+      const hasSelection = selection && selection.toString().length > 0;
+      
       // Solo manejar si el editor está enfocado o si es un atajo global que queremos capturar
       const isEditorFocused = editorViewRef.current && 
         document.activeElement && 
         (document.activeElement.closest('.cm-editor') || 
-         document.activeElement === editorViewRef.current.dom);
+         document.activeElement === editorViewRef.current.dom ||
+         document.activeElement.closest('.cm-content'));
+      
+      // Si hay texto seleccionado, permitir que los comandos de clipboard funcionen normalmente
+      if (hasSelection && (e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'x')) {
+        // No interferir con copiar/cortar cuando hay selección
+        return;
+      }
       
       // Si no es el editor el que está enfocado, no interferir (excepto para atajos globales específicos)
       if (!isEditorFocused && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
@@ -658,24 +762,25 @@ export default function VisualCodeTab({
       
       // NO interferir con Ctrl+C, Ctrl+V, Ctrl+X, Ctrl+A - dejar que CodeMirror los maneje
       if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'v' || e.key === 'x' || e.key === 'a')) {
-        // Permitir que CodeMirror maneje estos atajos
+        // Permitir que CodeMirror maneje estos atajos completamente
+        // No hacer preventDefault ni stopPropagation
         return;
       }
       
       // Solo manejar atajos específicos
-      if ((e.ctrlKey || e.metaKey) && e.key === 's' && activeFile) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's' && activeFile && isEditorFocused) {
         e.preventDefault();
         e.stopPropagation();
         saveFile(activeFile);
         return;
       }
-      if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '=') && !e.shiftKey) {
+      if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '=') && !e.shiftKey && isEditorFocused) {
         e.preventDefault();
         e.stopPropagation();
         setFontSize(prev => Math.min(prev + 1, 32));
         return;
       }
-      if ((e.ctrlKey || e.metaKey) && e.key === '-') {
+      if ((e.ctrlKey || e.metaKey) && e.key === '-' && isEditorFocused) {
         e.preventDefault();
         e.stopPropagation();
         setFontSize(prev => Math.max(prev - 1, 8));
@@ -687,9 +792,10 @@ export default function VisualCodeTab({
     };
 
     // Usar capture: false para que el editor pueda manejar primero sus eventos
-    window.addEventListener('keydown', handleKeyDown, false);
+    // Agregar el listener con prioridad baja para no interferir
+    document.addEventListener('keydown', handleKeyDown, false);
     return () => {
-      window.removeEventListener('keydown', handleKeyDown, false);
+      document.removeEventListener('keydown', handleKeyDown, false);
     };
   }, [activeFile]);
 
@@ -757,6 +863,66 @@ export default function VisualCodeTab({
   const getFileName = (filePath) => {
     return filePath.split(/[/\\]/).pop() || filePath;
   };
+
+  // Inicializar projectId para debugging
+  useEffect(() => {
+    if (projectPath) {
+      const projectId = projectPath.replace(/[<>:"/\\|?*]/g, '_') + '_' + Date.now();
+      setDebugProjectId(projectId);
+    }
+  }, [projectPath]);
+
+  // Manejar toggle de breakpoint
+  const handleBreakpointToggle = async (file, line) => {
+    if (!debugProjectId) return;
+
+    try {
+      const breakpointKey = `${file}:${line}`;
+      const existingBreakpoint = breakpoints.find(bp => bp.file === file && bp.line === line);
+
+      if (existingBreakpoint) {
+        // Remover breakpoint
+        await debuggerService.removeBreakpoint(debugProjectId, file, line);
+        setBreakpoints(prev => prev.filter(bp => !(bp.file === file && bp.line === line)));
+      } else {
+        // Agregar breakpoint
+        const result = await debuggerService.setBreakpoint(debugProjectId, file, line);
+        if (result.success) {
+          setBreakpoints(prev => [...prev, { file, line, id: result.breakpointId }]);
+        }
+      }
+    } catch (error) {
+      console.error('[VisualCodeTab] Error toggle breakpoint:', error);
+    }
+  };
+
+  // Escuchar eventos de debugging
+  useEffect(() => {
+    if (!debugProjectId) return;
+
+    const handleDebugPaused = (event) => {
+      if (event.detail?.projectId === debugProjectId) {
+        setCurrentDebugLine({
+          file: event.detail.file,
+          line: event.detail.line
+        });
+      }
+    };
+
+    const handleDebugContinued = (event) => {
+      if (event.detail?.projectId === debugProjectId) {
+        setCurrentDebugLine(null);
+      }
+    };
+
+    window.addEventListener('debugger-paused', handleDebugPaused);
+    window.addEventListener('debugger-continued', handleDebugContinued);
+
+    return () => {
+      window.removeEventListener('debugger-paused', handleDebugPaused);
+      window.removeEventListener('debugger-continued', handleDebugContinued);
+    };
+  }, [debugProjectId]);
 
   // Función para calcular diferencias entre dos archivos
   const calculateDiff = (content1, content2) => {
@@ -980,6 +1146,22 @@ export default function VisualCodeTab({
           >
             <Sparkles className="w-3.5 h-3.5" />
           </button>
+          {/* Debug Button */}
+          <button
+            className={`p-1.5 rounded transition-colors ${
+              showDebuggerPanel 
+                ? 'bg-[#0e639c] text-[#ffffff]' 
+                : 'text-[#cccccc] hover:text-[#ffffff] hover:bg-[#3e3e42]'
+            }`}
+            title="Debugger (F5)"
+            onClick={() => {
+              setShowDebuggerPanel(!showDebuggerPanel);
+              setShowExtensionsPanel(false);
+              setShowGitPanel(false);
+            }}
+          >
+            <Bug className="w-3.5 h-3.5" />
+          </button>
           <button
             onClick={() => setShowFileExplorer(!showFileExplorer)}
             className="px-2.5 py-1 bg-[#3e3e42] hover:bg-[#464647] text-[#cccccc] rounded text-[12px] transition-colors"
@@ -1039,9 +1221,10 @@ export default function VisualCodeTab({
                 onClick={() => {
                   setShowExtensionsPanel(false);
                   setShowGitPanel(false);
+                  setShowDebuggerPanel(false);
                 }}
                 className={`px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide transition-colors ${
-                  !showExtensionsPanel && !showGitPanel
+                  !showExtensionsPanel && !showGitPanel && !showDebuggerPanel
                     ? 'bg-[#252526] text-[#ffffff] border-b-2 border-b-[#007acc]' 
                     : 'text-[#cccccc] hover:text-[#ffffff] hover:bg-[#2d2d30]'
                 }`}
@@ -1052,6 +1235,7 @@ export default function VisualCodeTab({
                 onClick={() => {
                   setShowExtensionsPanel(false);
                   setShowGitPanel(true);
+                  setShowDebuggerPanel(false);
                 }}
                 className={`px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide transition-colors ${
                   showGitPanel
@@ -1065,6 +1249,7 @@ export default function VisualCodeTab({
                 onClick={() => {
                   setShowExtensionsPanel(true);
                   setShowGitPanel(false);
+                  setShowDebuggerPanel(false);
                 }}
                 className={`px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide transition-colors ${
                   showExtensionsPanel
@@ -1074,10 +1259,24 @@ export default function VisualCodeTab({
               >
                 EXTENSIONES
               </button>
+              <button
+                onClick={() => {
+                  setShowExtensionsPanel(false);
+                  setShowGitPanel(false);
+                  setShowDebuggerPanel(true);
+                }}
+                className={`px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide transition-colors ${
+                  showDebuggerPanel
+                    ? 'bg-[#252526] text-[#ffffff] border-b-2 border-b-[#007acc]' 
+                    : 'text-[#cccccc] hover:text-[#ffffff] hover:bg-[#2d2d30]'
+                }`}
+              >
+                DEBUGGER
+              </button>
             </div>
             
             {/* Botón para abrir terminal */}
-            {!showExtensionsPanel && (
+            {!showExtensionsPanel && !showDebuggerPanel && (
               <div className="px-2 py-2 border-b border-[#3e3e42]">
                 <button
                   onClick={() => {
@@ -1268,24 +1467,33 @@ export default function VisualCodeTab({
                 cursor: 'text !important',
                 overflow: 'auto',
               }}
+              onMouseDown={(e) => {
+                // Permitir selección de texto sin interferir
+                // NO hacer preventDefault ni stopPropagation aquí
+                // Esto permite que el usuario pueda seleccionar texto normalmente
+              }}
               onClick={(e) => {
                 // Solo enfocar si el clic no es parte de una selección de texto
-                // Verificar si hay una selección activa
-                const selection = window.getSelection();
-                if (selection && selection.toString().length > 0) {
-                  // Hay texto seleccionado, no enfocar para permitir copiar
-                  return;
-                }
-                
-                // Enfocar el editor cuando se hace clic en el contenedor (pero no en botones/inputs)
-                if (editorViewRef.current && !e.target.closest('button') && !e.target.closest('input') && !e.target.closest('textarea')) {
-                  // Usar setTimeout para no interferir con la selección
-                  setTimeout(() => {
-                    if (editorViewRef.current) {
-                      editorViewRef.current.focus();
-                    }
-                  }, 0);
-                }
+                // Verificar si hay una selección activa con un delay para permitir que se complete
+                setTimeout(() => {
+                  const selection = window.getSelection();
+                  if (selection && selection.toString().length > 0) {
+                    // Hay texto seleccionado, no enfocar para permitir copiar
+                    return;
+                  }
+                  
+                  // Solo enfocar si no hay selección
+                  if (editorViewRef.current && !selection?.toString()) {
+                    editorViewRef.current.focus();
+                  }
+                }, 10);
+              }}
+              onMouseUp={(e) => {
+                // NO interferir con la selección de texto
+                // Permitir que el usuario seleccione texto normalmente
+              }}
+              onSelect={(e) => {
+                // Permitir selección de texto sin interferir
               }}
             />
           ) : (

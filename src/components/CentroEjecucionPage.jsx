@@ -682,13 +682,58 @@ export default function CentroEjecucionPage({ onClose }) {
     setTerminals(updated);
   };
 
-  const changeTerminalDirectory = (projectPath) => {
+  // Función para verificar si existe un venv en el directorio
+  const checkForVenv = async (dirPath) => {
+    if (!dirPath || !window.electronAPI?.pathExists) return null;
+    
+    try {
+      const isWindows = window.electronAPI?.platform === 'win32';
+      const pathSep = isWindows ? '\\' : '/';
+      
+      // Normalizar la ruta
+      const normalizedPath = dirPath.replace(/[/\\]/g, pathSep);
+      
+      // Verificar si existe venv en el directorio actual
+      const venvPaths = [
+        `${normalizedPath}${pathSep}venv`,
+        `${normalizedPath}${pathSep}.venv`,
+        `${normalizedPath}${pathSep}env`
+      ];
+      
+      for (const venvPath of venvPaths) {
+        const exists = await window.electronAPI.pathExists(venvPath);
+        if (exists) {
+          // Verificar si tiene Scripts (Windows) o bin (Linux/Mac)
+          const activatePath = isWindows 
+            ? `${venvPath}${pathSep}Scripts${pathSep}Activate.ps1`
+            : `${venvPath}${pathSep}bin${pathSep}activate`;
+          
+          const activateExists = await window.electronAPI.pathExists(activatePath);
+          if (activateExists) {
+            return { venvPath, activatePath, isWindows };
+          }
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      console.warn('[CentroEjecucionPage] Error verificando venv:', error);
+      return null;
+    }
+  };
+
+  const changeTerminalDirectory = async (projectPath) => {
     // Si no hay terminales, crear una por defecto
     if (terminals.length === 0) {
       const defaultTerm = createDefaultTerminal();
       defaultTerm.currentDirectory = projectPath;
       setTerminals([defaultTerm]);
       setActiveTerminalId(defaultTerm.id);
+      
+      // Ejecutar comando cd que también detectará y activará venv automáticamente
+      setTimeout(() => {
+        executeCommand(defaultTerm.id, `cd "${projectPath}"`);
+      }, 100);
       return;
     }
     
@@ -706,6 +751,11 @@ export default function CentroEjecucionPage({ onClose }) {
         currentDirectory: projectPath
       };
       updateTerminal(updatedTerminal);
+      
+      // Ejecutar comando cd que también detectará y activará venv automáticamente
+      setTimeout(() => {
+        executeCommand(terminalIdToUpdate, `cd "${projectPath}"`);
+      }, 100);
     } else {
       console.error('[CentroEjecucionPage] Terminal no encontrada, creando nueva...');
       const defaultTerm = createDefaultTerminal();
@@ -713,6 +763,11 @@ export default function CentroEjecucionPage({ onClose }) {
       const updated = [...terminals, defaultTerm];
       setTerminals(updated);
       setActiveTerminalId(defaultTerm.id);
+      
+      // Ejecutar comando cd que también detectará y activará venv automáticamente
+      setTimeout(() => {
+        executeCommand(defaultTerm.id, `cd "${projectPath}"`);
+      }, 100);
     }
   };
 
@@ -758,6 +813,19 @@ export default function CentroEjecucionPage({ onClose }) {
               currentDirectory: targetPath
             };
             updateTerminal(updatedTerminal);
+            
+            // Verificar si hay venv en el nuevo directorio y activarlo automáticamente
+            const venvInfo = await checkForVenv(targetPath);
+            if (venvInfo) {
+              // Ejecutar comando de activación después de un breve delay
+              setTimeout(() => {
+                const activateCommand = venvInfo.isWindows
+                  ? `.\\venv\\Scripts\\Activate.ps1`
+                  : `source venv/bin/activate`;
+                // Ejecutar el comando de activación sin mostrar el prompt nuevamente
+                executeCommand(terminalId, activateCommand);
+              }, 100);
+            }
             return;
           } else {
             const errorOutput = `\ncd: no such file or directory: ${newDir}\n`;
@@ -1363,6 +1431,38 @@ export default function CentroEjecucionPage({ onClose }) {
                           >
                             <FolderOpen className="w-4 h-4" />
                             <span>Usar en Terminal</span>
+                          </button>
+                          <button
+                            onClick={async (e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              // Cambiar directorio primero
+                              await changeTerminalDirectory(project.path);
+                              // Detectar tipo de proyecto y ejecutar
+                              if (window.electronAPI && window.electronAPI.detectProjectType) {
+                                try {
+                                  const detection = await window.electronAPI.detectProjectType(project.path);
+                                  if (detection.type && detection.command) {
+                                    // Esperar un momento para que el cd se complete
+                                    setTimeout(() => {
+                                      const activeTerm = terminals.find(t => t.id === activeTerminalId) || terminals[0];
+                                      if (activeTerm) {
+                                        executeCommand(activeTerm.id, detection.command);
+                                      }
+                                    }, 500);
+                                  } else {
+                                    setToast({ message: 'No se pudo detectar el tipo de proyecto', type: 'error' });
+                                  }
+                                } catch (error) {
+                                  setToast({ message: `Error: ${error.message}`, type: 'error' });
+                                }
+                              }
+                            }}
+                            className="w-full px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded text-xs flex items-center justify-center gap-2 transition-colors font-medium"
+                            title="Ejecutar este proyecto en la terminal activa"
+                          >
+                            <Play className="w-4 h-4" />
+                            <span>Ejecutar Proyecto</span>
                           </button>
                         </div>
                       </div>

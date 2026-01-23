@@ -60,7 +60,8 @@
     "react-markdown": "^10.1.0",
     "react-router-dom": "^7.5.3",
     "react-window": "^2.2.4",
-    "react-window-infinite-loader": "^2.0.0"
+    "react-window-infinite-loader": "^2.0.0",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@types/react": "^19.0.10",
@@ -84,7 +85,11 @@
       "dist/**/*",
       "electron/**/*",
       "package.json",
-      "ejemplos-consola/**/*"
+      "ejemplos-consola/**/*",
+      "node_modules/ws/**/*"
+    ],
+    "asarUnpack": [
+      "node_modules/ws/**/*"
     ],
     "extraResources": [
       {
