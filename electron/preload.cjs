@@ -47,6 +47,43 @@ const electronAPI = {
         getCursosPath: () => {
           return ipcRenderer.invoke('get-cursos-path');
         },
+        // ========== BASE DE DATOS ==========
+        // Conectar a una base de datos
+        dbConnect: (config) => {
+          return ipcRenderer.invoke('db-connect', config);
+        },
+        // Desconectar de una base de datos
+        dbDisconnect: (connectionId) => {
+          return ipcRenderer.invoke('db-disconnect', connectionId);
+        },
+        // Ejecutar consulta SQL
+        dbExecuteQuery: (connectionId, query) => {
+          return ipcRenderer.invoke('db-execute-query', connectionId, query);
+        },
+        // Obtener tablas
+        dbGetTables: (connectionId) => {
+          return ipcRenderer.invoke('db-get-tables', connectionId);
+        },
+        // Obtener columnas de una tabla
+        dbGetTableColumns: (connectionId, schema, tableName) => {
+          return ipcRenderer.invoke('db-get-table-columns', connectionId, schema, tableName);
+        },
+        // Obtener procedimientos almacenados
+        dbGetStoredProcedures: (connectionId) => {
+          return ipcRenderer.invoke('db-get-stored-procedures', connectionId);
+        },
+        // Obtener conexiones guardadas
+        dbGetSavedConnections: () => {
+          return ipcRenderer.invoke('db-get-saved-connections');
+        },
+        // Guardar conexión
+        dbSaveConnection: (connectionData) => {
+          return ipcRenderer.invoke('db-save-connection', connectionData);
+        },
+        // Eliminar conexión guardada
+        dbDeleteConnection: (connectionId) => {
+          return ipcRenderer.invoke('db-delete-connection', connectionId);
+        },
         // Verificar si una ruta existe
         pathExists: (path) => {
           return ipcRenderer.invoke('path-exists', path);

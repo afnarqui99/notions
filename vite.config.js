@@ -12,6 +12,7 @@ export default defineConfig({
     outDir: 'dist',
     assetsDir: 'assets',
     minify: 'esbuild', // Volver a activar minificación
+    sourcemap: false, // No generar source maps para reducir tamaño
     rollupOptions: {
       output: {
         // Asegurar que las rutas sean relativas

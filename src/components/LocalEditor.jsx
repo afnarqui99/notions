@@ -21,6 +21,7 @@ import { ConsoleNode } from "../extensions/ConsoleNode";
 import { PostmanNode } from "../extensions/PostmanNode";
 import { VisualCodeNode } from "../extensions/VisualCodeNode";
 import { ConvertidorNode } from "../extensions/ConvertidorNode";
+import { ConnectBDNodeExtension } from "../extensions/ConnectBDNodeExtension";
 import TableHeader from "@tiptap/extension-table-header";
 import { ImageExtended } from "../extensions/ImageExtended";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -505,6 +506,7 @@ export default function LocalEditor({ onShowConfig }) {
       PostmanNode,
       VisualCodeNode,
       ConvertidorNode,
+      ConnectBDNodeExtension,
       Heading.configure({ levels: [1, 2, 3, 4, 5, 6] }),
       Underline,
       TextStyle,

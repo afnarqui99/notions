@@ -292,7 +292,7 @@ export default function PostmanBlock({ node, updateAttributes, editor, getPos })
 
       // Verificar nuevamente si fue cancelada antes de actualizar el estado
       if (!abortController.signal.aborted) {
-        setResponse(responseData);
+      setResponse(responseData);
         
         // Guardar en historial
         const historyItem = {
@@ -321,7 +321,7 @@ export default function PostmanBlock({ node, updateAttributes, editor, getPos })
     } finally {
       // Solo cambiar isExecuting si no fue cancelada
       if (!abortController.signal.aborted) {
-        setIsExecuting(false);
+      setIsExecuting(false);
       }
       abortControllerRef.current = null;
     }
@@ -791,6 +791,8 @@ export default function PostmanBlock({ node, updateAttributes, editor, getPos })
       const newCollections = [...collections, newCollection];
       saveCollections(newCollections);
       setCurrentCollection(collectionName);
+      // Expandir automáticamente la colección importada
+      setExpandedCollections(prev => new Set([...prev, newCollection.id]));
       setToast({ message: `Colección "${collectionName}" importada correctamente (${requests.length} peticiones)`, type: 'success' });
       setShowCollectionMenu(false);
     } catch (error) {
@@ -983,8 +985,24 @@ export default function PostmanBlock({ node, updateAttributes, editor, getPos })
 
   // Cargar petición desde el sidebar
   const loadRequestFromSidebar = (request) => {
+    if (!request) {
+      console.error('Request is undefined or null');
+      return;
+    }
+    
+    // Buscar la colección que contiene esta request
+    const collection = collections.find(c => 
+      c.requests && c.requests.some(r => r && r.id === request.id)
+    );
+    
+    if (collection) {
+      setCurrentCollection(collection.name);
+      // Asegurar que la colección esté expandida
+      setExpandedCollections(prev => new Set([...prev, collection.id]));
+    }
+    
+    // Cargar la request
     loadRequest(request);
-    setCurrentCollection(collections.find(c => c.requests.some(r => r.id === request.id))?.name || '');
   };
 
   // Cerrar dropdowns al hacer clic fuera
@@ -1208,15 +1226,15 @@ export default function PostmanBlock({ node, updateAttributes, editor, getPos })
                 Cancelar
               </button>
             ) : (
-              <button
-                onClick={executeRequest}
+            <button
+              onClick={executeRequest}
                 disabled={!url.trim()}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium flex items-center gap-2"
-                title="Ejecutar petición"
-              >
-                <Send className="w-4 h-4" />
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium flex items-center gap-2"
+              title="Ejecutar petición"
+            >
+              <Send className="w-4 h-4" />
                 Enviar
-              </button>
+            </button>
             )}
             <button
               onClick={resetRequest}
@@ -1787,8 +1805,8 @@ export default function PostmanBlock({ node, updateAttributes, editor, getPos })
                 Insertar bloque completo
               </button>
             </div>
+            </div>
           </div>
-        </div>
         </div>
       </div>
       

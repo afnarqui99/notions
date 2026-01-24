@@ -9,6 +9,7 @@ const http = require('http');
 const https = require('https');
 const url = require('url');
 const WebSocket = require('ws');
+const DatabaseService = require('./DatabaseService.cjs');
 
 // Configurar auto-inicio en Windows
 let autoLauncher;
@@ -2902,6 +2903,91 @@ print("✅ Cliente de debugging conectado", file=sys.stderr)
     return ProcessManager.getStats();
   });
 
+  // ========== HANDLERS DE BASE DE DATOS ==========
+  
+  // Conectar a una base de datos
+  ipcMain.handle('db-connect', async (event, config) => {
+    try {
+      return await DatabaseService.connect(config);
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Desconectar de una base de datos
+  ipcMain.handle('db-disconnect', async (event, connectionId) => {
+    try {
+      await DatabaseService.disconnect(connectionId);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Ejecutar consulta SQL
+  ipcMain.handle('db-execute-query', async (event, connectionId, query) => {
+    try {
+      return await DatabaseService.executeQuery(connectionId, query);
+    } catch (error) {
+      throw error; // Lanzar error para que el renderer lo maneje
+    }
+  });
+
+  // Obtener tablas
+  ipcMain.handle('db-get-tables', async (event, connectionId) => {
+    try {
+      return await DatabaseService.getTables(connectionId);
+    } catch (error) {
+      return { error: error.message };
+    }
+  });
+
+  // Obtener columnas de una tabla
+  ipcMain.handle('db-get-table-columns', async (event, connectionId, schema, tableName) => {
+    try {
+      return await DatabaseService.getTableColumns(connectionId, schema, tableName);
+    } catch (error) {
+      return { error: error.message };
+    }
+  });
+
+  // Obtener procedimientos almacenados
+  ipcMain.handle('db-get-stored-procedures', async (event, connectionId) => {
+    try {
+      return await DatabaseService.getStoredProcedures(connectionId);
+    } catch (error) {
+      return { error: error.message };
+    }
+  });
+
+  // Obtener conexiones guardadas
+  ipcMain.handle('db-get-saved-connections', async () => {
+    try {
+      return DatabaseService.getSavedConnections();
+    } catch (error) {
+      return [];
+    }
+  });
+
+  // Guardar conexión
+  ipcMain.handle('db-save-connection', async (event, connectionData) => {
+    try {
+      return DatabaseService.saveConnection(connectionData);
+    } catch (error) {
+      return { error: error.message };
+    }
+  });
+
+  // Eliminar conexión guardada
+  ipcMain.handle('db-delete-connection', async (event, connectionId) => {
+    try {
+      DatabaseService.deleteConnection(connectionId);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
   // Handler para verificar si Docker está instalado
   ipcMain.handle('check-docker-installed', async () => {
     return new Promise((resolve) => {
@@ -2938,6 +3024,15 @@ print("✅ Cliente de debugging conectado", file=sys.stderr)
       mainWindow.focus();
     }
   });
+});
+
+// Desconectar todas las conexiones de base de datos al cerrar
+app.on('before-quit', async () => {
+  try {
+    await DatabaseService.disconnectAll();
+  } catch (error) {
+    console.error('Error desconectando bases de datos:', error);
+  }
 });
 
 // Salir cuando todas las ventanas estén cerradas
