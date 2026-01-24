@@ -13,7 +13,6 @@ import { TableCellExtended } from "./TableCellExtended";
 import { TablaNotionNode } from "./TablaNotionNode";
 import { GaleriaImagenesNode } from "./GaleriaImagenesNode";
 import { GaleriaArchivosNode } from "./GaleriaArchivosNode";
-import { ResumenFinancieroNode } from "./ResumenFinancieroNode";
 import { CalendarNode } from "./CalendarNode";
 import { ConsoleNode } from "./ConsoleNode";
 import TableHeader from "@tiptap/extension-table-header";
@@ -47,7 +46,6 @@ export default function EditorDescripcion({ content, onChange, autoFocus = false
       TablaNotionNode,
       GaleriaImagenesNode,
       GaleriaArchivosNode,
-      ResumenFinancieroNode,
       CalendarNode,
       ConsoleNode,
       Heading,

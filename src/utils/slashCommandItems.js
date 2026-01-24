@@ -167,16 +167,6 @@ export function getSlashCommandItems() {
           // Párrafo separador
           { type: 'paragraph', content: [] },
           // Título de gráficas
-          {
-            type: 'heading',
-            attrs: { level: 2 },
-            content: [{ type: 'text', text: '📊 Resumen Financiero' }]
-          },
-          { type: 'paragraph', content: [] },
-          {
-            type: 'resumenFinanciero'
-          },
-          { type: 'paragraph', content: [] },
           // Primera tabla: Ingresos
           {
             type: 'heading',

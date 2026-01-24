@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, Star, ChevronDown, Settings, Plus, Trash2, Github, ChevronRight, Pencil, Tag as TagIcon, X, Moon, Sun, Database, Smile, Zap } from 'lucide-react';
+import { Search, Star, ChevronDown, Settings, Plus, Trash2, Github, ChevronRight, Pencil, Tag as TagIcon, X, Moon, Sun, Database, Smile, Zap, User, Image as ImageIcon } from 'lucide-react';
 import TagService from '../services/TagService';
 import { useTheme } from '../contexts/ThemeContext';
 import SQLFileService from '../services/SQLFileService';
 import EmojiPicker from './EmojiPicker';
+import LocalStorageService from '../services/LocalStorageService';
 
 export default function Sidebar({ 
   paginas = [], 
@@ -47,6 +48,15 @@ export default function Sidebar({
   const [tags, setTags] = useState([]);
   const [pageSQLCounts, setPageSQLCounts] = useState({}); // { pageId: count }
   
+  // Estado para perfil de usuario
+  const [userProfile, setUserProfile] = useState({
+    name: 'Usuario',
+    avatar: null // URL de la imagen o null para usar inicial por defecto
+  });
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editingName, setEditingName] = useState('');
+  const fileInputRef = useRef(null);
+  
   // Estado para páginas expandidas/colapsadas en el árbol
   const [paginasExpandidas, setPaginasExpandidas] = useState(() => {
     try {
@@ -77,6 +87,90 @@ export default function Sidebar({
       console.error('Error guardando estado de expansión:', error);
     }
   }, [paginasExpandidas]);
+
+  // Cargar perfil de usuario
+  useEffect(() => {
+    const loadUserProfile = async () => {
+      try {
+        const profile = await LocalStorageService.readJSONFile('user-profile.json', 'data');
+        if (profile && (profile.name || profile.avatar)) {
+          setUserProfile({
+            name: profile.name || 'Usuario',
+            avatar: profile.avatar || null
+          });
+        }
+      } catch (error) {
+        // Si no existe el archivo, usar valores por defecto
+        console.log('Perfil de usuario no encontrado, usando valores por defecto');
+      }
+    };
+    
+    loadUserProfile();
+    
+    // Escuchar cambios en el directorio para recargar
+    const handleDirectoryChanged = () => {
+      loadUserProfile();
+    };
+    
+    window.addEventListener('directoryHandleChanged', handleDirectoryChanged);
+    return () => {
+      window.removeEventListener('directoryHandleChanged', handleDirectoryChanged);
+    };
+  }, []);
+
+  // Guardar perfil de usuario
+  const saveUserProfile = async (profile) => {
+    try {
+      await LocalStorageService.saveJSONFile('user-profile.json', profile, 'data');
+      setUserProfile(profile);
+    } catch (error) {
+      console.error('Error guardando perfil de usuario:', error);
+    }
+  };
+
+  // Manejar cambio de nombre
+  const handleNameChange = async () => {
+    if (editingName.trim()) {
+      const newProfile = { ...userProfile, name: editingName.trim() };
+      await saveUserProfile(newProfile);
+    }
+    setIsEditingName(false);
+    setEditingName('');
+  };
+
+  // Manejar cambio de imagen
+  const handleImageChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validar que sea una imagen
+    if (!file.type.startsWith('image/')) {
+      alert('Por favor, selecciona un archivo de imagen válido');
+      return;
+    }
+
+    try {
+      // Leer el archivo como base64 o guardarlo en el sistema de archivos
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const imageDataUrl = event.target.result;
+        const newProfile = { ...userProfile, avatar: imageDataUrl };
+        await saveUserProfile(newProfile);
+      };
+      reader.readAsDataURL(file);
+    } catch (error) {
+      console.error('Error procesando imagen:', error);
+      alert('Error al procesar la imagen. Por favor, intenta de nuevo.');
+    }
+  };
+
+  // Obtener inicial para el avatar
+  const getAvatarInitial = () => {
+    if (userProfile.name && userProfile.name !== 'Usuario') {
+      return userProfile.name.charAt(0).toUpperCase();
+    }
+    return 'U';
+  };
 
   // Cargar tags
   useEffect(() => {
@@ -910,18 +1004,65 @@ export default function Sidebar({
       {/* Header con perfil */}
       <div className="p-3 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
         <div className="flex items-center gap-2 mb-2">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold text-sm">
-            A
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">afnarqui job</div>
-          </div>
+          {/* Avatar - clickeable para cambiar imagen */}
           <button
-            className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
-            title="Opciones"
+            onClick={() => fileInputRef.current?.click()}
+            className="relative w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold text-sm hover:opacity-80 transition-opacity cursor-pointer overflow-hidden"
+            title="Cambiar imagen de perfil"
           >
-            <ChevronDown className="w-4 h-4 text-gray-500" />
+            {userProfile.avatar ? (
+              <img 
+                src={userProfile.avatar} 
+                alt={userProfile.name}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              getAvatarInitial()
+            )}
+            <div className="absolute inset-0 bg-black/0 hover:bg-black/20 transition-colors flex items-center justify-center">
+              <ImageIcon className="w-3 h-3 opacity-0 hover:opacity-100 transition-opacity" />
+            </div>
           </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleImageChange}
+            className="hidden"
+          />
+          
+          {/* Nombre - editable */}
+          <div className="flex-1 min-w-0">
+            {isEditingName ? (
+              <input
+                type="text"
+                value={editingName}
+                onChange={(e) => setEditingName(e.target.value)}
+                onBlur={handleNameChange}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleNameChange();
+                  } else if (e.key === 'Escape') {
+                    setIsEditingName(false);
+                    setEditingName('');
+                  }
+                }}
+                className="w-full text-sm font-medium text-gray-900 dark:text-gray-100 bg-transparent border-b border-blue-500 focus:outline-none"
+                autoFocus
+              />
+            ) : (
+              <div
+                onClick={() => {
+                  setEditingName(userProfile.name);
+                  setIsEditingName(true);
+                }}
+                className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                title="Click para editar nombre"
+              >
+                {userProfile.name}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
