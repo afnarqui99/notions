@@ -15,7 +15,6 @@ import { TableCellExtended } from "../extensions/TableCellExtended";
 import { TablaNotionNode } from "../extensions/TablaNotionNode";
 import { GaleriaImagenesNode } from "../extensions/GaleriaImagenesNode";
 import { GaleriaArchivosNode } from "../extensions/GaleriaArchivosNode";
-import { ResumenFinancieroNode } from "../extensions/ResumenFinancieroNode";
 import { CalendarNode } from "../extensions/CalendarNode";
 import { ConsoleNode } from "../extensions/ConsoleNode";
 import { PostmanNode } from "../extensions/PostmanNode";
@@ -69,6 +68,7 @@ import VisualCodeFullscreenModal from "./VisualCodeFullscreenModal";
 import SlashCommandModal from "./SlashCommandModal";
 import CommandButtonModal from "./CommandButtonModal";
 import { getSlashCommandItems } from "../utils/slashCommandItems";
+import WelcomeExamples from "./WelcomeExamples";
 
 export default function LocalEditor({ onShowConfig }) {
   // Función helper para extraer emoji del título
@@ -500,7 +500,6 @@ export default function LocalEditor({ onShowConfig }) {
       TablaNotionNode,
       GaleriaImagenesNode,
       GaleriaArchivosNode,
-      ResumenFinancieroNode,
       CalendarNode,
       ConsoleNode,
       PostmanNode,
@@ -1362,75 +1361,15 @@ export default function LocalEditor({ onShowConfig }) {
       e.preventDefault();
       e.stopPropagation();
       
-      // Buscar la página "Centro de Ejecución" o "⚡ Centro de Ejecución"
-      const paginaCentro = paginas.find(p => 
-        p.titulo === 'Centro de Ejecución' || 
-        p.titulo === '⚡ Centro de Ejecución' ||
-        (p.titulo && p.titulo.includes('Centro de Ejecución'))
-      );
-      
-      if (paginaCentro) {
-        // Si existe, seleccionarla
-        console.log('[LocalEditor] Página Centro de Ejecución encontrada, seleccionando...', paginaCentro.id);
-        if (seleccionarPaginaRef.current) {
-          seleccionarPaginaRef.current(paginaCentro.id);
-        }
-        setShowCentroEjecucion(true);
-      } else {
-        // Si no existe, crearla y luego seleccionarla
-        console.log('[LocalEditor] Página Centro de Ejecución no existe, creándola...');
-        const contenido = {
-          type: "doc",
-          content: [
-            {
-              type: "heading",
-              attrs: { level: 1 },
-              content: [{ type: "text", text: "⚡ Centro de Ejecución" }]
-            },
-            {
-              type: "paragraph",
-              content: [
-                { type: "text", text: "Esta es tu página centralizada para gestionar terminales, proyectos y servicios de ejecución." }
-              ]
-            },
-            {
-              type: "paragraph",
-              content: [
-                { type: "text", text: "Escribe " },
-                { type: "text", marks: [{ type: "code" }], text: "/centro ejecucion" },
-                { type: "text", text: " o usa el botón flotante para abrir el Centro de Ejecución." }
-              ]
-            },
-            {
-              type: "paragraph"
-            },
-            {
-              type: "paragraph",
-              content: [
-                { type: "text", marks: [{ type: "code" }], text: "/centro ejecucion" }
-              ]
-            }
-          ]
-        };
-        
-        const nuevaPaginaId = crearPaginaRef.current 
-          ? await crearPaginaRef.current('⚡ Centro de Ejecución', '⚡', null, [], contenido)
-          : null;
-        // Esperar un momento para que se cree y luego seleccionarla
-        setTimeout(() => {
-          if (nuevaPaginaId && seleccionarPaginaRef.current) {
-            seleccionarPaginaRef.current(nuevaPaginaId);
-          }
-          setShowCentroEjecucion(true);
-        }, 500);
-      }
+      // Simplemente abrir el panel del Centro de Ejecución
+      setShowCentroEjecucion(true);
     };
 
     window.addEventListener('open-centro-ejecucion', handleOpenCentroEjecucion);
     return () => {
       window.removeEventListener('open-centro-ejecucion', handleOpenCentroEjecucion);
     };
-  }, [paginas]);
+  }, []);
 
   // Escuchar evento para abrir Visual Code con un proyecto
   useEffect(() => {
@@ -1484,22 +1423,36 @@ export default function LocalEditor({ onShowConfig }) {
         return;
       }
       
-      // Si el editor no está disponible, buscar/seleccionar la página "Centro de Ejecución"
+      // Si el editor no está disponible, usar la página actual o la primera disponible
       if (!editor) {
-        console.warn('[LocalEditor] Editor no está disponible, buscando página Centro de Ejecución...');
+        console.warn('[LocalEditor] Editor no está disponible, buscando página disponible...');
         
-        // Buscar la página "Centro de Ejecución"
-        const paginaCentro = paginas.find(p => 
-          p.titulo === 'Centro de Ejecución' || 
-          p.titulo === '⚡ Centro de Ejecución' ||
-          (p.titulo && p.titulo.includes('Centro de Ejecución'))
-        );
+        // Si hay una página seleccionada, usarla
+        if (paginaSeleccionada) {
+          console.log('[LocalEditor] Usando página seleccionada:', paginaSeleccionada);
+          setTimeout(() => {
+            if (editor) {
+              console.log('[LocalEditor] Editor disponible, procesando Visual Code...');
+              window.dispatchEvent(new CustomEvent('open-visual-code', { 
+                detail: e.detail,
+                bubbles: true,
+                cancelable: true
+              }));
+            } else {
+              console.error('[LocalEditor] Editor aún no disponible');
+              alert('⚠️ El editor no está disponible.\n\n' +
+                    'Por favor, espera un momento y vuelve a intentar abrir el proyecto.');
+            }
+          }, 1000);
+          return;
+        }
         
-        if (paginaCentro) {
-          // Si existe, seleccionarla y esperar a que se cargue
-          console.log('[LocalEditor] Página Centro de Ejecución encontrada, seleccionando...', paginaCentro.id);
+        // Si no hay página seleccionada, usar la primera página disponible
+        if (paginas.length > 0) {
+          const primeraPagina = paginas[0];
+          console.log('[LocalEditor] Usando primera página disponible:', primeraPagina.id);
           if (seleccionarPaginaRef.current) {
-            seleccionarPaginaRef.current(paginaCentro.id);
+            seleccionarPaginaRef.current(primeraPagina.id);
           }
           setTimeout(() => {
             if (editor) {
@@ -1516,50 +1469,12 @@ export default function LocalEditor({ onShowConfig }) {
             }
           }, 1000);
           return;
-        } else {
-          // Si no existe, crearla
-          console.log('[LocalEditor] Página Centro de Ejecución no existe, creándola...');
-          const contenido = {
-            type: "doc",
-            content: [
-              {
-                type: "heading",
-                attrs: { level: 1 },
-                content: [{ type: "text", text: "⚡ Centro de Ejecución" }]
-              },
-              {
-                type: "paragraph",
-                content: [
-                  { type: "text", text: "Esta es tu página centralizada para gestionar terminales, proyectos y servicios de ejecución." }
-                ]
-              }
-            ]
-          };
-          
-          const nuevaPaginaId = crearPaginaRef.current 
-            ? await crearPaginaRef.current('⚡ Centro de Ejecución', '⚡', null, [], contenido)
-            : null;
-          // Esperar a que se cree y seleccione la página
-          setTimeout(() => {
-            if (nuevaPaginaId && seleccionarPaginaRef.current) {
-              seleccionarPaginaRef.current(nuevaPaginaId);
-            }
-            // Esperar un poco más para que el editor esté listo
-            setTimeout(() => {
-              if (editor) {
-                console.log('[LocalEditor] Página creada, procesando Visual Code...');
-                window.dispatchEvent(new CustomEvent('open-visual-code', { 
-                  detail: e.detail,
-                  bubbles: true,
-                  cancelable: true
-                }));
-              } else {
-                alert('⚠️ No se pudo crear la página. Por favor, crea una página manualmente y vuelve a intentar.');
-              }
-            }, 500);
-          }, 500);
-          return;
         }
+        
+        // Si no hay páginas, mostrar error
+        alert('⚠️ No hay páginas disponibles.\n\n' +
+              'Por favor, crea una página primero y luego intenta abrir el proyecto.');
+        return;
       }
       
       try {
@@ -1819,91 +1734,6 @@ export default function LocalEditor({ onShowConfig }) {
     }
   }, [paginas, editor, extraerEmojiDelTitulo, quitarEmojiDelTitulo, setPaginas, setPaginaSeleccionada, setTitulo, setTituloPaginaActual, setModalError]);
 
-  // Crear página de Centro de Ejecución automáticamente si no existe
-  useEffect(() => {
-    const crearPaginaCentroEjecucion = async () => {
-      try {
-        // Verificar configuración y handle
-        const config = LocalStorageService.config;
-        const hasHandle = !!LocalStorageService.baseDirectoryHandle;
-        
-        if (config.useLocalStorage && !hasHandle) {
-          return; // No crear si no hay handle
-        }
-
-        // Buscar si ya existe una página con el título "Centro de Ejecución"
-        const files = await LocalStorageService.listFiles('data');
-        
-        // Verificar de forma más simple
-        let paginaExiste = false;
-        for (const file of files) {
-          if (!file.endsWith('.json')) continue;
-          // Excluir archivos que no son páginas
-          if (file.startsWith('quick-note-') || file === 'calendar-events.json' || file === '_pages-index.json') continue;
-          try {
-            const data = await LocalStorageService.readJSONFile(file, 'data');
-            if (data?.titulo === 'Centro de Ejecución' || data?.titulo === '⚡ Centro de Ejecución') {
-              paginaExiste = true;
-              break;
-            }
-          } catch {
-            continue;
-          }
-        }
-
-        if (!paginaExiste) {
-          // Crear la página automáticamente usando la función crearPagina
-          const contenido = {
-            type: "doc",
-            content: [
-              {
-                type: "heading",
-                attrs: { level: 1 },
-                content: [{ type: "text", text: "⚡ Centro de Ejecución" }]
-              },
-              {
-                type: "paragraph",
-                content: [
-                  { type: "text", text: "Esta es tu página centralizada para gestionar terminales, proyectos y servicios de ejecución." }
-                ]
-              },
-              {
-                type: "paragraph",
-                content: [
-                  { type: "text", text: "Escribe " },
-                  { type: "text", marks: [{ type: "code" }], text: "/centro ejecucion" },
-                  { type: "text", text: " o usa el botón flotante para abrir el Centro de Ejecución." }
-                ]
-              },
-              {
-                type: "paragraph"
-              },
-              {
-                type: "paragraph",
-                content: [
-                  { type: "text", marks: [{ type: "code" }], text: "/centro ejecucion" }
-                ]
-              }
-            ]
-          };
-
-          // Usar crearPagina que ya está definida en el componente
-          if (crearPaginaRef.current) {
-            await crearPaginaRef.current('⚡ Centro de Ejecución', '⚡', null, [], contenido);
-          }
-        }
-      } catch (error) {
-        console.error('Error creando página de Centro de Ejecución:', error);
-      }
-    };
-
-    // Esperar un poco para que el sistema esté listo y las páginas se hayan cargado
-    const timeoutId = setTimeout(() => {
-      crearPaginaCentroEjecucion();
-    }, 3000);
-
-    return () => clearTimeout(timeoutId);
-  }, [crearPagina]); // Incluir crearPagina en dependencias
 
   // Verificar scripts SQL asociados a una página
   const checkPageSQLScripts = useCallback(async (pageId) => {
@@ -3157,8 +2987,23 @@ export default function LocalEditor({ onShowConfig }) {
         </div>
         ) : (
           <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900 transition-colors">
-            {/* Mostrar páginas favoritas como cards */}
+            {/* Mostrar WelcomeExamples si no hay páginas, o páginas favoritas si hay páginas */}
             {(() => {
+              // Si no hay páginas, mostrar WelcomeExamples
+              if (paginas.length === 0) {
+                return (
+                  <div className="max-w-7xl mx-auto px-6 py-8">
+                    <WelcomeExamples 
+                      onCreatePage={() => {
+                        setPaginaPadreParaNueva(null);
+                        setShowNewPageModal(true);
+                      }}
+                    />
+                  </div>
+                );
+              }
+              
+              // Si hay páginas, mostrar páginas favoritas
               const paginasFavoritas = paginas.filter(p => favoritos.includes(p.id));
               
               if (paginasFavoritas.length > 0) {

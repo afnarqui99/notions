@@ -2,32 +2,21 @@ import { useState, useEffect, useCallback } from 'react';
 import ConfigDashboard from './components/ConfigDashboard';
 import LocalEditor from './components/LocalEditor';
 import NotificationContainer from './components/NotificationContainer';
-import DirectorySelectorModal from './components/DirectorySelectorModal';
 import LocalStorageService from './services/LocalStorageService';
 import NotificationService from './services/NotificationService';
 
 function App() {
   const [showConfig, setShowConfig] = useState(false);
   const [configReady, setConfigReady] = useState(false);
-  const [showDirectoryModal, setShowDirectoryModal] = useState(false);
 
   // Definir las funciones de callback primero
   const handleConfigSaved = useCallback(() => {
     setConfigReady(true);
     setShowConfig(false);
-    setShowDirectoryModal(false);
   }, []);
 
   const handleShowConfig = useCallback(() => {
     setShowConfig(true);
-  }, []);
-
-  const handleDirectorySelected = useCallback((path) => {
-    // La configuración ya se guardó en DirectorySelectorModal
-    // Solo necesitamos cerrar el modal y mostrar el editor
-    setShowDirectoryModal(false);
-    setConfigReady(true);
-    setShowConfig(false);
   }, []);
 
   useEffect(() => {
@@ -36,33 +25,53 @@ function App() {
       try {
         const config = LocalStorageService.config;
         
+        // Si hay configuración de carpeta local, intentar restaurar acceso
         if (config.useLocalStorage && config.basePath) {
           // Intentar restaurar el acceso al directorio
           const hasAccess = await LocalStorageService.verifyDirectoryAccess();
           
           if (hasAccess) {
             setConfigReady(true);
+            return;
           } else {
-            // Si no hay acceso pero hay configuración, mostrar el editor con warning
+            // Si no hay acceso pero hay configuración, usar localStorage como fallback
+            // y mostrar el editor (el usuario puede cambiar a carpeta local desde configuración)
+            console.log('[App] No se pudo restaurar acceso a carpeta local, usando localStorage');
+            LocalStorageService.saveConfig({
+              useLocalStorage: false,
+              basePath: null
+            });
             setConfigReady(true);
-          }
-        } else {
-          // Si no hay configuración, abrir directamente el selector de carpeta
-          // Solo en Electron, en navegador mostrar el dashboard
-          if (typeof window !== 'undefined' && window.electronAPI) {
-            setShowDirectoryModal(true);
-            // NO marcar configReady como true todavía, esperar a que se seleccione la carpeta
-            setConfigReady(false);
-          } else {
-            // En navegador, mostrar dashboard
-            setShowConfig(true);
-            setConfigReady(true);
+            return;
           }
         }
+        
+        // Si no hay configuración o useLocalStorage es false, usar localStorage por defecto
+        // NO pedir carpeta al inicio - el usuario puede cambiarlo desde configuración
+        if (!config.useLocalStorage) {
+          // Asegurar que la configuración esté guardada con localStorage
+          LocalStorageService.saveConfig({
+            useLocalStorage: false,
+            basePath: null
+          });
+          setConfigReady(true);
+          return;
+        }
+        
+        // Si llegamos aquí, no hay configuración previa - usar localStorage por defecto
+        LocalStorageService.saveConfig({
+          useLocalStorage: false,
+          basePath: null
+        });
+        setConfigReady(true);
+        
       } catch (error) {
         console.error('[App] Error en inicialización:', error);
-        // En caso de error, mostrar dashboard de configuración
-        setShowConfig(true);
+        // En caso de error, usar localStorage por defecto y mostrar el editor
+        LocalStorageService.saveConfig({
+          useLocalStorage: false,
+          basePath: null
+        });
         setConfigReady(true);
       }
     };
@@ -90,22 +99,6 @@ function App() {
         </div>
       )}
       
-      {/* Modal de selección de carpeta (solo en Electron, primera vez) */}
-      {typeof window !== 'undefined' && window.electronAPI && (
-        <DirectorySelectorModal
-          isOpen={showDirectoryModal}
-          onClose={() => {
-            setShowDirectoryModal(false);
-            // Si se cierra sin seleccionar, mostrar el dashboard
-            if (!LocalStorageService.config.useLocalStorage) {
-              setShowConfig(true);
-              setConfigReady(true);
-            }
-          }}
-          onDirectorySelected={handleDirectorySelected}
-          autoOpen={true}
-        />
-      )}
     </>
   );
 }
