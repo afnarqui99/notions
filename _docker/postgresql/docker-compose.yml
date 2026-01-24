@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  postgresql:
+    image: postgres:16-alpine
+    container_name: postgresql-notions
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: notions_db
+      POSTGRES_USER: notions_user
+      POSTGRES_PASSWORD: notions_password
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgresql_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U notions_user -d notions_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - notions_network
+
+volumes:
+  postgresql_data:
+    driver: local
+
+networks:
+  notions_network:
+    driver: bridge
+

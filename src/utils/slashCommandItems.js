@@ -731,6 +731,32 @@ export function getSlashCommandItems() {
       },
     },
     {
+      icon: '🗄️',
+      label: 'Conectar BD',
+      description: 'Conectar y consultar bases de datos (PostgreSQL, MySQL, SQL Server)',
+      keywords: ['connectbd', 'database', 'bd', 'postgresql', 'mysql', 'sqlserver', 'sql', 'db', 'base de datos', 'conectar'],
+      command: ({ editor, range }) => {
+        editor.chain().focus().deleteRange(range).run();
+        editor.chain().focus().insertContent({
+          type: 'connectBD',
+          attrs: {
+            dbType: 'postgresql',
+            host: '',
+            port: '',
+            database: '',
+            username: '',
+            password: '',
+            ssl: false,
+            connectionId: null,
+            connectionName: '',
+            isConnected: false,
+            queryHistory: '[]',
+            savedQueries: '[]',
+          },
+        }).run();
+      },
+    },
+    {
       icon: '🖼️',
       label: 'Insertar imagen',
       description: 'Sube una imagen con título, descripción y fecha',

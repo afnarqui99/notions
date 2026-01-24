@@ -11,6 +11,7 @@
     "electron": "electron .",
     "electron:dev": "NODE_ENV=development electron .",
     "electron:build": "npm run build && electron-builder",
+    "clean-release": "powershell -ExecutionPolicy Bypass -File scripts/clean-release.ps1",
     "electron:build:win": "npm run build && electron-builder --win",
     "electron:build:zip": "npm run build && electron-builder --win --config.win.target=zip",
     "electron:build:both": "npm run build && electron-builder --win --config.win.target=nsis --config.win.target=zip",
@@ -52,8 +53,11 @@
     "mammoth": "^1.11.0",
     "marked": "^17.0.1",
     "mermaid": "^11.12.2",
+    "mssql": "^12.2.0",
+    "mysql2": "^3.16.1",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^5.4.530",
+    "pg": "^8.17.2",
     "react": "^19.0.0",
     "react-chartjs-2": "^5.3.1",
     "react-dom": "^19.0.0",
@@ -86,10 +90,34 @@
       "electron/**/*",
       "package.json",
       "ejemplos-consola/**/*",
-      "node_modules/ws/**/*"
+      "node_modules/ws/**/*",
+      "node_modules/auto-launch/**/*",
+      "node_modules/pg/**/*",
+      "node_modules/mysql2/**/*",
+      "node_modules/mssql/**/*",
+      "!docker/**/*",
+      "!**/*.map",
+      "!**/*.test.js",
+      "!**/*.spec.js",
+      "!**/README.md",
+      "!**/.git/**/*",
+      "!**/.github/**/*",
+      "!**/node_modules/**/test/**/*",
+      "!**/node_modules/**/tests/**/*",
+      "!**/node_modules/**/*.map",
+      "!**/node_modules/**/README.md",
+      "!**/node_modules/**/CHANGELOG.md",
+      "!**/node_modules/**/LICENSE*",
+      "!**/node_modules/**/.github/**/*",
+      "!**/node_modules/**/.git/**/*"
     ],
+    "asar": true,
     "asarUnpack": [
-      "node_modules/ws/**/*"
+      "node_modules/ws/**/*",
+      "node_modules/auto-launch/**/*",
+      "node_modules/pg/**/*",
+      "node_modules/mysql2/**/*",
+      "node_modules/mssql/**/*"
     ],
     "extraResources": [
       {
@@ -143,7 +171,10 @@
       "installerLanguages": [
         "Spanish"
       ],
-      "multiLanguageInstaller": false
+      "multiLanguageInstaller": false,
+      "warningsAsErrors": false,
+      "runAfterFinish": false,
+      "deleteAppDataOnUninstall": false
     }
   }
 }

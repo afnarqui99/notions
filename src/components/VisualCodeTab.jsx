@@ -1476,16 +1476,16 @@ export default function VisualCodeTab({
                 // Solo enfocar si el clic no es parte de una selección de texto
                 // Verificar si hay una selección activa con un delay para permitir que se complete
                 setTimeout(() => {
-                  const selection = window.getSelection();
-                  if (selection && selection.toString().length > 0) {
-                    // Hay texto seleccionado, no enfocar para permitir copiar
-                    return;
-                  }
-                  
+                const selection = window.getSelection();
+                if (selection && selection.toString().length > 0) {
+                  // Hay texto seleccionado, no enfocar para permitir copiar
+                  return;
+                }
+                
                   // Solo enfocar si no hay selección
                   if (editorViewRef.current && !selection?.toString()) {
-                    editorViewRef.current.focus();
-                  }
+                      editorViewRef.current.focus();
+                    }
                 }, 10);
               }}
               onMouseUp={(e) => {
