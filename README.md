@@ -221,7 +221,7 @@ Escribe `/` en cualquier parte del editor para acceder a comandos rápidos:
 - **`/convertidor`** - Convertir documentos: Markdown a PDF, PDF a Word, Word a PDF
 - **`/diagrama`** - Crear diagramas: flujo, secuencia, clase, estado, Gantt, ER
 - **`/markdown`** - Editor de Markdown con vista previa y exportación a PDF
-- **`/postman`** - Cliente API para probar endpoints REST con colecciones
+- **`/postman`** - Cliente API completo para probar endpoints REST con colecciones, variables y pestañas
 
 ---
 
@@ -312,6 +312,72 @@ Escribe `/` en cualquier parte del editor para acceder a comandos rápidos:
 2. Se abre el modal de notas rápidas
 3. Escribe tu nota - se guarda automáticamente
 4. Accede al historial desde el mismo modal
+
+### Probar APIs con Postman
+
+El comando **`/postman`** te permite probar APIs REST de forma completa, similar a Postman original:
+
+#### Características Principales:
+- ✅ **Múltiples pestañas** - Trabaja con varias APIs simultáneamente
+- ✅ **Colecciones** - Organiza tus APIs en colecciones
+- ✅ **Variables** - Usa variables como `{{base_url}}` y `{{token}}`
+- ✅ **Importar/Exportar** - Compatible con formato Postman Collection v2.1
+- ✅ **Autenticación** - Soporta Bearer Token, Basic Auth y API Key
+- ✅ **Historial** - Guarda historial de peticiones ejecutadas
+- ✅ **Generación de código** - Exporta a cURL, JavaScript, Python, etc.
+
+#### Ejemplo Básico:
+
+1. Escribe **`/postman`** en el editor
+2. Se crea un bloque Postman con una pestaña nueva
+3. Configura tu petición:
+   - **Método**: GET, POST, PUT, DELETE, etc.
+   - **URL**: `https://api.ejemplo.com/endpoint`
+   - **Headers**: Agrega headers personalizados
+   - **Body**: Para POST/PUT, escribe el JSON del body
+4. Haz clic en **"Enviar"** para ejecutar la petición
+5. Verás la respuesta con código de estado, tiempo de respuesta y datos
+
+#### Usar Variables:
+
+1. Haz clic en el botón **"Variables"** en la barra de herramientas
+2. Agrega variables como:
+   - `base_url` = `https://api.sancolombia.com`
+   - `token` = `tu-token-aqui`
+3. Usa las variables en tus peticiones:
+   - **URL**: `{{base_url}}/procedure`
+   - **Header**: `Authorization: Bearer {{token}}`
+4. Las variables se sustituyen automáticamente al ejecutar
+
+#### Importar Colección de Postman:
+
+1. Haz clic en el botón **"⚙️"** (Settings) → **"Importar colección"**
+2. Selecciona tu archivo `.postman_collection.json`
+3. La colección se importa con todas sus APIs y variables
+4. Haz clic en cualquier API del sidebar para crear una nueva pestaña con esa API lista para ejecutar
+
+#### Trabajar con Pestañas:
+
+- **Agregar pestaña**: Haz clic en el botón **"+"** en la barra de pestañas
+- **Cambiar de pestaña**: Haz clic en el nombre de la pestaña
+- **Cerrar pestaña**: Haz clic en la **"X"** junto al nombre
+- Cada pestaña mantiene su propia configuración (método, URL, headers, body, respuesta)
+
+#### Ejemplo Completo - API con Autenticación:
+
+```
+Método: POST
+URL: {{base_url}}/login
+Headers:
+  Content-Type: application/json
+Body (JSON):
+{
+  "usuario": "{{usuario}}",
+  "clave": "{{clave}}"
+}
+```
+
+Las variables `{{base_url}}`, `{{usuario}}` y `{{clave}}` se sustituyen automáticamente.
 
 ---
 
