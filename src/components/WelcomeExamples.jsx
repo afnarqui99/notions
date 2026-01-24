@@ -59,15 +59,30 @@ export default function WelcomeExamples() {
         </div>
       </div>
 
-      {/* Ejemplo 2: Postman/JSON Request */}
+      {/* Ejemplo 2: Postman/API Client */}
       <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-700">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
             <Send className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Petición API (Postman)
-          </h3>
+          <div className="flex-1">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Cliente API (Postman)
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Prueba APIs REST con colecciones, variables y múltiples pestañas
+            </p>
+          </div>
+        </div>
+        
+        {/* Pestañas */}
+        <div className="mb-4 flex gap-2 border-b border-gray-200 dark:border-gray-700">
+          <div className="px-3 py-2 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 text-xs font-semibold rounded-t border-b-2 border-indigo-600 dark:border-indigo-400">
+            Login API
+          </div>
+          <div className="px-3 py-2 text-gray-500 dark:text-gray-400 text-xs rounded-t">
+            + Nueva API
+          </div>
         </div>
         
         {/* Request */}
@@ -77,8 +92,26 @@ export default function WelcomeExamples() {
               POST
             </span>
             <span className="text-sm text-gray-700 dark:text-gray-300 font-mono">
-              https://api.ejemplo.com/usuarios
+              <span className="text-blue-600 dark:text-blue-400">{'{{'}</span>base_url<span className="text-blue-600 dark:text-blue-400">{'}}'}</span>/login
             </span>
+            <span className="text-xs text-gray-500 dark:text-gray-400">(con variables)</span>
+          </div>
+          
+          {/* Variables */}
+          <div className="mb-3 bg-blue-50 dark:bg-blue-900/20 rounded p-2 border border-blue-200 dark:border-blue-800">
+            <div className="text-xs font-semibold text-blue-800 dark:text-blue-300 mb-1">Variables</div>
+            <div className="flex flex-wrap gap-2 text-xs">
+              <span className="px-2 py-1 bg-white dark:bg-gray-700 rounded border border-blue-200 dark:border-blue-700">
+                <span className="text-blue-600 dark:text-blue-400 font-mono">base_url</span>
+                <span className="text-gray-500 dark:text-gray-400"> = </span>
+                <span className="text-green-600 dark:text-green-400">https://api.ejemplo.com</span>
+              </span>
+              <span className="px-2 py-1 bg-white dark:bg-gray-700 rounded border border-blue-200 dark:border-blue-700">
+                <span className="text-blue-600 dark:text-blue-400 font-mono">token</span>
+                <span className="text-gray-500 dark:text-gray-400"> = </span>
+                <span className="text-green-600 dark:text-green-400">abc123...</span>
+              </span>
+            </div>
           </div>
           
           {/* Headers */}
@@ -89,6 +122,11 @@ export default function WelcomeExamples() {
                 <span className="text-purple-600 dark:text-purple-400">Content-Type</span>
                 <span className="text-gray-500 dark:text-gray-500">: </span>
                 <span className="text-blue-600 dark:text-blue-400">application/json</span>
+              </div>
+              <div className="text-gray-700 dark:text-gray-300 mt-1">
+                <span className="text-purple-600 dark:text-purple-400">Authorization</span>
+                <span className="text-gray-500 dark:text-gray-500">: </span>
+                <span className="text-blue-600 dark:text-blue-400">Bearer <span className="text-green-600 dark:text-green-400">{'{{'}</span>token<span className="text-green-600 dark:text-green-400">{'}}'}</span></span>
               </div>
             </div>
           </div>
@@ -101,24 +139,14 @@ export default function WelcomeExamples() {
                 <code>
                   <span className="text-gray-400">{'{'}</span>{'\n'}
                   {'  '}
-                  <span className="text-yellow-400">"nombre"</span>
+                  <span className="text-yellow-400">"usuario"</span>
                   <span className="text-gray-400">: </span>
-                  <span className="text-green-400">"Juan Pérez"</span>
+                  <span className="text-green-400">"admin"</span>
                   <span className="text-gray-400">,</span>{'\n'}
                   {'  '}
-                  <span className="text-yellow-400">"email"</span>
+                  <span className="text-yellow-400">"clave"</span>
                   <span className="text-gray-400">: </span>
-                  <span className="text-green-400">"juan@ejemplo.com"</span>
-                  <span className="text-gray-400">,</span>{'\n'}
-                  {'  '}
-                  <span className="text-yellow-400">"edad"</span>
-                  <span className="text-gray-400">: </span>
-                  <span className="text-blue-400">28</span>
-                  <span className="text-gray-400">,</span>{'\n'}
-                  {'  '}
-                  <span className="text-yellow-400">"activo"</span>
-                  <span className="text-gray-400">: </span>
-                  <span className="text-purple-400">true</span>
+                  <span className="text-green-400">"******"</span>
                   {'\n'}
                   <span className="text-gray-400">{'}'}</span>
                 </code>
@@ -140,19 +168,45 @@ export default function WelcomeExamples() {
               <code>
                 <span className="text-gray-400">{'{'}</span>{'\n'}
                 {'  '}
-                <span className="text-yellow-400">"id"</span>
+                <span className="text-yellow-400">"token"</span>
                 <span className="text-gray-400">: </span>
-                <span className="text-blue-400">123</span>
+                <span className="text-green-400">"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."</span>
                 <span className="text-gray-400">,</span>{'\n'}
                 {'  '}
-                <span className="text-yellow-400">"mensaje"</span>
+                <span className="text-yellow-400">"expira"</span>
                 <span className="text-gray-400">: </span>
-                <span className="text-green-400">"Usuario creado exitosamente"</span>
+                <span className="text-blue-400">3600</span>
                 {'\n'}
                 <span className="text-gray-400">{'}'}</span>
               </code>
             </pre>
           </div>
+        </div>
+        
+        {/* Características */}
+        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">Características:</div>
+          <div className="grid grid-cols-2 gap-2 text-xs text-gray-700 dark:text-gray-300">
+            <div className="flex items-center gap-1">
+              <span className="text-green-500">✓</span>
+              <span>Múltiples pestañas</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="text-green-500">✓</span>
+              <span>Variables dinámicas</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="text-green-500">✓</span>
+              <span>Importar colecciones</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="text-green-500">✓</span>
+              <span>Autenticación</span>
+            </div>
+          </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-3 text-center">
+            Escribe <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">/postman</code> para crear un bloque Postman
+          </p>
         </div>
       </div>
 
