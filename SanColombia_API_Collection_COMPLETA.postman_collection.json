@@ -1,0 +1,2609 @@
+{
+	"info": {
+		"_postman_id": "san-colombia-api-collection-completa",
+		"name": "SanColombia API Collection - COMPLETA",
+		"description": "Colección COMPLETA de todas las APIs de SanColombia extraídas del código fuente. Incluye más de 60+ procedimientos almacenados y operaciones CRUD dinámicas encontradas en todos los componentes.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Autenticación",
+			"item": [
+				{
+					"name": "Login",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"usuario\": \"{{usuario}}\",\n  \"clave\": \"{{clave}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/login",
+							"host": ["{{base_url}}"],
+							"path": ["login"]
+						},
+						"description": "Endpoint HTTP directo para login (no es un procedimiento almacenado)"
+					}
+				}
+			]
+		},
+		{
+			"name": "Usuarios",
+			"item": [
+				{
+					"name": "Buscar Usuarios San",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"buscarUsuariosSan\",\n  \"parameters\": {\n    \"searchTerm\": \"{{searchTerm}}\",\n    \"companiasId\": {{companiasId}},\n    \"pageNumber\": {{pageNumber}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Buscar Usuarios Por Código",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"buscarUsuariosPorCodigoSan\",\n  \"parameters\": {\n    \"searchTerm\": \"{{codigoUsuario}}\",\n    \"companiasId\": {{companiasId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Registro Usuario (Crear/Actualizar)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"registroUsuario\",\n  \"parameters\": {\n    \"usuariosId\": {{usuariosId}},\n    \"codigoUsuario\": \"{{codigoUsuario}}\",\n    \"nombreUsuario\": \"{{nombreUsuario}}\",\n    \"cargosId\": {{cargosId}},\n    \"administrador\": {{administrador}},\n    \"correoElectronico\": \"{{correoElectronico}}\",\n    \"clave\": \"{{clave}}\",\n    \"intentosClaves\": 9,\n    \"ultimoCambioClave\": \"{{fechaActual}}\",\n    \"diasCambioClave\": 200,\n    \"cambiaClaveProximoInicioSesion\": \"0\",\n    \"estado\": \"1\",\n    \"desconect\": \"{{clave}}\",\n    \"companiasPrincipalesId\": {{companiasId}},\n    \"clavePedidosSalon\": \"1111\",\n    \"nombreCargo\": \"{{nombreCargo}}\",\n    \"queHago\": \"{{queHago}}\",\n    \"nombreTabla\": \"usuarios\",\n    \"companiasId\": {{companiasId}},\n    \"claveactual\": \"{{claveactual}}\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						},
+						"description": "I = Insert, A = Update. Para actualizar, incluir usuariosId y queHago: 'A'"
+					}
+				},
+				{
+					"name": "Buscar Desconect (Obtener Clave Actual)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"buscarDesconect\",\n  \"parameters\": {\n    \"usuariosId\": {{usuariosId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Actualizar Usuario San",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"actualizarUsuarioSan\",\n  \"parameters\": {\n    \"usuariosId\": {{usuariosId}},\n    \"nombreUsuario\": \"{{nombreUsuario}}\",\n    \"cargosId\": {{cargosId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Eliminar Usuario San",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"eliminarUsuarioSan\",\n  \"parameters\": {\n    \"usuariosId\": {{usuariosId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Cargos",
+			"item": [
+				{
+					"name": "Buscar Cargos Por Empresa",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"buscarCargosPorEmpresa\",\n  \"parameters\": {\n    \"companiasId\": {{companiasId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "DataDynamicCrud - Cargos (Insert)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"dataDynamicCrud\",\n  \"parameters\": {\n    \"json\": \"{\\\"codigoCargo\\\":\\\"{{codigoCargo}}\\\",\\\"nombreCargo\\\":\\\"{{nombreCargo}}\\\",\\\"companiasId\\\":{{companiasId}},\\\"nombreTabla\\\":\\\"cargos\\\"}\",\n    \"queHago\": \"I\",\n    \"nombreTabla\": \"cargos\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "DataDynamicCrud - Cargos (Update)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"dataDynamicCrud\",\n  \"parameters\": {\n    \"json\": \"{\\\"cargosId\\\":{{cargosId}},\\\"codigoCargo\\\":\\\"{{codigoCargo}}\\\",\\\"nombreCargo\\\":\\\"{{nombreCargo}}\\\",\\\"companiasId\\\":{{companiasId}},\\\"nombreTabla\\\":\\\"cargos\\\"}\",\n    \"queHago\": \"A\",\n    \"nombreTabla\": \"cargos\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "DataDynamicCrud - Cargos (Delete)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"dataDynamicCrud\",\n  \"parameters\": {\n    \"json\": \"{\\\"cargosId\\\":{{cargosId}},\\\"nombreTabla\\\":\\\"cargos\\\"}\",\n    \"queHago\": \"E\",\n    \"nombreTabla\": \"cargos\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Proveedores",
+			"item": [
+				{
+					"name": "Buscar Proveedores Por Empresa",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"buscarProveedoresPorEmpresa\",\n  \"parameters\": {\n    \"companiasId\": {{companiasId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "DataDynamicCrud - Proveedores (Insert)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"dataDynamicCrud\",\n  \"parameters\": {\n    \"json\": \"{\\\"identificacion\\\":\\\"{{identificacion}}\\\",\\\"nombreEmpresa\\\":\\\"{{nombreEmpresa}}\\\",\\\"nombre\\\":\\\"{{nombre}}\\\",\\\"direccion\\\":\\\"{{direccion}}\\\",\\\"numeroTelefono\\\":\\\"{{numeroTelefono}}\\\",\\\"descripcion\\\":\\\"{{descripcion}}\\\",\\\"estado\\\":\\\"a\\\",\\\"companiasId\\\":{{companiasId}},\\\"nombreTabla\\\":\\\"proveedores\\\"}\",\n    \"queHago\": \"I\",\n    \"nombreTabla\": \"proveedores\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "DataDynamicCrud - Proveedores (Update)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"dataDynamicCrud\",\n  \"parameters\": {\n    \"json\": \"{\\\"proveedoresId\\\":{{proveedoresId}},\\\"identificacion\\\":\\\"{{identificacion}}\\\",\\\"nombreEmpresa\\\":\\\"{{nombreEmpresa}}\\\",\\\"nombre\\\":\\\"{{nombre}}\\\",\\\"direccion\\\":\\\"{{direccion}}\\\",\\\"numeroTelefono\\\":\\\"{{numeroTelefono}}\\\",\\\"descripcion\\\":\\\"{{descripcion}}\\\",\\\"estado\\\":\\\"{{estado}}\\\",\\\"companiasId\\\":{{companiasId}},\\\"nombreTabla\\\":\\\"proveedores\\\"}\",\n    \"queHago\": \"A\",\n    \"nombreTabla\": \"proveedores\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "DataDynamicCrud - Proveedores (Delete)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"dataDynamicCrud\",\n  \"parameters\": {\n    \"json\": \"{\\\"proveedoresId\\\":{{proveedoresId}},\\\"nombreTabla\\\":\\\"proveedores\\\"}\",\n    \"queHago\": \"E\",\n    \"nombreTabla\": \"proveedores\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Productos",
+			"item": [
+				{
+					"name": "Buscar Tallas",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"buscarTallas\",\n  \"parameters\": {\n    \"companiasId\": {{companiasId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Buscar Colores",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"buscarColores\",\n  \"parameters\": {\n    \"companiasId\": {{companiasId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Buscar Centro De Costos",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"buscarcentroDeCostos\",\n  \"parameters\": {\n    \"companiasId\": {{companiasId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Buscar Grupos Productos",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"buscarGruposProductos\",\n  \"parameters\": {\n    \"companiasId\": {{companiasId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Buscar Grupos Productos (Alternativo)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"buscargruposProductos\",\n  \"parameters\": {\n    \"companiasId\": {{companiasId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Buscar Grupos Productos Por Compañía Ra",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"buscarGruposProductosPorCompaniasIdRa\",\n  \"parameters\": {\n    \"companiasId\": {{companiasId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Buscar Código Barra Async",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"buscarCodigoBarraAsync\",\n  \"parameters\": {\n    \"codigoBarra\": \"{{codigoBarra}}\",\n    \"companiasId\": {{companiasId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Buscar Productos Existente",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"buscarProductosExistente\",\n  \"parameters\": {\n    \"codigoProducto\": \"{{codigoProducto}}\",\n    \"companiasId\": {{companiasId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Buscar Campos Base Producto",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"buscarCamposBaseProducto\",\n  \"parameters\": {\n    \"productosId\": {{productosId}},\n    \"companiasId\": {{companiasId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Buscar Productos Paginado Infinito San",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"buscarProductosPaginadoInfinitoSan\",\n  \"parameters\": {\n    \"companiasId\": {{companiasId}},\n    \"gruposProductosId\": {{gruposProductosId}},\n    \"terminoBusqueda\": \"{{terminoBusqueda}}\",\n    \"ultimoProductoId\": {{ultimoProductoId}},\n    \"limite\": {{limite}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Buscar Productos Por Grupos Drag",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"buscarProductosPorGruposDrag\",\n  \"parameters\": {\n    \"companiasId\": {{companiasId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Gestionar Productos Por Grupos",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"gestionarProductosPorGrupos\",\n  \"parameters\": {\n    \"productosId\": {{productosId}},\n    \"gruposProductosId\": {{gruposProductosId}},\n    \"queHago\": \"{{queHago}}\",\n    \"companiasId\": {{companiasId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Eliminar Cualquier Producto",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"eliminarCualquierProducto\",\n  \"parameters\": {\n    \"productosId\": {{productosId}},\n    \"companiasId\": {{companiasId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Eliminar Producto Por Grupo",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"eliminarProductoPorGrupo\",\n  \"parameters\": {\n    \"productosId\": {{productosId}},\n    \"gruposProductosId\": {{gruposProductosId}},\n    \"companiasId\": {{companiasId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Actualizar Nombre Producto",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"actualizarNombreProducto\",\n  \"parameters\": {\n    \"productosId\": {{productosId}},\n    \"nombreProducto\": \"{{nombreProducto}}\",\n    \"companiasId\": {{companiasId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "DataDynamicCrud - Productos (Insert)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"dataDynamicCrud\",\n  \"parameters\": {\n    \"json\": \"{\\\"nombreProducto\\\":\\\"{{nombreProducto}}\\\",\\\"codigoProducto\\\":\\\"{{codigoProducto}}\\\",\\\"codigoBarra\\\":\\\"{{codigoBarra}}\\\",\\\"valorVenta\\\":{{valorVenta}},\\\"valorProducto\\\":{{valorProducto}},\\\"unidad\\\":\\\"{{unidad}}\\\",\\\"companiasId\\\":{{companiasId}},\\\"nombreTabla\\\":\\\"productos\\\"}\",\n    \"queHago\": \"I\",\n    \"nombreTabla\": \"productos\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "DataDynamicCrud - Productos (Update)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"dataDynamicCrud\",\n  \"parameters\": {\n    \"json\": \"{\\\"productosId\\\":{{productosId}},\\\"nombreProducto\\\":\\\"{{nombreProducto}}\\\",\\\"codigoProducto\\\":\\\"{{codigoProducto}}\\\",\\\"codigoBarra\\\":\\\"{{codigoBarra}}\\\",\\\"valorVenta\\\":{{valorVenta}},\\\"valorProducto\\\":{{valorProducto}},\\\"unidad\\\":\\\"{{unidad}}\\\",\\\"companiasId\\\":{{companiasId}},\\\"nombreTabla\\\":\\\"productos\\\"}\",\n    \"queHago\": \"A\",\n    \"nombreTabla\": \"productos\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "DataDynamicCrud - Productos (Delete)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"dataDynamicCrud\",\n  \"parameters\": {\n    \"json\": \"{\\\"productosId\\\":{{productosId}},\\\"nombreTabla\\\":\\\"productos\\\"}\",\n    \"queHago\": \"E\",\n    \"nombreTabla\": \"productos\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "DataDynamicCrud - Grupos Productos (Insert)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"dataDynamicCrud\",\n  \"parameters\": {\n    \"json\": \"{\\\"codigoGrupo\\\":\\\"{{codigoGrupo}}\\\",\\\"nombreGrupo\\\":\\\"{{nombreGrupo}}\\\",\\\"companiasId\\\":{{companiasId}},\\\"nombreTabla\\\":\\\"gruposProductos\\\"}\",\n    \"queHago\": \"I\",\n    \"nombreTabla\": \"gruposProductos\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "DataDynamicCrud - Grupos Productos (Update)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"dataDynamicCrud\",\n  \"parameters\": {\n    \"json\": \"{\\\"gruposProductosId\\\":{{gruposProductosId}},\\\"codigoGrupo\\\":\\\"{{codigoGrupo}}\\\",\\\"nombreGrupo\\\":\\\"{{nombreGrupo}}\\\",\\\"companiasId\\\":{{companiasId}},\\\"nombreTabla\\\":\\\"gruposProductos\\\"}\",\n    \"queHago\": \"A\",\n    \"nombreTabla\": \"gruposProductos\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "DataDynamicCrud - Grupos Productos (Delete)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"dataDynamicCrud\",\n  \"parameters\": {\n    \"json\": \"{\\\"gruposProductosId\\\":{{gruposProductosId}},\\\"nombreTabla\\\":\\\"gruposProductos\\\"}\",\n    \"queHago\": \"E\",\n    \"nombreTabla\": \"gruposProductos\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Almacenar Varios Registros",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"almacenarVariosRegistros\",\n  \"parameters\": {\n    \"elJson\": \"{{elJsonString}}\",\n    \"nombreTabla\": \"{{nombreTabla}}\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Clientes",
+			"item": [
+				{
+					"name": "Buscar Clientes Por Empresa Paginado Infinito",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"buscarClientesPorEmpresaPaginadoInfinito\",\n  \"parameters\": {\n    \"companiasId\": {{companiasId}},\n    \"terminoBusqueda\": \"{{terminoBusqueda}}\",\n    \"ultimoClienteId\": {{ultimoClienteId}},\n    \"limite\": {{limite}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Crear Referencia Familiar",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"crearReferenciaFamiliar\",\n  \"parameters\": {\n    \"clientesId\": {{clientesId}},\n    \"nombreReferencia\": \"{{nombreReferencia}}\",\n    \"telefonoReferencia\": \"{{telefonoReferencia}}\",\n    \"parentesco\": \"{{parentesco}}\",\n    \"companiasId\": {{companiasId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Gestionar Cliente Descripción",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"gestionarClienteDescripcion\",\n  \"parameters\": {\n    \"companiasId\": {{companiasId}},\n    \"clientesId\": {{clientesId}},\n    \"descripcion\": \"{{descripcion}}\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "DataDynamicCrud - Clientes (Insert)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"dataDynamicCrud\",\n  \"parameters\": {\n    \"json\": \"{\\\"identificacion\\\":\\\"{{identificacion}}\\\",\\\"nombreCliente\\\":\\\"{{nombreCliente}}\\\",\\\"direccion\\\":\\\"{{direccion}}\\\",\\\"telefono\\\":\\\"{{telefono}}\\\",\\\"correoElectronico\\\":\\\"{{correoElectronico}}\\\",\\\"companiasId\\\":{{companiasId}},\\\"nombreTabla\\\":\\\"clientes\\\"}\",\n    \"queHago\": \"I\",\n    \"nombreTabla\": \"clientes\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "DataDynamicCrud - Clientes (Update)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"dataDynamicCrud\",\n  \"parameters\": {\n    \"json\": \"{\\\"clientesId\\\":{{clientesId}},\\\"identificacion\\\":\\\"{{identificacion}}\\\",\\\"nombreCliente\\\":\\\"{{nombreCliente}}\\\",\\\"direccion\\\":\\\"{{direccion}}\\\",\\\"telefono\\\":\\\"{{telefono}}\\\",\\\"correoElectronico\\\":\\\"{{correoElectronico}}\\\",\\\"companiasId\\\":{{companiasId}},\\\"nombreTabla\\\":\\\"clientes\\\"}\",\n    \"queHago\": \"A\",\n    \"nombreTabla\": \"clientes\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "DataDynamicCrud - Clientes (Delete)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"dataDynamicCrud\",\n  \"parameters\": {\n    \"json\": \"{\\\"clientesId\\\":{{clientesId}},\\\"nombreTabla\\\":\\\"clientes\\\"}\",\n    \"queHago\": \"E\",\n    \"nombreTabla\": \"clientes\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Parámetros Generales",
+			"item": [
+				{
+					"name": "Buscar Parámetros Generales Por Compañía",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"buscarparametrosGeneralesPorCompaniasId\",\n  \"parameters\": {\n    \"companiasId\": {{companiasId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Buscar Parámetros Generales Otros Datos",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"buscarParametrosGeneralesOtrosDatos\",\n  \"parameters\": {\n    \"companiaId\": {{companiasId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Actualizar Parámetros Generales Otros Datos",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"actualizarParametrosGeneralesOtrosDatos\",\n  \"parameters\": {\n    \"companiaId\": {{companiasId}},\n    \"datos\": \"{{datosJSON}}\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Actualizar Parámetros Generales Créditos",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"actualizarParametrosGeneralesCreditos\",\n  \"parameters\": {\n    \"companiaId\": {{companiasId}},\n    \"datosCreditos\": \"{{datosCreditosJSON}}\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "DataDynamicCrud - Actualizar Fecha Sistema",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"dataDynamicCrud\",\n  \"parameters\": {\n    \"json\": \"{\\\"parametrosGeneralesId\\\":{{parametrosGeneralesId}},\\\"fechaSistema\\\":\\\"{{fechaSistema}}\\\",\\\"nombreTabla\\\":\\\"parametrosGenerales\\\"}\",\n    \"queHago\": \"A\",\n    \"nombreTabla\": \"parametrosGenerales\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Caja",
+			"item": [
+				{
+					"name": "Buscar Todas Las Denominaciones",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"buscarTodasLasDenominaciones\",\n  \"parameters\": {\n    \"companiasId\": {{companiasId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Buscar Formas De Pago",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"buscarFormasDePago\",\n  \"parameters\": {\n    \"companiasId\": {{companiasId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Buscar Ventas Diarias Todos",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"buscarVentasDiariasTodos\",\n  \"parameters\": {\n    \"usuarioCuadro\": {{usuariosId}},\n    \"companiasId\": {{companiasId}},\n    \"fechaVenta\": \"{{fechaVenta}}\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Devolver Valores Ventas Discriminados",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"devolverValoresVentasDiscriminados\",\n  \"parameters\": {\n    \"companiasId\": {{companiasId}},\n    \"usuariosId\": {{usuariosId}},\n    \"fechaVenta\": \"{{fechaVenta}}\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Almacenar Cuadre Caja Diario",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"almacenarCuadreCajaDiario\",\n  \"parameters\": {\n    \"elJson\": \"{{elJsonString}}\",\n    \"base\": {{valorBase}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Listado Recibos Caja ReImprime",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"listadoRecibosCajaReImprime\",\n  \"parameters\": {\n    \"companiasId\": {{companiasId}},\n    \"fechaDesde\": \"{{fechaDesde}}\",\n    \"fechaHasta\": \"{{fechaHasta}}\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Imprimir Recibo Caja",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"imprimirReciboCaja\",\n  \"parameters\": {\n    \"elRecibo\": {{consecutivo}},\n    \"companiasId\": {{companiasId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Imprimir Recibo Caja Histórico",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"imprimirReciboCajaHistorico\",\n  \"parameters\": {\n    \"elRecibo\": {{consecutivo}},\n    \"companiasId\": {{companiasId}},\n    \"fecha\": \"{{fecha}}\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Buscar Cufe",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"buscarCufe\",\n  \"parameters\": {\n    \"companiasId\": {{companiasId}},\n    \"factura\": {{consecutivo}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Buscar Ventas Diarias Cufe",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"buscarVentasDiariasCufe\",\n  \"parameters\": {\n    \"factura\": {{factura}},\n    \"companiasId\": {{companiasId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Imprimir Recibo Cufe",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"imprimirReciboCufe\",\n  \"parameters\": {\n    \"recibo\": \"{{textResponse}}\",\n    \"cufe\": \"{{cufe}}\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Imprimir Recibo",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"imprimirRecibo\",\n  \"parameters\": {\n    \"recibo\": \"{{recibo}}\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Salón - Comandas",
+			"item": [
+				{
+					"name": "Buscar Comandas Turno Por Compañía",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"buscarComandasturnoPorCompania\",\n  \"parameters\": {\n    \"companiasId\": {{companiasId}},\n    \"turnosId\": {{turnosId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "SAN Eliminar Comandas Por Turno",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"SAN_EliminarComandasPorTurno\",\n  \"parameters\": {\n    \"turnosId\": {{turnosId}},\n    \"companiasId\": {{companiasId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Almacenar Comandas Mesero Turnos Por Centro De Costo V2",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"almacenarComandasMeseroTurnosPorCentroDeCostoV2\",\n  \"parameters\": {\n    \"elJson\": \"{{elJsonString}}\",\n    \"companiasId\": {{companiasId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Almacenar Venta Diaria AFN",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"almacenarVentaDiariaAFN\",\n  \"parameters\": {\n    \"elJson\": \"{{elJsonString}}\",\n    \"companiasId\": {{companiasId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Buscar Turnos App Comandas Vacio",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"BuscarTurnosAppComandasVacio\",\n  \"parameters\": {\n    \"companiasId\": {{companiasId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Configuraciones",
+			"item": [
+				{
+					"name": "Buscar Configuraciones Generales Por Compañía",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"buscarConfiguracionesGeneralesPorCompania\",\n  \"parameters\": {\n    \"companiasId\": {{companiasId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Obtener Componentes Activos Por Compañía",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"obtenerComponentesActivosPorCompania\",\n  \"parameters\": {\n    \"companiasId\": {{companiasId}},\n    \"incluirAuditoria\": false\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Actualizar Componente Empresa",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"ActualizarComponenteEmpresa\",\n  \"parameters\": {\n    \"configuracionComponentesCompaniaId\": {{configuracionId}},\n    \"esActivo\": {{esActivo}},\n    \"usuarioModificacion\": \"{{usuario}}\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Obtener Compañías",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"obtenerCompanias\",\n  \"parameters\": {\n    \"incluirInactivas\": 0\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Buscar Colección",
+			"item": [
+				{
+					"name": "Buscar Colección (Tabla)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"buscarColeccion\",\n  \"parameters\": {\n    \"coleccion\": \"{{nombreTabla}}\",\n    \"tipo\": \"t\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						},
+						"description": "Obtiene la estructura de una tabla. tipo='t' para tabla, tipo='p' para procedimiento"
+					}
+				},
+				{
+					"name": "Buscar Colección (Procedimiento)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"buscarColeccion\",\n  \"parameters\": {\n    \"coleccion\": \"{{nombreProcedimiento}}\",\n    \"tipo\": \"p\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						},
+						"description": "Obtiene el código de un procedimiento almacenado"
+					}
+				}
+			]
+		},
+		{
+			"name": "Créditos y Cuentas por Cobrar",
+			"item": [
+				{
+					"name": "Buscar Informe Cuentas Por Cobrar AWS",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"buscarinformeCuentasPorCobrarAWS\",\n  \"parameters\": {\n    \"nombre\": \"{{nombreInforme}}\",\n    \"companiaId\": {{companiasId}},\n    \"clienteId\": {{clienteId}},\n    \"TodasConSaldo\": \"{{TodasConSaldo}}\",\n    \"fechadesde\": \"{{fechaDesde}}\",\n    \"fechahasta\": \"{{fechaHasta}}\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Informe Resumen Cuentas Por Cobrar Con Estado",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"informeResumenCuentasPorCobrarConEstado\",\n  \"parameters\": {\n    \"entidadesId\": {{entidadesId}},\n    \"clientesId\": {{clientesId}},\n    \"fechaDesde\": \"{{fechaDesde}}\",\n    \"fechaHasta\": \"{{fechaHasta}}\",\n    \"estado\": \"{{estado}}\",\n    \"companiasId\": {{companiasId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Informe Resumen Cuentas Por Cobrar Plan De Pago",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"informeResumenCuentasPorCobrarPlanDePago\",\n  \"parameters\": {\n    \"entidadesId\": {{entidadesId}},\n    \"clientesId\": {{clientesId}},\n    \"fechaDesde\": \"{{fechaDesde}}\",\n    \"fechaHasta\": \"{{fechaHasta}}\",\n    \"estado\": \"{{estado}}\",\n    \"companiasId\": {{companiasId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Calcular Valores Cuenta Por Cobrar",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"calcularValoresCuentaPorCobrar\",\n  \"parameters\": {\n    \"companiasId\": {{companiasId}},\n    \"cuentasPorCobrarId\": {{cuentasPorCobrarId}},\n    \"fechaCalcula\": \"{{fechaCalcula}}\",\n    \"esUnPago\": \"{{esUnPago}}\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Validar Almacenar Pago Cuenta Por Cobrar",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"validarAlmacenarPagoCuentaPorCobrar\",\n  \"parameters\": {\n    \"elJson\": \"{{elJsonString}}\",\n    \"companiasId\": {{companiasId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Almacenar Pago Cuenta Por Cobrar",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"almacenarPagoCuentaPorCobrar\",\n  \"parameters\": {\n    \"elJson\": \"{{elJsonString}}\",\n    \"companiasId\": {{companiasId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Devolver Abono Cuenta Por Cobrar",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"devolverAbonoCuentaPorCobrar\",\n  \"parameters\": {\n    \"cuentasPorCobrarId\": {{cuentasPorCobrarId}},\n    \"seguimientosCuentasPorCobrarId\": {{seguimientosCuentasPorCobrarId}},\n    \"companiasId\": {{companiasId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Conceptos y Egresos",
+			"item": [
+				{
+					"name": "Buscar Conceptos Egresos Por Empresa San",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"buscarConceptosEgresosPorEmpresaSan\",\n  \"parameters\": {\n    \"companiasId\": {{companiasId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Buscar Egresos Ingresos Por Empresa San",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"buscarEgresosIngresosPorEmpresaSan\",\n  \"parameters\": {\n    \"companiasId\": {{companiasId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "DataDynamicCrud - Conceptos Egresos (Insert)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"dataDynamicCrud\",\n  \"parameters\": {\n    \"json\": \"{\\\"codigo\\\":\\\"{{codigo}}\\\",\\\"nombre\\\":\\\"{{nombre}}\\\",\\\"tipo\\\":{{tipo}},\\\"companiasId\\\":{{companiasId}},\\\"nombreTabla\\\":\\\"conceptosEgresos\\\"}\",\n    \"queHago\": \"I\",\n    \"nombreTabla\": \"conceptosEgresos\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "DataDynamicCrud - Conceptos Egresos (Update)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"dataDynamicCrud\",\n  \"parameters\": {\n    \"json\": \"{\\\"conceptosEgresosId\\\":{{conceptosEgresosId}},\\\"codigo\\\":\\\"{{codigo}}\\\",\\\"nombre\\\":\\\"{{nombre}}\\\",\\\"tipo\\\":{{tipo}},\\\"companiasId\\\":{{companiasId}},\\\"nombreTabla\\\":\\\"conceptosEgresos\\\"}\",\n    \"queHago\": \"A\",\n    \"nombreTabla\": \"conceptosEgresos\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "DataDynamicCrud - Conceptos Egresos (Delete)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"dataDynamicCrud\",\n  \"parameters\": {\n    \"json\": \"{\\\"conceptosEgresosId\\\":{{conceptosEgresosId}},\\\"nombreTabla\\\":\\\"conceptosEgresos\\\"}\",\n    \"queHago\": \"E\",\n    \"nombreTabla\": \"conceptosEgresos\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "DataDynamicCrud - Egresos Ingresos (Insert)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"dataDynamicCrud\",\n  \"parameters\": {\n    \"json\": \"{\\\"valorUnitario\\\":{{valorUnitario}},\\\"cantidad\\\":{{cantidad}},\\\"detalle\\\":\\\"{{detalle}}\\\",\\\"conceptosEgresosId\\\":{{conceptosEgresosId}},\\\"imagen\\\":\\\"{{imagen}}\\\",\\\"fechaEgreso\\\":\\\"{{fechaEgreso}}\\\",\\\"companiasId\\\":{{companiasId}},\\\"nombreTabla\\\":\\\"egresosDiarios\\\"}\",\n    \"queHago\": \"I\",\n    \"nombreTabla\": \"egresosDiarios\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "DataDynamicCrud - Egresos Ingresos (Update)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"dataDynamicCrud\",\n  \"parameters\": {\n    \"json\": \"{\\\"egresosDiariosId\\\":{{egresosDiariosId}},\\\"valorUnitario\\\":{{valorUnitario}},\\\"cantidad\\\":{{cantidad}},\\\"detalle\\\":\\\"{{detalle}}\\\",\\\"conceptosEgresosId\\\":{{conceptosEgresosId}},\\\"imagen\\\":\\\"{{imagen}}\\\",\\\"fechaEgreso\\\":\\\"{{fechaEgreso}}\\\",\\\"companiasId\\\":{{companiasId}},\\\"nombreTabla\\\":\\\"egresosDiarios\\\"}\",\n    \"queHago\": \"A\",\n    \"nombreTabla\": \"egresosDiarios\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "DataDynamicCrud - Egresos Ingresos (Delete)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"dataDynamicCrud\",\n  \"parameters\": {\n    \"json\": \"{\\\"egresosDiariosId\\\":{{egresosDiariosId}},\\\"nombreTabla\\\":\\\"egresosDiarios\\\"}\",\n    \"queHago\": \"E\",\n    \"nombreTabla\": \"egresosDiarios\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Informes",
+			"item": [
+				{
+					"name": "Informe Balance Negocio",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"informeBalanceNegocio\",\n  \"parameters\": {\n    \"companiasId\": {{companiasId}},\n    \"fechaDesde\": \"{{fechaDesde}}\",\n    \"fechaHasta\": \"{{fechaHasta}}\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Informe Cuadres Diarios",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"informeCuadresDiarios\",\n  \"parameters\": {\n    \"companiasId\": {{companiasId}},\n    \"fechaDesde\": \"{{fechaDesde}}\",\n    \"fechaHasta\": \"{{fechaHasta}}\",\n    \"usuariosId\": {{usuariosId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Informe Desperdicios Por Día",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"informeDesperdiciosPorDia\",\n  \"parameters\": {\n    \"companiasId\": {{companiasId}},\n    \"fechaDesde\": \"{{fechaDesde}}\",\n    \"fechaHasta\": \"{{fechaHasta}}\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Informe Productos Vendidos Por Días",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"informeProductosVendidosPorDias\",\n  \"parameters\": {\n    \"companiasId\": {{companiasId}},\n    \"fechaDesde\": \"{{fechaDesde}}\",\n    \"fechaHasta\": \"{{fechaHasta}}\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Informe Cantidades Descontadas Inventario Por Día",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"informeCantidadesDescontadasInventarioPorDia\",\n  \"parameters\": {\n    \"companiasId\": {{companiasId}},\n    \"fechaDesde\": \"{{fechaDesde}}\",\n    \"fechaHasta\": \"{{fechaHasta}}\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Informe Ingreso Mercancia Por Día",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"informeIngresoMercanciaPorDia\",\n  \"parameters\": {\n    \"companiasId\": {{companiasId}},\n    \"fechaDesde\": \"{{fechaDesde}}\",\n    \"fechaHasta\": \"{{fechaHasta}}\",\n    \"proveedoresId\": {{proveedoresId}}\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Buscar Informe Por Fechas",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"buscarinformePorFechas\",\n  \"parameters\": {\n    \"companiasId\": {{companiasId}},\n    \"fecha\": \"{{fecha}}\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						}
+					}
+				},
+				{
+					"name": "Informe Ventas Devueltas (Dinámico)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"{{nombreInforme}}\",\n  \"parameters\": {\n    \"companiasId\": {{companiasId}},\n    \"fechaDesde\": \"{{fechaDesde}}\",\n    \"fechaHasta\": \"{{fechaHasta}}\",\n    \"totales\": {{totales}},\n    \"consecutivo\": \"{{consecutivo}}\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						},
+						"description": "Nombre del informe se pasa como parámetro. Ejemplos: buscarinformeVariosVentasDevueltasAWS"
+					}
+				}
+			]
+		},
+		{
+			"name": "SQL Dinámico",
+			"item": [
+				{
+					"name": "Cualquier Cosa (Ejecutar SQL)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"cualquiercosa\",\n  \"parameters\": {\n    \"afn\": \"{{querySQL}}\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						},
+						"description": "Ejecuta cualquier query SQL. Usado en SanInformeSqlPagina para ejecutar consultas dinámicas."
+					}
+				}
+			]
+		},
+		{
+			"name": "DataDynamicCrud - Genérico",
+			"item": [
+				{
+					"name": "DataDynamicCrud - Insert (Genérico)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"dataDynamicCrud\",\n  \"parameters\": {\n    \"json\": \"{{jsonDatos}}\",\n    \"queHago\": \"I\",\n    \"nombreTabla\": \"{{nombreTabla}}\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						},
+						"description": "Insert genérico. El campo json debe ser un string JSON escapado con todos los campos de la tabla, incluyendo nombreTabla."
+					}
+				},
+				{
+					"name": "DataDynamicCrud - Update (Genérico)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"dataDynamicCrud\",\n  \"parameters\": {\n    \"json\": \"{{jsonDatos}}\",\n    \"queHago\": \"A\",\n    \"nombreTabla\": \"{{nombreTabla}}\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						},
+						"description": "Update genérico. El campo json debe incluir el ID del registro y nombreTabla."
+					}
+				},
+				{
+					"name": "DataDynamicCrud - Delete (Genérico)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"dataDynamicCrud\",\n  \"parameters\": {\n    \"json\": \"{{jsonDatos}}\",\n    \"queHago\": \"E\",\n    \"nombreTabla\": \"{{nombreTabla}}\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						},
+						"description": "Delete genérico. El campo json debe incluir el ID del registro y nombreTabla."
+					}
+				},
+				{
+					"name": "DataDynamicCrud - Select (Genérico)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"dataDynamicCrud\",\n  \"parameters\": {\n    \"json\": \"{{jsonDatos}}\",\n    \"queHago\": \"S\",\n    \"nombreTabla\": \"{{nombreTabla}}\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/procedure",
+							"host": ["{{base_url}}"],
+							"path": ["procedure"]
+						},
+						"description": "Select genérico. El campo json puede incluir filtros y nombreTabla."
+					}
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "https://servicios.sancolombia.com/api-san",
+			"type": "string"
+		},
+		{
+			"key": "token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "companiasId",
+			"value": "1",
+			"type": "string"
+		},
+		{
+			"key": "usuario",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "clave",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "searchTerm",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "pageNumber",
+			"value": "1",
+			"type": "string"
+		}
+	]
+}
+

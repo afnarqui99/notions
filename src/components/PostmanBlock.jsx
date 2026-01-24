@@ -67,6 +67,108 @@ export default function PostmanBlock({ node, updateAttributes, editor, getPos })
   const [authPassword, setAuthPassword] = useState('');
   const [authHeaderName, setAuthHeaderName] = useState('X-API-Key');
   const [authApiValue, setAuthApiValue] = useState('');
+  
+  // Sistema de variables (similar a Postman)
+  const [variables, setVariables] = useState(() => {
+    try {
+      const saved = localStorage.getItem('postman_variables');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+      // Variables por defecto
+      return [
+        { key: 'base_url', value: 'https://api.ejemplo.com', enabled: true },
+        { key: 'token', value: '', enabled: true },
+        { key: 'usuario', value: '', enabled: true },
+        { key: 'clave', value: '', enabled: true }
+      ];
+    } catch {
+      return [
+        { key: 'base_url', value: 'https://api.ejemplo.com', enabled: true },
+        { key: 'token', value: '', enabled: true }
+      ];
+    }
+  });
+  const [showVariables, setShowVariables] = useState(false);
+  const [editingVariable, setEditingVariable] = useState(null);
+  const [newVariableKey, setNewVariableKey] = useState('');
+  const [newVariableValue, setNewVariableValue] = useState('');
+  
+  // Sistema de pestañas
+  const [tabs, setTabs] = useState(() => {
+    try {
+      const savedTabs = node.attrs.tabs ? JSON.parse(node.attrs.tabs) : null;
+      if (savedTabs && savedTabs.length > 0) {
+        return savedTabs;
+      }
+      // Si no hay pestañas guardadas, crear una pestaña inicial
+      return [{
+        id: `tab-${Date.now()}`,
+        name: 'Nueva API',
+        method: node.attrs.method || 'GET',
+        url: node.attrs.url || '',
+        headers: node.attrs.headers ? JSON.parse(node.attrs.headers) : [{ key: '', value: '' }],
+        body: node.attrs.body || '',
+        bodyType: node.attrs.bodyType || 'json',
+        response: node.attrs.response ? JSON.parse(node.attrs.response) : null,
+        responseTime: 0,
+        statusCode: null,
+        authType: 'noauth',
+        authToken: '',
+        authUsername: '',
+        authPassword: '',
+        authHeaderName: 'X-API-Key',
+        authApiValue: '',
+        requestName: ''
+      }];
+    } catch {
+      return [{
+        id: `tab-${Date.now()}`,
+        name: 'Nueva API',
+        method: 'GET',
+        url: '',
+        headers: [{ key: '', value: '' }],
+        body: '',
+        bodyType: 'json',
+        response: null,
+        responseTime: 0,
+        statusCode: null,
+        authType: 'noauth',
+        authToken: '',
+        authUsername: '',
+        authPassword: '',
+        authHeaderName: 'X-API-Key',
+        authApiValue: '',
+        requestName: ''
+      }];
+    }
+  });
+  const [activeTabId, setActiveTabId] = useState(() => {
+    try {
+      const savedTabs = node.attrs.tabs ? JSON.parse(node.attrs.tabs) : null;
+      const savedActiveTab = node.attrs.activeTabId;
+      if (savedActiveTab && savedTabs && savedTabs.find(t => t.id === savedActiveTab)) {
+        return savedActiveTab;
+      }
+      if (savedTabs && savedTabs.length > 0) {
+        return savedTabs[0].id;
+      }
+      return '';
+    } catch {
+      return '';
+    }
+  });
+  
+  // Asegurar que activeTabId sea válido después de que tabs se inicialice
+  useEffect(() => {
+    if (tabs.length > 0 && (!activeTabId || !tabs.find(t => t.id === activeTabId))) {
+      setActiveTabId(tabs[0].id);
+    }
+  }, [tabs.length]);
+  
+  // Obtener la pestaña activa
+  const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0];
+  
   const fileInputRef = useRef(null);
   const responseRef = useRef(null);
   const abortControllerRef = useRef(null);
@@ -97,18 +199,139 @@ export default function PostmanBlock({ node, updateAttributes, editor, getPos })
     setShowDeleteModal(false);
   };
 
+  // Sincronizar estado local con la pestaña activa cuando cambia
+  useEffect(() => {
+    // Si estamos actualizando desde la creación de una nueva pestaña, no hacer nada
+    if (isUpdatingFromTabRef.current) {
+      console.log('[PostmanBlock] useEffect sincronización - bloqueado por isUpdatingFromTabRef');
+      return;
+    }
+    
+    if (activeTabId && tabs.length > 0) {
+      const currentTab = tabs.find(t => t.id === activeTabId);
+      if (currentTab) {
+        // Verificar si los valores ya son los correctos para evitar actualizaciones innecesarias
+        const currentMethod = method;
+        const currentUrl = url;
+        const currentHeaders = JSON.stringify(headers);
+        const tabMethod = currentTab.method || 'GET';
+        const tabUrl = currentTab.url || '';
+        const tabHeaders = JSON.stringify(Array.isArray(currentTab.headers) ? currentTab.headers : [{ key: '', value: '' }]);
+        
+        // Solo actualizar si los valores son diferentes
+        if (currentMethod !== tabMethod || currentUrl !== tabUrl || currentHeaders !== tabHeaders) {
+          console.log('[PostmanBlock] useEffect sincronización - actualizando desde pestaña:', currentTab.name, {
+            method: tabMethod,
+            url: tabUrl,
+            'estado actual method': currentMethod,
+            'estado actual url': currentUrl
+          });
+          
+          // Marcar que estamos actualizando desde el cambio de pestaña
+          isUpdatingFromTabRef.current = true;
+          
+          setMethod(tabMethod);
+          setUrl(tabUrl);
+          setHeaders(Array.isArray(currentTab.headers) ? currentTab.headers : [{ key: '', value: '' }]);
+          setBody(currentTab.body || '');
+          setBodyType(currentTab.bodyType || 'json');
+          setResponse(currentTab.response || null);
+          setResponseTime(currentTab.responseTime || 0);
+          setStatusCode(currentTab.statusCode || null);
+          setRequestName(currentTab.requestName || '');
+          setAuthType(currentTab.authType || 'noauth');
+          setAuthToken(currentTab.authToken || '');
+          setAuthUsername(currentTab.authUsername || '');
+          setAuthPassword(currentTab.authPassword || '');
+          setAuthHeaderName(currentTab.authHeaderName || 'X-API-Key');
+          setAuthApiValue(currentTab.authApiValue || '');
+          
+          // Resetear el flag después de actualizar
+          setTimeout(() => {
+            isUpdatingFromTabRef.current = false;
+          }, 0);
+        } else {
+          console.log('[PostmanBlock] useEffect sincronización - valores ya están sincronizados, saltando actualización');
+        }
+      }
+    }
+  }, [activeTabId, tabs]);
+
+  // Ref para evitar loops infinitos
+  const isUpdatingFromTabRef = useRef(false);
+  
+  // Actualizar la pestaña activa cuando cambia el estado local (con verificación para evitar loops)
+  useEffect(() => {
+    // Si estamos actualizando desde el cambio de pestaña, no actualizar de vuelta
+    if (isUpdatingFromTabRef.current) {
+      isUpdatingFromTabRef.current = false;
+      return;
+    }
+    
+    if (activeTabId && tabs.length > 0) {
+      const currentTab = tabs.find(t => t.id === activeTabId);
+      if (currentTab) {
+        // Solo actualizar si los valores realmente cambiaron
+        const hasChanges = 
+          currentTab.method !== method ||
+          currentTab.url !== url ||
+          JSON.stringify(currentTab.headers) !== JSON.stringify(headers) ||
+          currentTab.body !== body ||
+          currentTab.bodyType !== bodyType ||
+          JSON.stringify(currentTab.response) !== JSON.stringify(response) ||
+          currentTab.responseTime !== responseTime ||
+          currentTab.statusCode !== statusCode ||
+          currentTab.requestName !== requestName ||
+          currentTab.authType !== authType ||
+          currentTab.authToken !== authToken ||
+          currentTab.authUsername !== authUsername ||
+          currentTab.authPassword !== authPassword ||
+          currentTab.authHeaderName !== authHeaderName ||
+          currentTab.authApiValue !== authApiValue;
+
+        if (hasChanges) {
+          setTabs(prevTabs => prevTabs.map(tab => 
+            tab.id === activeTabId 
+              ? {
+                  ...tab,
+                  method,
+                  url,
+                  headers,
+                  body,
+                  bodyType,
+                  response,
+                  responseTime,
+                  statusCode,
+                  requestName,
+                  authType,
+                  authToken,
+                  authUsername,
+                  authPassword,
+                  authHeaderName,
+                  authApiValue,
+                  name: requestName || url || tab.name || 'Nueva API'
+                }
+              : tab
+          ));
+        }
+      }
+    }
+  }, [method, url, headers, body, bodyType, response, responseTime, statusCode, requestName, authType, authToken, authUsername, authPassword, authHeaderName, authApiValue, activeTabId, tabs.length]);
+
   // Guardar estado en el nodo
   useEffect(() => {
     updateAttributes({
-      method,
-      url,
-      headers: JSON.stringify(headers),
-      body,
-      bodyType,
-      response: response ? JSON.stringify(response) : '',
-      collections: JSON.stringify(collections)
+      method: activeTab?.method || 'GET',
+      url: activeTab?.url || '',
+      headers: JSON.stringify(activeTab?.headers || [{ key: '', value: '' }]),
+      body: activeTab?.body || '',
+      bodyType: activeTab?.bodyType || 'json',
+      response: activeTab?.response ? JSON.stringify(activeTab.response) : '',
+      collections: JSON.stringify(collections),
+      tabs: JSON.stringify(tabs),
+      activeTabId: activeTabId
     });
-  }, [method, url, headers, body, bodyType, response, collections, updateAttributes]);
+  }, [tabs, activeTabId, collections, updateAttributes]);
 
   // Actualizar savedRequests cuando cambia currentCollection
   useEffect(() => {
@@ -144,8 +367,61 @@ export default function PostmanBlock({ node, updateAttributes, editor, getPos })
   const saveCollections = (newCollections) => {
     setCollections(newCollections);
     updateAttributes({
-      collections: JSON.stringify(newCollections)
+      collections: JSON.stringify(newCollections),
+      tabs: JSON.stringify(tabs),
+      activeTabId: activeTabId
     });
+  };
+
+  // Funciones para gestionar pestañas
+  const createNewTab = () => {
+    const newTab = {
+      id: `tab-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      name: 'Nueva API',
+      method: 'GET',
+      url: '',
+      headers: [{ key: '', value: '' }],
+      body: '',
+      bodyType: 'json',
+      response: null,
+      responseTime: 0,
+      statusCode: null,
+      authType: 'noauth',
+      authToken: '',
+      authUsername: '',
+      authPassword: '',
+      authHeaderName: 'X-API-Key',
+      authApiValue: '',
+      requestName: ''
+    };
+    setTabs(prev => [...prev, newTab]);
+    setActiveTabId(newTab.id);
+  };
+
+  const closeTab = (tabId, e) => {
+    e?.stopPropagation();
+    if (tabs.length === 1) {
+      // No permitir cerrar la última pestaña
+      setToast({ message: 'Debe haber al menos una pestaña abierta', type: 'error' });
+      return;
+    }
+    
+    const tabIndex = tabs.findIndex(t => t.id === tabId);
+    const newTabs = tabs.filter(t => t.id !== tabId);
+    setTabs(newTabs);
+    
+    // Si se cerró la pestaña activa, activar otra
+    if (activeTabId === tabId) {
+      if (tabIndex > 0) {
+        setActiveTabId(newTabs[tabIndex - 1].id);
+      } else {
+        setActiveTabId(newTabs[0].id);
+      }
+    }
+  };
+
+  const switchTab = (tabId) => {
+    setActiveTabId(tabId);
   };
 
   const addHeader = () => {
@@ -175,6 +451,20 @@ export default function PostmanBlock({ node, updateAttributes, editor, getPos })
     }
   };
 
+  // Función para sustituir variables en un string
+  const substituteVariables = (text) => {
+    if (!text || typeof text !== 'string') return text;
+    
+    let result = text;
+    variables.forEach(variable => {
+      if (variable.enabled && variable.key) {
+        const regex = new RegExp(`\\{\\{${variable.key}\\}\\}`, 'g');
+        result = result.replace(regex, variable.value || '');
+      }
+    });
+    return result;
+  };
+
   const executeRequest = async () => {
     if (!url.trim()) {
       setResponse({ error: 'Por favor, ingresa una URL' });
@@ -198,22 +488,32 @@ export default function PostmanBlock({ node, updateAttributes, editor, getPos })
     const startTime = Date.now();
 
     try {
-      // Construir headers
+      // Sustituir variables en URL
+      const finalUrl = substituteVariables(url);
+      
+      // Construir headers con sustitución de variables
       const requestHeaders = {};
       headers.forEach(header => {
         if (header.key.trim()) {
-          requestHeaders[header.key.trim()] = header.value.trim();
+          const headerKey = substituteVariables(header.key.trim());
+          const headerValue = substituteVariables(header.value.trim());
+          requestHeaders[headerKey] = headerValue;
         }
       });
 
-      // Agregar autenticación según el tipo
+      // Agregar autenticación según el tipo (con sustitución de variables)
       if (authType === 'bearer' && authToken.trim()) {
-        requestHeaders['Authorization'] = `Bearer ${authToken.trim()}`;
+        const token = substituteVariables(authToken.trim());
+        requestHeaders['Authorization'] = `Bearer ${token}`;
       } else if (authType === 'basic' && authUsername.trim() && authPassword.trim()) {
-        const credentials = btoa(`${authUsername.trim()}:${authPassword.trim()}`);
+        const username = substituteVariables(authUsername.trim());
+        const password = substituteVariables(authPassword.trim());
+        const credentials = btoa(`${username}:${password}`);
         requestHeaders['Authorization'] = `Basic ${credentials}`;
       } else if (authType === 'apikey' && authApiValue.trim()) {
-        requestHeaders[authHeaderName.trim() || 'X-API-Key'] = authApiValue.trim();
+        const headerName = substituteVariables(authHeaderName.trim() || 'X-API-Key');
+        const apiValue = substituteVariables(authApiValue.trim());
+        requestHeaders[headerName] = apiValue;
       }
 
       // Si es JSON, agregar Content-Type automáticamente
@@ -232,23 +532,31 @@ export default function PostmanBlock({ node, updateAttributes, editor, getPos })
         signal: abortController.signal // Agregar señal de cancelación
       };
 
-      // Agregar body para métodos que lo requieren
+      console.log('[PostmanBlock] Ejecutando request:', {
+        method,
+        originalUrl: url,
+        finalUrl,
+        headers: requestHeaders
+      });
+
+      // Agregar body para métodos que lo requieren (con sustitución de variables)
       if ((method === 'POST' || method === 'PUT' || method === 'PATCH') && body.trim()) {
+        const finalBody = substituteVariables(body);
         if (bodyType === 'json') {
           try {
             // Intentar parsear como JSON para validar
-            JSON.parse(body);
-            fetchOptions.body = body;
+            JSON.parse(finalBody);
+            fetchOptions.body = finalBody;
           } catch {
-            fetchOptions.body = body; // Enviar como está si no es JSON válido
+            fetchOptions.body = finalBody; // Enviar como está si no es JSON válido
           }
         } else {
-          fetchOptions.body = body;
+          fetchOptions.body = finalBody;
         }
       }
 
       // Ejecutar petición
-      const fetchResponse = await fetch(url.trim(), fetchOptions);
+      const fetchResponse = await fetch(finalUrl, fetchOptions);
       const endTime = Date.now();
       setResponseTime(endTime - startTime);
       setStatusCode(fetchResponse.status);
@@ -735,49 +1043,116 @@ export default function PostmanBlock({ node, updateAttributes, editor, getPos })
         return;
       }
 
-      const requests = postmanCollection.item.map((item, index) => {
-        const request = item.request || {};
-        const url = typeof request.url === 'string' 
-          ? request.url 
-          : request.url?.raw || '';
+      // Función recursiva para extraer todas las requests (incluyendo las anidadas en carpetas)
+      const extractRequests = (items, parentFolder = '') => {
+        const requests = [];
+        let requestIndex = 0;
 
-        // Convertir headers
-        const headers = (request.header || []).map(h => ({
-          key: h.key || '',
-          value: h.value || ''
-        }));
+        const processItem = (item) => {
+          // Si el item tiene una request directa, es una request
+          if (item.request) {
+            const request = item.request;
+            
+            // Extraer URL del formato Postman (puede ser string u objeto)
+            let url = '';
+            if (typeof request.url === 'string') {
+              url = request.url;
+            } else if (request.url) {
+              // Formato Postman v2.1: request.url puede ser un objeto con 'raw', 'host', 'path', etc.
+              url = request.url.raw || '';
+              
+              // Si no hay raw, construir la URL desde host y path
+              if (!url && request.url.host) {
+                let host = '';
+                if (Array.isArray(request.url.host)) {
+                  host = request.url.host.join('.');
+                } else if (typeof request.url.host === 'string') {
+                  host = request.url.host;
+                }
+                
+                if (host) {
+                  const protocol = request.url.protocol || (request.url.protocols && request.url.protocols[0]) || 'https';
+                  const path = Array.isArray(request.url.path) 
+                    ? '/' + request.url.path.filter(p => p).join('/') 
+                    : (request.url.path || '');
+                  
+                  // Construir query string si existe
+                  let query = '';
+                  if (request.url.query && Array.isArray(request.url.query)) {
+                    const queryParts = request.url.query
+                      .filter(q => q.key || q.value)
+                      .map(q => {
+                        if (q.disabled) return null;
+                        return q.value ? `${q.key || ''}=${q.value}` : (q.key || '');
+                      })
+                      .filter(q => q !== null);
+                    if (queryParts.length > 0) {
+                      query = '?' + queryParts.join('&');
+                    }
+                  }
+                  
+                  url = `${protocol}://${host}${path}${query}`;
+                }
+              }
+            }
+            
+            console.log('[PostmanBlock] Importando request:', {
+              name: item.name,
+              folder: parentFolder,
+              'request.url (original)': request.url,
+              'url extraída': url
+            });
 
-        // Determinar body y bodyType
-        let body = '';
-        let bodyType = 'json';
-        
-        if (request.body) {
-          if (request.body.mode === 'raw') {
-            body = request.body.raw || '';
-            bodyType = request.body.options?.raw?.language === 'json' ? 'json' : 'text';
-          } else if (request.body.mode === 'formdata') {
-            body = request.body.formdata?.map(f => `${f.key}=${f.value}`).join('&') || '';
-            bodyType = 'form-data';
-          } else if (request.body.mode === 'urlencoded') {
-            body = request.body.urlencoded?.map(u => `${u.key}=${u.value}`).join('&') || '';
-            bodyType = 'x-www-form-urlencoded';
-          } else {
-            body = request.body.raw || '';
-            bodyType = 'text';
+            // Convertir headers
+            const headers = (request.header || []).map(h => ({
+              key: h.key || '',
+              value: h.value || ''
+            }));
+
+            // Determinar body y bodyType
+            let body = '';
+            let bodyType = 'json';
+            
+            if (request.body) {
+              if (request.body.mode === 'raw') {
+                body = request.body.raw || '';
+                bodyType = request.body.options?.raw?.language === 'json' ? 'json' : 'text';
+              } else if (request.body.mode === 'formdata') {
+                body = request.body.formdata?.map(f => `${f.key}=${f.value}`).join('&') || '';
+                bodyType = 'form-data';
+              } else if (request.body.mode === 'urlencoded') {
+                body = request.body.urlencoded?.map(u => `${u.key}=${u.value}`).join('&') || '';
+                bodyType = 'x-www-form-urlencoded';
+              } else {
+                body = request.body.raw || '';
+                bodyType = 'text';
+              }
+            }
+
+            requests.push({
+              id: `request-${Date.now()}-${requestIndex++}-${Math.random().toString(36).substr(2, 9)}`,
+              name: item.name || `Request ${requestIndex}`,
+              method: request.method || 'GET',
+              url: url,
+              headers: headers.length > 0 ? headers : [{ key: '', value: '' }],
+              body: body,
+              bodyType: bodyType,
+              createdAt: new Date().toISOString()
+            });
           }
-        }
-
-        return {
-          id: `request-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`,
-          name: item.name || `Request ${index + 1}`,
-          method: request.method || 'GET',
-          url: url,
-          headers: headers.length > 0 ? headers : [{ key: '', value: '' }],
-          body: body,
-          bodyType: bodyType,
-          createdAt: new Date().toISOString()
+          // Si el item tiene sub-items, es una carpeta - procesar recursivamente
+          else if (item.item && Array.isArray(item.item)) {
+            const folderName = item.name || 'Sin nombre';
+            const newParentFolder = parentFolder ? `${parentFolder}/${folderName}` : folderName;
+            item.item.forEach(subItem => processItem(subItem));
+          }
         };
-      });
+
+        items.forEach(item => processItem(item));
+        return requests;
+      };
+
+      const requests = extractRequests(postmanCollection.item);
 
       const newCollection = {
         id: postmanCollection.info._postman_id || `collection-${Date.now()}`,
@@ -793,6 +1168,12 @@ export default function PostmanBlock({ node, updateAttributes, editor, getPos })
       setCurrentCollection(collectionName);
       // Expandir automáticamente la colección importada
       setExpandedCollections(prev => new Set([...prev, newCollection.id]));
+      
+      // Importar variables de la colección si existen
+      if (postmanCollection.variable) {
+        importVariablesFromCollection(postmanCollection);
+      }
+      
       setToast({ message: `Colección "${collectionName}" importada correctamente (${requests.length} peticiones)`, type: 'success' });
       setShowCollectionMenu(false);
     } catch (error) {
@@ -805,6 +1186,209 @@ export default function PostmanBlock({ node, updateAttributes, editor, getPos })
       }
     }
   };
+
+  // Funciones para gestionar variables
+  const addVariable = () => {
+    if (!newVariableKey.trim()) {
+      setToast({ message: 'Por favor, ingresa un nombre para la variable', type: 'error' });
+      return;
+    }
+    
+    // Verificar si ya existe
+    if (variables.find(v => v.key === newVariableKey.trim())) {
+      setToast({ message: `Ya existe una variable con el nombre "${newVariableKey.trim()}"`, type: 'error' });
+      return;
+    }
+    
+    const newVariable = {
+      key: newVariableKey.trim(),
+      value: newVariableValue.trim(),
+      enabled: true
+    };
+    
+    setVariables([...variables, newVariable]);
+    setNewVariableKey('');
+    setNewVariableValue('');
+    setToast({ message: `Variable "${newVariable.key}" agregada`, type: 'success' });
+  };
+
+  const editVariable = (index) => {
+    const variable = variables[index];
+    setEditingVariable(index);
+    setNewVariableKey(variable.key);
+    setNewVariableValue(variable.value);
+  };
+
+  const saveVariableEdit = () => {
+    if (!newVariableKey.trim()) {
+      setToast({ message: 'Por favor, ingresa un nombre para la variable', type: 'error' });
+      return;
+    }
+    
+    // Verificar si el nuevo nombre ya existe (excepto el que estamos editando)
+    const existingIndex = variables.findIndex(v => v.key === newVariableKey.trim());
+    if (existingIndex !== -1 && existingIndex !== editingVariable) {
+      setToast({ message: `Ya existe una variable con el nombre "${newVariableKey.trim()}"`, type: 'error' });
+      return;
+    }
+    
+    const updatedVariables = [...variables];
+    updatedVariables[editingVariable] = {
+      ...updatedVariables[editingVariable],
+      key: newVariableKey.trim(),
+      value: newVariableValue.trim()
+    };
+    
+    setVariables(updatedVariables);
+    setEditingVariable(null);
+    setNewVariableKey('');
+    setNewVariableValue('');
+    setToast({ message: 'Variable actualizada', type: 'success' });
+  };
+
+  const deleteVariable = (index) => {
+    const variable = variables[index];
+    const updatedVariables = variables.filter((_, i) => i !== index);
+    setVariables(updatedVariables);
+    setToast({ message: `Variable "${variable.key}" eliminada`, type: 'success' });
+  };
+
+  const toggleVariable = (index) => {
+    const updatedVariables = [...variables];
+    updatedVariables[index].enabled = !updatedVariables[index].enabled;
+    setVariables(updatedVariables);
+  };
+
+  const exportVariables = () => {
+    const variablesToExport = variables.map(v => ({
+      key: v.key,
+      value: v.value,
+      enabled: v.enabled
+    }));
+    
+    const jsonString = JSON.stringify(variablesToExport, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `postman_variables_${Date.now()}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
+    setToast({ message: 'Variables exportadas correctamente', type: 'success' });
+  };
+
+  const importVariables = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    try {
+      const text = await file.text();
+      const importedVariables = JSON.parse(text);
+      
+      if (!Array.isArray(importedVariables)) {
+        setToast({ message: 'El archivo no tiene un formato válido', type: 'error' });
+        return;
+      }
+      
+      // Validar estructura
+      const validVariables = importedVariables.filter(v => v.key && typeof v.key === 'string');
+      
+      if (validVariables.length === 0) {
+        setToast({ message: 'No se encontraron variables válidas en el archivo', type: 'error' });
+        return;
+      }
+      
+      // Combinar con variables existentes (actualizar si existe, agregar si no)
+      const updatedVariables = [...variables];
+      validVariables.forEach(importedVar => {
+        const existingIndex = updatedVariables.findIndex(v => v.key === importedVar.key);
+        if (existingIndex !== -1) {
+          // Actualizar variable existente
+          updatedVariables[existingIndex] = {
+            ...updatedVariables[existingIndex],
+            value: importedVar.value || '',
+            enabled: importedVar.enabled !== undefined ? importedVar.enabled : true
+          };
+        } else {
+          // Agregar nueva variable
+          updatedVariables.push({
+            key: importedVar.key,
+            value: importedVar.value || '',
+            enabled: importedVar.enabled !== undefined ? importedVar.enabled : true
+          });
+        }
+      });
+      
+      setVariables(updatedVariables);
+      setToast({ message: `${validVariables.length} variable(s) importada(s) correctamente`, type: 'success' });
+      
+      // Limpiar el input
+      event.target.value = '';
+    } catch (error) {
+      console.error('Error al importar variables:', error);
+      setToast({ message: 'Error al importar variables: ' + error.message, type: 'error' });
+    }
+  };
+
+  // Importar variables desde colección Postman
+  const importVariablesFromCollection = (postmanCollection) => {
+    try {
+      // Buscar variables en la colección (pueden estar en variable o en variable[])
+      let collectionVariables = [];
+      
+      if (postmanCollection.variable && Array.isArray(postmanCollection.variable)) {
+        collectionVariables = postmanCollection.variable;
+      } else if (postmanCollection.variable && typeof postmanCollection.variable === 'object') {
+        collectionVariables = [postmanCollection.variable];
+      }
+      
+      if (collectionVariables.length === 0) {
+        return; // No hay variables, no mostrar mensaje
+      }
+      
+      // Convertir variables de Postman al formato interno
+      const importedVariables = collectionVariables.map(v => ({
+        key: v.key || v.name || '',
+        value: v.value || '',
+        enabled: v.enabled !== undefined ? v.enabled : true
+      })).filter(v => v.key);
+      
+      if (importedVariables.length === 0) {
+        return; // No hay variables válidas
+      }
+      
+      // Combinar con variables existentes
+      const updatedVariables = [...variables];
+      importedVariables.forEach(importedVar => {
+        const existingIndex = updatedVariables.findIndex(v => v.key === importedVar.key);
+        if (existingIndex !== -1) {
+          updatedVariables[existingIndex] = {
+            ...updatedVariables[existingIndex],
+            value: importedVar.value || '',
+            enabled: importedVar.enabled !== undefined ? importedVar.enabled : true
+          };
+        } else {
+          updatedVariables.push(importedVar);
+        }
+      });
+      
+      setVariables(updatedVariables);
+    } catch (error) {
+      console.error('Error al importar variables desde colección:', error);
+    }
+  };
+
+  // Guardar variables en localStorage cuando cambien
+  useEffect(() => {
+    try {
+      localStorage.setItem('postman_variables', JSON.stringify(variables));
+    } catch (error) {
+      console.error('Error al guardar variables:', error);
+    }
+  }, [variables]);
 
   // Generar código para diferentes lenguajes
   const generateCode = (language) => {
@@ -983,11 +1567,109 @@ export default function PostmanBlock({ node, updateAttributes, editor, getPos })
     });
   };
 
-  // Cargar petición desde el sidebar
+  // Crear un nuevo bloque Postman con una request específica
+  const createNewPostmanBlockWithRequest = (request) => {
+    if (!request || !editor) {
+      console.error('Request or editor is undefined');
+      return;
+    }
+
+    try {
+      // Crear un nuevo bloque postman con la request seleccionada
+      const newPostmanBlock = {
+        type: 'postmanBlock',
+        attrs: {
+          method: request.method || 'GET',
+          url: request.url || '',
+          headers: JSON.stringify(request.headers || [{ key: '', value: '' }]),
+          body: request.body || '',
+          bodyType: request.bodyType || 'json',
+          response: '',
+          collections: JSON.stringify(collections) // Mantener las colecciones
+        },
+      };
+
+      // Obtener la posición actual del cursor después del bloque postman
+      if (typeof getPos === 'function') {
+        const pos = getPos();
+        if (pos !== undefined && pos !== null) {
+          // Calcular la posición después del bloque actual
+          const afterPos = pos + node.nodeSize;
+          
+          // Usar el método directo de inserción
+          const { state, view } = editor;
+          const tr = state.tr;
+          
+          // Verificar que no estamos duplicando contenido
+          const nodeAtPos = tr.doc.nodeAt(afterPos);
+          if (nodeAtPos && nodeAtPos.type.name === 'postmanBlock') {
+            // Si ya hay un bloque postman en esa posición, mover la posición
+            const newAfterPos = afterPos + nodeAtPos.nodeSize;
+            tr.insert(newAfterPos, state.schema.nodes.postmanBlock.create(newPostmanBlock.attrs));
+          } else {
+            // Insertar normalmente
+            tr.insert(afterPos, state.schema.nodes.postmanBlock.create(newPostmanBlock.attrs));
+          }
+          
+          view.dispatch(tr);
+        } else {
+          // Fallback: insertar al final
+          editor.chain().focus().insertContent(newPostmanBlock).run();
+        }
+      } else {
+        // Fallback: insertar al final
+        editor.chain().focus().insertContent(newPostmanBlock).run();
+      }
+      
+      setToast({ message: `Nuevo bloque Postman creado con "${request.name || 'API'}"`, type: 'success' });
+    } catch (error) {
+      console.error('Error al crear nuevo bloque postman:', error);
+      // Intentar método alternativo más simple
+      try {
+        const newPostmanBlock = {
+          type: 'postmanBlock',
+          attrs: {
+            method: request.method || 'GET',
+            url: request.url || '',
+            headers: JSON.stringify(request.headers || [{ key: '', value: '' }]),
+            body: request.body || '',
+            bodyType: request.bodyType || 'json',
+            response: '',
+            collections: JSON.stringify(collections)
+          },
+        };
+        editor.chain().focus().insertContent(newPostmanBlock).run();
+        setToast({ message: `Nuevo bloque Postman creado con "${request.name || 'API'}"`, type: 'success' });
+      } catch (fallbackError) {
+        console.error('Error en fallback:', fallbackError);
+        setToast({ message: 'Error al crear nuevo bloque postman', type: 'error' });
+      }
+    }
+  };
+
+  // Cargar petición desde el sidebar (crea una nueva pestaña)
   const loadRequestFromSidebar = (request) => {
     if (!request) {
       console.error('Request is undefined or null');
       return;
+    }
+    
+    console.log('[PostmanBlock] loadRequestFromSidebar - request recibida:', {
+      name: request.name,
+      method: request.method,
+      url: request.url,
+      headers: request.headers,
+      'request completa': request
+    });
+    
+    // Si la URL está vacía, mostrar un mensaje informativo
+    if (!request.url || request.url.trim() === '') {
+      console.warn('[PostmanBlock] La request tiene URL vacía. Esto puede deberse a que la colección fue importada antes de la corrección. Reimporta la colección para obtener las URLs correctas.');
+      setToast({ 
+        message: `La API "${request.name}" no tiene URL configurada. Por favor, reimporta la colección o configura la URL manualmente.`, 
+        type: 'warning',
+        duration: 5000
+      });
     }
     
     // Buscar la colección que contiene esta request
@@ -996,13 +1678,86 @@ export default function PostmanBlock({ node, updateAttributes, editor, getPos })
     );
     
     if (collection) {
-      setCurrentCollection(collection.name);
       // Asegurar que la colección esté expandida
       setExpandedCollections(prev => new Set([...prev, collection.id]));
     }
     
-    // Cargar la request
-    loadRequest(request);
+    // Crear una nueva pestaña con esta request
+    const newTab = {
+      id: `tab-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      name: request.name || request.url || 'Nueva API',
+      method: request.method || 'GET',
+      url: request.url || '',
+      headers: Array.isArray(request.headers) && request.headers.length > 0 
+        ? request.headers 
+        : [{ key: '', value: '' }],
+      body: request.body || '',
+      bodyType: request.bodyType || 'json',
+      response: null,
+      responseTime: 0,
+      statusCode: null,
+      authType: request.authType || 'noauth',
+      authToken: request.authToken || '',
+      authUsername: request.authUsername || '',
+      authPassword: request.authPassword || '',
+      authHeaderName: request.authHeaderName || 'X-API-Key',
+      authApiValue: request.authApiValue || '',
+      requestName: request.name || ''
+    };
+    
+    console.log('[PostmanBlock] loadRequestFromSidebar - newTab creada:', {
+      id: newTab.id,
+      name: newTab.name,
+      method: newTab.method,
+      url: newTab.url
+    });
+    
+    // Marcar que estamos creando una nueva pestaña para evitar que el useEffect sobrescriba
+    isUpdatingFromTabRef.current = true;
+    console.log('[PostmanBlock] Flag activado, bloqueando useEffect');
+    
+    // Actualizar el estado local PRIMERO, antes de agregar la pestaña
+    console.log('[PostmanBlock] Actualizando estado local inmediatamente con valores:', {
+      method: newTab.method,
+      url: newTab.url
+    });
+    
+    setMethod(newTab.method);
+    setUrl(newTab.url);
+    setHeaders(newTab.headers);
+    setBody(newTab.body);
+    setBodyType(newTab.bodyType);
+    setRequestName(newTab.requestName);
+    setAuthType(newTab.authType);
+    setAuthToken(newTab.authToken);
+    setAuthUsername(newTab.authUsername);
+    setAuthPassword(newTab.authPassword);
+    setAuthHeaderName(newTab.authHeaderName);
+    setAuthApiValue(newTab.authApiValue);
+    
+    // Agregar la nueva pestaña y activarla en el mismo batch
+    // Usar una función de actualización para asegurar que todo se haga en el mismo ciclo
+    setTabs(prev => {
+      console.log('[PostmanBlock] Agregando nueva pestaña, tabs actuales:', prev.length);
+      const updatedTabs = [...prev, newTab];
+      
+      // Usar requestAnimationFrame para asegurar que React procese primero la actualización de tabs
+      requestAnimationFrame(() => {
+        // Activar la pestaña después de que React haya procesado la actualización de tabs
+        setActiveTabId(newTab.id);
+        console.log('[PostmanBlock] Pestaña activada:', newTab.id);
+        
+        // Resetear el flag después de que todo se haya actualizado
+        setTimeout(() => {
+          isUpdatingFromTabRef.current = false;
+          console.log('[PostmanBlock] Flag reset, sincronización habilitada');
+        }, 300);
+      });
+      
+      return updatedTabs;
+    });
+    
+    setToast({ message: `Nueva pestaña creada: "${newTab.name}"`, type: 'success' });
   };
 
   // Cerrar dropdowns al hacer clic fuera
@@ -1017,14 +1772,56 @@ export default function PostmanBlock({ node, updateAttributes, editor, getPos })
       if (showAuthMenu && !e.target.closest('.relative')) {
         setShowAuthMenu(false);
       }
+      if (showVariables && !e.target.closest('.bg-white.dark\\:bg-gray-800')) {
+        setShowVariables(false);
+        setEditingVariable(null);
+        setNewVariableKey('');
+        setNewVariableValue('');
+      }
     };
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
-  }, [showCollections, showCollectionMenu, showAuthMenu]);
+  }, [showCollections, showCollectionMenu, showAuthMenu, showVariables]);
 
   return (
     <NodeViewWrapper className={`postman-block-wrapper ${isFullscreen ? 'fixed inset-0 z-[9999] bg-white dark:bg-gray-800 p-4' : 'my-6'}`}>
-      <div className={`border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 overflow-hidden ${isFullscreen ? 'h-full flex' : 'flex'} flex-row`}>
+      <div className={`border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 overflow-hidden ${isFullscreen ? 'h-full flex flex-col' : 'flex flex-col'}`}>
+        {/* Barra de Pestañas */}
+        <div className="flex items-center gap-1 px-2 py-1 bg-gray-100 dark:bg-gray-900 border-b border-gray-300 dark:border-gray-600 overflow-x-auto">
+          {tabs.map((tab) => (
+            <div
+              key={tab.id}
+              onClick={() => switchTab(tab.id)}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-t-lg cursor-pointer transition-colors min-w-[120px] max-w-[200px] ${
+                activeTabId === tab.id
+                  ? 'bg-white dark:bg-gray-800 border-b-2 border-blue-500 text-blue-600 dark:text-blue-400'
+                  : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-600'
+              }`}
+            >
+              <span className="text-xs font-medium truncate flex-1" title={tab.name}>
+                {tab.name}
+              </span>
+              {tabs.length > 1 && (
+                <button
+                  onClick={(e) => closeTab(tab.id, e)}
+                  className="p-0.5 hover:bg-gray-300 dark:hover:bg-gray-500 rounded transition-colors"
+                  title="Cerrar pestaña"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          ))}
+          <button
+            onClick={createNewTab}
+            className="px-2 py-1.5 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+            title="Nueva pestaña"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+        </div>
+        
+        <div className={`flex flex-row ${isFullscreen ? 'flex-1 overflow-hidden' : ''}`}>
         {/* Sidebar de Colecciones */}
         <div className={`${sidebarCollapsed ? 'w-0' : 'w-64'} border-r border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 transition-all duration-300 overflow-hidden flex flex-col ${isFullscreen ? 'h-full' : ''}`}>
           {!sidebarCollapsed && (
@@ -1439,6 +2236,16 @@ export default function PostmanBlock({ node, updateAttributes, editor, getPos })
               </div>
               <div className="relative">
                 <button
+                  onClick={() => setShowVariables(!showVariables)}
+                  className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
+                  title="Gestionar variables"
+                >
+                  <Code2 className="w-4 h-4" />
+                  Variables
+                </button>
+              </div>
+              <div className="relative">
+                <button
                   onClick={() => setShowCollectionMenu(!showCollectionMenu)}
                   className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
                   title="Gestionar colecciones"
@@ -1808,6 +2615,7 @@ export default function PostmanBlock({ node, updateAttributes, editor, getPos })
             </div>
           </div>
         </div>
+        </div>
       </div>
       
       {/* Modal de confirmación de eliminación de petición */}
@@ -1927,6 +2735,180 @@ export default function PostmanBlock({ node, updateAttributes, editor, getPos })
                 >
                   {editingCollection ? 'Guardar' : 'Crear'}
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Variables */}
+      {showVariables && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+            <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                Gestionar Variables
+              </h3>
+              <button
+                onClick={() => {
+                  setShowVariables(false);
+                  setEditingVariable(null);
+                  setNewVariableKey('');
+                  setNewVariableValue('');
+                }}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 overflow-y-auto flex-1">
+              {/* Formulario para agregar/editar variable */}
+              <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  {editingVariable !== null ? 'Editar Variable' : 'Nueva Variable'}
+                </h4>
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={newVariableKey}
+                    onChange={(e) => setNewVariableKey(e.target.value)}
+                    placeholder="Nombre de la variable (ej: base_url)"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        editingVariable !== null ? saveVariableEdit() : addVariable();
+                      }
+                    }}
+                  />
+                  <input
+                    type="text"
+                    value={newVariableValue}
+                    onChange={(e) => setNewVariableValue(e.target.value)}
+                    placeholder="Valor de la variable"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        editingVariable !== null ? saveVariableEdit() : addVariable();
+                      }
+                    }}
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={editingVariable !== null ? saveVariableEdit : addVariable}
+                      className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm"
+                    >
+                      {editingVariable !== null ? 'Guardar' : 'Agregar'}
+                    </button>
+                    {editingVariable !== null && (
+                      <button
+                        onClick={() => {
+                          setEditingVariable(null);
+                          setNewVariableKey('');
+                          setNewVariableValue('');
+                        }}
+                        className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm"
+                      >
+                        Cancelar
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Lista de variables */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Variables ({variables.length})
+                  </h4>
+                  <div className="flex gap-2">
+                    <input
+                      type="file"
+                      accept=".json"
+                      onChange={importVariables}
+                      style={{ display: 'none' }}
+                      id="import-variables-input"
+                    />
+                    <label
+                      htmlFor="import-variables-input"
+                      className="px-3 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors cursor-pointer"
+                    >
+                      <Upload className="w-3 h-3 inline mr-1" />
+                      Importar
+                    </label>
+                    <button
+                      onClick={exportVariables}
+                      className="px-3 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors flex items-center gap-1"
+                    >
+                      <Download className="w-3 h-3" />
+                      Exportar
+                    </button>
+                  </div>
+                </div>
+                {variables.length === 0 ? (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+                    No hay variables. Agrega una variable para comenzar.
+                  </p>
+                ) : (
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {variables.map((variable, index) => (
+                      <div
+                        key={index}
+                        className={`p-3 border rounded-lg flex items-center justify-between ${
+                          variable.enabled
+                            ? 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700'
+                            : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 opacity-60'
+                        }`}
+                      >
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <code className="text-sm font-mono text-blue-600 dark:text-blue-400">
+                              {`{{${variable.key}}}`}
+                            </code>
+                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                              = {variable.value || '(vacío)'}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => toggleVariable(index)}
+                            className={`px-2 py-1 text-xs rounded ${
+                              variable.enabled
+                                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                            }`}
+                            title={variable.enabled ? 'Deshabilitar' : 'Habilitar'}
+                          >
+                            {variable.enabled ? '✓' : '✗'}
+                          </button>
+                          <button
+                            onClick={() => editVariable(index)}
+                            className="px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
+                            title="Editar"
+                          >
+                            <Edit2 className="w-3 h-3" />
+                          </button>
+                          <button
+                            onClick={() => deleteVariable(index)}
+                            className="px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                            title="Eliminar"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Información sobre uso de variables */}
+              <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                <p className="text-xs text-blue-800 dark:text-blue-300">
+                  <strong>Uso:</strong> Usa <code className="bg-blue-100 dark:bg-blue-900/50 px-1 rounded">{`{{nombre_variable}}`}</code> en URLs, headers o body. 
+                  Las variables se sustituyen automáticamente al ejecutar la petición.
+                </p>
               </div>
             </div>
           </div>
