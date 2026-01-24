@@ -15,7 +15,8 @@
     "electron:build:win": "npm run build && electron-builder --win",
     "electron:build:zip": "npm run build && electron-builder --win --config.win.target=zip",
     "electron:build:both": "npm run build && electron-builder --win --config.win.target=nsis --config.win.target=zip",
-    "dist": "npm run build && electron-builder"
+    "dist": "npm run build && electron-builder",
+    "generate:og-image": "node build/generar-og-image.cjs"
   },
   "dependencies": {
     "@codemirror/lang-css": "^6.3.1",
@@ -72,6 +73,7 @@
     "@types/react-dom": "^19.0.4",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.21",
+    "canvas": "^3.2.1",
     "electron": "^32.0.0",
     "electron-builder": "^25.1.8",
     "postcss": "^8.5.3",
@@ -148,13 +150,15 @@
         }
       ],
       "icon": "build/icon.ico",
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
       "sign": null,
       "signingHashAlgorithms": [],
       "verifyUpdateCodeSignature": false,
       "certificateFile": null,
       "certificatePassword": null,
       "publisherName": null,
-      "signAndEditExecutable": false
+      "signAndEditExecutable": false,
+      "requestedExecutionLevel": "asInvoker"
     },
     "nsis": {
       "oneClick": false,
