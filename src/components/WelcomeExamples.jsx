@@ -1,4 +1,4 @@
-import { Code, Database, Calendar, Image as ImageIcon, FileText, FolderTree, File, FileJson, Send, FileCode, Plus, Sparkles, Zap, Rocket, BookOpen, CheckCircle2, Settings, HardDrive, Cloud, Terminal, Monitor } from 'lucide-react';
+import { Code, Database, Calendar, Image as ImageIcon, FileText, FolderTree, File, FileJson, Send, FileCode, Plus, Sparkles, Zap, Rocket, BookOpen, CheckCircle2, Settings, HardDrive, Cloud, Terminal, Monitor, Shield, FileText as FileTextIcon } from 'lucide-react';
 
 export default function WelcomeExamples({ onCreatePage }) {
   const useCases = [
@@ -533,6 +533,54 @@ export default function WelcomeExamples({ onCreatePage }) {
           <Plus className="w-5 h-5" />
           <span>Crear mi primera página</span>
         </button>
+      </div>
+
+      {/* Footer con enlaces legales */}
+      <div className="pt-8 border-t border-gray-200 dark:border-gray-700">
+        <div className="flex flex-col md:flex-row items-center justify-center gap-4 md:gap-6 text-sm flex-wrap">
+          <a
+            href="/politica-privacidad.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors group"
+          >
+            <Shield className="w-4 h-4 group-hover:scale-110 transition-transform" />
+            <span>Política de Privacidad</span>
+          </a>
+          <span className="hidden md:inline text-gray-400 dark:text-gray-600">•</span>
+          <a
+            href="/terminos.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors group"
+          >
+            <FileTextIcon className="w-4 h-4 group-hover:scale-110 transition-transform" />
+            <span>Términos y Condiciones</span>
+          </a>
+          <span className="hidden md:inline text-gray-400 dark:text-gray-600">•</span>
+          <a
+            href="/preguntas-frecuentes.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors group"
+          >
+            <BookOpen className="w-4 h-4 group-hover:scale-110 transition-transform" />
+            <span>Preguntas Frecuentes</span>
+          </a>
+          <span className="hidden md:inline text-gray-400 dark:text-gray-600">•</span>
+          <a
+            href="/como-usar-notionlocal.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors group"
+          >
+            <Rocket className="w-4 h-4 group-hover:scale-110 transition-transform" />
+            <span>Cómo Usar NotionLocal</span>
+          </a>
+        </div>
+        <p className="text-xs text-gray-500 dark:text-gray-500 text-center mt-4">
+          Al usar esta aplicación, aceptas nuestros términos y condiciones de uso.
+        </p>
       </div>
     </div>
   );
