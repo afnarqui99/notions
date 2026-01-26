@@ -270,15 +270,40 @@ export const SlashCommand = Extension.create({
   icon: "📊",
   keywords: ["excel", "spreadsheet", "hoja", "calculos", "tabla excel", "tabla calculo"],
   command: ({ editor, range }) => {
-    // Pedir dimensiones al usuario
-    const rows = parseInt(prompt('¿Cuántas filas? (por defecto 5):', '5') || '5') || 5;
-    const cols = parseInt(prompt('¿Cuántas columnas? (por defecto 5):', '5') || '5') || 5;
-    
+    editor.chain().focus().deleteRange(range).run();
+    // Disparar evento para abrir el modal de dimensiones
+    window.dispatchEvent(new CustomEvent('open-excel-table-dimensions', {
+      detail: { editor, range }
+    }));
+  },
+},
+          {
+  label: "Recorte de Pantalla",
+  description: "Capturar pantalla y agregar anotaciones (rectángulos, flechas, texto)",
+  icon: "📸",
+  keywords: ["captura", "screenshot", "pantalla", "recorte", "screen", "capture", "print screen"],
+  command: ({ editor, range }) => {
     editor.chain().focus().deleteRange(range).insertContent({
-      type: 'excelTable',
+      type: 'screenCapture',
       attrs: {
-        rows: Math.max(1, Math.min(100, rows)),
-        cols: Math.max(1, Math.min(50, cols))
+        image: null,
+        annotations: []
+      }
+    }).run();
+  },
+},
+          {
+  label: "Recorte Avanzado",
+  description: "Capturar pantalla completa, seleccionar área, agregar anotaciones (rectángulos, triángulos, flechas, texto) y descargar",
+  icon: "✂️",
+  keywords: ["recorte", "snipper", "recortar", "crop", "anotar", "triangulo", "cuadro", "flecha"],
+  command: ({ editor, range }) => {
+    editor.chain().focus().deleteRange(range).insertContent({
+      type: 'screenSnipper',
+      attrs: {
+        image: null,
+        selectedArea: null,
+        annotations: []
       }
     }).run();
   },

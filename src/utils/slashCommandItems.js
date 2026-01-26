@@ -149,6 +149,50 @@ export function getSlashCommandItems() {
       },
     },
     {
+      label: "Tabla Excel",
+      description: "Crear tabla tipo Excel con redimensionamiento de columnas y filas, copiar/pegar y captura de pantalla",
+      icon: "📊",
+      keywords: ["excel", "spreadsheet", "hoja", "calculos", "tabla excel", "tabla calculo"],
+      command: ({ editor, range }) => {
+        editor.chain().focus().deleteRange(range).run();
+        // Disparar evento para abrir el modal de dimensiones
+        window.dispatchEvent(new CustomEvent('open-excel-table-dimensions', {
+          detail: { editor }
+        }));
+      },
+    },
+    {
+      label: "Recorte de Pantalla",
+      description: "Capturar pantalla y agregar anotaciones (rectángulos, flechas, texto)",
+      icon: "📸",
+      keywords: ["captura", "screenshot", "pantalla", "recorte", "screen", "capture", "print screen"],
+      command: ({ editor, range }) => {
+        editor.chain().focus().deleteRange(range).insertContent({
+          type: 'screenCapture',
+          attrs: {
+            image: null,
+            annotations: []
+          }
+        }).run();
+      },
+    },
+    {
+      label: "Recorte Avanzado",
+      description: "Capturar pantalla completa, seleccionar área, agregar anotaciones (rectángulos, triángulos, flechas, texto) y descargar",
+      icon: "✂️",
+      keywords: ["recorte", "snipper", "recortar", "crop", "anotar", "triangulo", "cuadro", "flecha"],
+      command: ({ editor, range }) => {
+        editor.chain().focus().deleteRange(range).insertContent({
+          type: 'screenSnipper',
+          attrs: {
+            image: null,
+            selectedArea: null,
+            annotations: []
+          }
+        }).run();
+      },
+    },
+    {
       label: "Plantilla Financiero",
       description: "Crear sistema financiero completo con Ingresos, Egresos y Deudas interconectadas",
       icon: "💰",

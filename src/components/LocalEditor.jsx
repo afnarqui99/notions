@@ -13,6 +13,9 @@ import Table from "@tiptap/extension-table";
 import TableRow from "@tiptap/extension-table-row";
 import { TableCellExtended } from "../extensions/TableCellExtended";
 import { TablaNotionNode } from "../extensions/TablaNotionNode";
+import { ExcelTableNode } from "../extensions/ExcelTableNode";
+import { ScreenCaptureNode } from "../extensions/ScreenCaptureNode";
+import { ScreenSnipperNode } from "../extensions/ScreenSnipperNode";
 import { GaleriaImagenesNode } from "../extensions/GaleriaImagenesNode";
 import { GaleriaArchivosNode } from "../extensions/GaleriaArchivosNode";
 import { CalendarNode } from "../extensions/CalendarNode";
@@ -67,6 +70,7 @@ import PageIndexService from "../services/PageIndexService";
 import VisualCodeFullscreenModal from "./VisualCodeFullscreenModal";
 import SlashCommandModal from "./SlashCommandModal";
 import CommandButtonModal from "./CommandButtonModal";
+import ExcelTableDimensionsModal from "./ExcelTableDimensionsModal";
 import { getSlashCommandItems } from "../utils/slashCommandItems";
 import WelcomeExamples from "./WelcomeExamples";
 
@@ -154,6 +158,7 @@ export default function LocalEditor({ onShowConfig }) {
   const [showCentroEjecucion, setShowCentroEjecucion] = useState(false);
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
   const [showSlashCommandModal, setShowSlashCommandModal] = useState(false);
+  const [showExcelTableDimensionsModal, setShowExcelTableDimensionsModal] = useState(false);
   const [cursorPosition, setCursorPosition] = useState({ top: 160, left: 300 });
   // Múltiples modales de Visual Code fullscreen
   const [visualCodeFullscreenModals, setVisualCodeFullscreenModals] = useState([]);
@@ -498,6 +503,9 @@ export default function LocalEditor({ onShowConfig }) {
       MarkdownNodeExtension,
       Toggle,
       TablaNotionNode,
+      ExcelTableNode,
+      ScreenCaptureNode,
+      ScreenSnipperNode,
       GaleriaImagenesNode,
       GaleriaArchivosNode,
       CalendarNode,
@@ -1368,6 +1376,18 @@ export default function LocalEditor({ onShowConfig }) {
     window.addEventListener('open-centro-ejecucion', handleOpenCentroEjecucion);
     return () => {
       window.removeEventListener('open-centro-ejecucion', handleOpenCentroEjecucion);
+    };
+  }, []);
+
+  // Escuchar evento para abrir modal de dimensiones de tabla Excel
+  useEffect(() => {
+    const handleOpenExcelTableDimensions = (event) => {
+      setShowExcelTableDimensionsModal(true);
+    };
+
+    window.addEventListener('open-excel-table-dimensions', handleOpenExcelTableDimensions);
+    return () => {
+      window.removeEventListener('open-excel-table-dimensions', handleOpenExcelTableDimensions);
     };
   }, []);
 
@@ -2745,6 +2765,52 @@ export default function LocalEditor({ onShowConfig }) {
                 item.command({ editor, range });
               }
             }, 50);
+          }}
+        />
+      )}
+
+      {/* Modal de dimensiones para tabla Excel */}
+      {showExcelTableDimensionsModal && editor && (
+        <ExcelTableDimensionsModal
+          isOpen={showExcelTableDimensionsModal}
+          onClose={() => setShowExcelTableDimensionsModal(false)}
+          onConfirm={(rows, cols) => {
+            // Verificar que el editor reconozca el nodo
+            if (!editor) {
+              console.error('[ExcelTable] Editor no disponible');
+              setShowExcelTableDimensionsModal(false);
+              return;
+            }
+
+            // Verificar que el nodo esté registrado
+            const nodeType = editor.schema.nodes.excelTable;
+            if (!nodeType) {
+              console.error('[ExcelTable] Nodo excelTable no encontrado en el schema del editor');
+              console.log('[ExcelTable] Nodos disponibles:', Object.keys(editor.schema.nodes));
+              setShowExcelTableDimensionsModal(false);
+              return;
+            }
+
+            // Insertar la tabla con las dimensiones especificadas
+            try {
+              // Usar commands directamente en lugar de chain()
+              editor.commands.focus();
+              const success = editor.commands.insertContent({
+                type: 'excelTable',
+                attrs: {
+                  rows: rows,
+                  cols: cols
+                }
+              });
+              
+              if (!success) {
+                console.error('[ExcelTable] No se pudo insertar la tabla');
+              }
+              setShowExcelTableDimensionsModal(false);
+            } catch (error) {
+              console.error('[ExcelTable] Error al insertar tabla:', error);
+              setShowExcelTableDimensionsModal(false);
+            }
           }}
         />
       )}

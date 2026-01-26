@@ -255,6 +255,10 @@ const electronAPI = {
         // Crear nueva ventana
         createNewWindow: () => {
           return ipcRenderer.invoke('create-new-window');
+        },
+        // Obtener fuentes de captura de pantalla
+        getScreenSources: () => {
+          return ipcRenderer.invoke('get-screen-sources');
         }
 };
 

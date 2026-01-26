@@ -1399,17 +1399,31 @@ export default function TerminalTab({
                       <span className="text-xs text-gray-500">
                         {item.count}x
                       </span>
-                      <button
-                        onClick={(e) => handleDeleteCommand(e, item.command)}
+                      <div
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleDeleteCommand(e, item.command);
+                        }}
                         onMouseDown={(e) => {
                           // Prevenir que el onBlur del textarea se active cuando se hace clic
                           e.preventDefault();
+                          e.stopPropagation();
                         }}
-                        className="p-1 hover:bg-red-600 rounded transition-colors opacity-0 group-hover:opacity-100"
+                        role="button"
+                        tabIndex={0}
+                        className="p-1 hover:bg-red-600 rounded transition-colors opacity-0 group-hover:opacity-100 cursor-pointer"
                         title="Eliminar comando"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleDeleteCommand(e, item.command);
+                          }
+                        }}
                       >
                         <Trash2 className="w-3.5 h-3.5 text-gray-400 hover:text-red-400" />
-                      </button>
+                      </div>
                     </div>
                   </button>
                 );
