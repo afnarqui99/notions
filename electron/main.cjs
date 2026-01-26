@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, Tray, Menu, nativeImage, Notification, ipcMain, dialog, session } = require('electron');
+const { app, BrowserWindow, shell, Tray, Menu, nativeImage, Notification, ipcMain, dialog, session, desktopCapturer } = require('electron');
 const path = require('path');
 const { spawn, exec } = require('child_process');
 const fs = require('fs');
@@ -947,15 +947,15 @@ function createWindow() {
     }
   });
 
+  // Guardar referencia a si es la primera ventana (principal)
+  const isFirstWindow = windows.length === 0;
+  
   // Agregar la ventana al array de ventanas
   windows.push(mainWindow);
   
   // Si es la primera ventana, establecerla como principal
-  if (windows.length === 1) {
-    // mainWindow ya está establecida
-  } else {
-    // Para ventanas adicionales, también las mantenemos en mainWindow para compatibilidad
-    // pero podemos tener múltiples ventanas
+  if (isFirstWindow) {
+    // mainWindow ya está establecida como principal
   }
 
   mainWindow.on('closed', () => {
@@ -976,19 +976,22 @@ function createWindow() {
     }
   });
   
-  // Minimizar a la bandeja en lugar de cerrar (solo para la ventana principal)
-  // Las ventanas adicionales se pueden cerrar normalmente
-  const isMainWindow = windows.length === 1;
+  // Manejar el evento de cierre
   mainWindow.on('close', (event) => {
     if (!isQuitting) {
-      // Solo minimizar a la bandeja si es la ventana principal y hay otras ventanas
-      // o si es la única ventana
-      if (isMainWindow || windows.length === 1) {
+      // Solo minimizar a la bandeja si es la ÚLTIMA ventana (cuando se intenta cerrar)
+      // Verificar cuántas ventanas quedan después de cerrar esta
+      const remainingWindows = windows.filter(w => w !== mainWindow && !w.isDestroyed());
+      const willBeLastWindow = remainingWindows.length === 0;
+      
+      if (willBeLastWindow) {
+        // Si será la última ventana, minimizar a la bandeja en lugar de cerrar
         event.preventDefault();
         mainWindow.hide();
       }
-      // Si hay múltiples ventanas y esta no es la principal, permitir cerrarla normalmente
+      // Si hay otras ventanas, permitir cerrar normalmente (no hacer preventDefault)
     }
+    // Si isQuitting es true, permitir cerrar todas las ventanas normalmente
   });
 }
 
@@ -3060,6 +3063,24 @@ print("✅ Cliente de debugging conectado", file=sys.stderr)
         });
       });
     });
+  });
+
+  // Handler para obtener fuentes de captura de pantalla
+  ipcMain.handle('get-screen-sources', async () => {
+    try {
+      const sources = await desktopCapturer.getSources({
+        types: ['screen', 'window'],
+        thumbnailSize: { width: 1920, height: 1080 }
+      });
+      return sources.map(source => ({
+        id: source.id,
+        name: source.name,
+        thumbnail: source.thumbnail.toDataURL()
+      }));
+    } catch (error) {
+      console.error('Error obteniendo fuentes de pantalla:', error);
+      return [];
+    }
   });
 
   app.on('activate', () => {

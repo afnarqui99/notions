@@ -61,6 +61,58 @@ export const ExcelTableNode = Node.create({
         renderHTML: attributes => ({
           'data-row-heights': JSON.stringify(attributes.rowHeights)
         })
+      },
+      columnNames: {
+        default: {},
+        parseHTML: element => {
+          try {
+            return JSON.parse(element.getAttribute('data-column-names') || '{}');
+          } catch {
+            return {};
+          }
+        },
+        renderHTML: attributes => ({
+          'data-column-names': JSON.stringify(attributes.columnNames)
+        })
+      },
+      cellTextColors: {
+        default: {},
+        parseHTML: element => {
+          try {
+            return JSON.parse(element.getAttribute('data-cell-text-colors') || '{}');
+          } catch {
+            return {};
+          }
+        },
+        renderHTML: attributes => ({
+          'data-cell-text-colors': JSON.stringify(attributes.cellTextColors)
+        })
+      },
+      cellBackgroundColors: {
+        default: {},
+        parseHTML: element => {
+          try {
+            return JSON.parse(element.getAttribute('data-cell-background-colors') || '{}');
+          } catch {
+            return {};
+          }
+        },
+        renderHTML: attributes => ({
+          'data-cell-background-colors': JSON.stringify(attributes.cellBackgroundColors)
+        })
+      },
+      columnBackgroundColors: {
+        default: {},
+        parseHTML: element => {
+          try {
+            return JSON.parse(element.getAttribute('data-column-background-colors') || '{}');
+          } catch {
+            return {};
+          }
+        },
+        renderHTML: attributes => ({
+          'data-column-background-colors': JSON.stringify(attributes.columnBackgroundColors)
+        })
       }
     };
   },
