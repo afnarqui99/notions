@@ -19,6 +19,47 @@ function App() {
     setShowConfig(true);
   }, []);
 
+  // Manejar atajo de teclado para nueva ventana (Ctrl+N o Cmd+N)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Ctrl+N (Windows/Linux) o Cmd+N (Mac)
+      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+      const modifierKey = isMac ? e.metaKey : e.ctrlKey;
+      
+      if (modifierKey && !e.shiftKey && !e.altKey && e.key === 'N') {
+        // Solo activar si no hay un input, textarea o contenteditable activo
+        const activeElement = document.activeElement;
+        const isInputActive = activeElement && (
+          activeElement.tagName === 'INPUT' ||
+          activeElement.tagName === 'TEXTAREA' ||
+          activeElement.isContentEditable ||
+          activeElement.closest('[contenteditable="true"]')
+        );
+        
+        // Si hay un input activo, no hacer nada (permitir comportamiento normal)
+        if (isInputActive) {
+          return;
+        }
+        
+        // Prevenir el comportamiento por defecto y crear nueva ventana
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Verificar que electronAPI esté disponible
+        if (typeof window !== 'undefined' && window.electronAPI && window.electronAPI.createNewWindow) {
+          window.electronAPI.createNewWindow().catch(err => {
+            console.error('Error al crear nueva ventana:', err);
+          });
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown, true);
+    };
+  }, []);
+
   useEffect(() => {
     // Verificar si hay configuración guardada y restaurar acceso si es necesario
     const initializeApp = async () => {

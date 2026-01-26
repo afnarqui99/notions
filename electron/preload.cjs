@@ -251,6 +251,10 @@ const electronAPI = {
         // Remover listeners de debugging
         removeDebugListeners: () => {
           ipcRenderer.removeAllListeners('debug-event');
+        },
+        // Crear nueva ventana
+        createNewWindow: () => {
+          return ipcRenderer.invoke('create-new-window');
         }
 };
 

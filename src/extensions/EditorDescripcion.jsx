@@ -11,6 +11,7 @@ import Table from "@tiptap/extension-table";
 import TableRow from "@tiptap/extension-table-row";
 import { TableCellExtended } from "./TableCellExtended";
 import { TablaNotionNode } from "./TablaNotionNode";
+import { ExcelTableNode } from "./ExcelTableNode";
 import { GaleriaImagenesNode } from "./GaleriaImagenesNode";
 import { GaleriaArchivosNode } from "./GaleriaArchivosNode";
 import { CalendarNode } from "./CalendarNode";
@@ -44,6 +45,7 @@ export default function EditorDescripcion({ content, onChange, autoFocus = false
       MarkdownNodeExtension,
       Toggle,
       TablaNotionNode,
+      ExcelTableNode,
       GaleriaImagenesNode,
       GaleriaArchivosNode,
       CalendarNode,

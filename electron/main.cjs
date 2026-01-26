@@ -28,6 +28,7 @@ try {
 }
 
 let mainWindow;
+let windows = []; // Array para mantener todas las ventanas abiertas
 let tray = null;
 let isQuitting = false;
 
@@ -573,21 +574,18 @@ const CodeExecutionService = {
   }
 };
 
-// Prevenir múltiples instancias
+// Permitir múltiples instancias - crear nueva ventana en lugar de enfocar existente
 const gotTheLock = app.requestSingleInstanceLock();
 
 if (!gotTheLock) {
-  // Si ya hay una instancia corriendo, enfocar esa ventana y salir
+  // Si ya hay una instancia corriendo, crear una nueva ventana en lugar de salir
   app.quit();
+  // Nota: En Windows, si se ejecuta otra instancia, se creará una nueva ventana
+  // El sistema operativo manejará la nueva instancia
 } else {
   app.on('second-instance', () => {
-    // Si se intenta abrir otra instancia, enfocar la ventana existente
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.focus();
-    } else {
-      createWindow();
-    }
+    // Si se intenta abrir otra instancia, crear una nueva ventana
+    createWindow();
   });
 }
 
@@ -637,9 +635,15 @@ function createTray() {
     {
       label: 'Mostrar',
       click: () => {
-        if (mainWindow) {
-          mainWindow.show();
-          mainWindow.focus();
+        // Mostrar todas las ventanas o crear una nueva si no hay ninguna
+        if (windows.length > 0) {
+          windows.forEach(win => {
+            if (win && !win.isDestroyed()) {
+              if (win.isMinimized()) win.restore();
+              win.show();
+              win.focus();
+            }
+          });
         } else {
           createWindow();
         }
@@ -648,9 +652,12 @@ function createTray() {
     {
       label: 'Ocultar',
       click: () => {
-        if (mainWindow) {
-          mainWindow.hide();
-        }
+        // Ocultar todas las ventanas
+        windows.forEach(win => {
+          if (win && !win.isDestroyed()) {
+            win.hide();
+          }
+        });
       }
     },
     { type: 'separator' },
@@ -668,9 +675,15 @@ function createTray() {
   
   // Mostrar ventana al hacer doble clic en el icono
   tray.on('double-click', () => {
-    if (mainWindow) {
-      mainWindow.show();
-      mainWindow.focus();
+    // Mostrar todas las ventanas o crear una nueva si no hay ninguna
+    if (windows.length > 0) {
+      windows.forEach(win => {
+        if (win && !win.isDestroyed()) {
+          if (win.isMinimized()) win.restore();
+          win.show();
+          win.focus();
+        }
+      });
     } else {
       createWindow();
     }
@@ -678,12 +691,7 @@ function createTray() {
 }
 
 function createWindow() {
-  // Si ya existe una ventana, solo enfocarla
-  if (mainWindow) {
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.focus();
-    return;
-  }
+  // Permitir crear múltiples ventanas - siempre crear una nueva
   const iconPath = getIconPath();
   
   const isDev = !app.isPackaged;
@@ -939,15 +947,47 @@ function createWindow() {
     }
   });
 
+  // Agregar la ventana al array de ventanas
+  windows.push(mainWindow);
+  
+  // Si es la primera ventana, establecerla como principal
+  if (windows.length === 1) {
+    // mainWindow ya está establecida
+  } else {
+    // Para ventanas adicionales, también las mantenemos en mainWindow para compatibilidad
+    // pero podemos tener múltiples ventanas
+  }
+
   mainWindow.on('closed', () => {
-    mainWindow = null;
+    // Remover la ventana del array
+    const closedWindow = mainWindow;
+    const index = windows.indexOf(closedWindow);
+    if (index > -1) {
+      windows.splice(index, 1);
+    }
+    
+    // Si era la ventana principal y hay otras ventanas, asignar la primera como principal
+    if (closedWindow === mainWindow) {
+      if (windows.length > 0) {
+        mainWindow = windows[0];
+      } else {
+        mainWindow = null;
+      }
+    }
   });
   
-  // Minimizar a la bandeja en lugar de cerrar
+  // Minimizar a la bandeja en lugar de cerrar (solo para la ventana principal)
+  // Las ventanas adicionales se pueden cerrar normalmente
+  const isMainWindow = windows.length === 1;
   mainWindow.on('close', (event) => {
     if (!isQuitting) {
-      event.preventDefault();
-      mainWindow.hide();
+      // Solo minimizar a la bandeja si es la ventana principal y hay otras ventanas
+      // o si es la única ventana
+      if (isMainWindow || windows.length === 1) {
+        event.preventDefault();
+        mainWindow.hide();
+      }
+      // Si hay múltiples ventanas y esta no es la principal, permitir cerrarla normalmente
     }
   });
 }
@@ -1010,6 +1050,12 @@ app.whenReady().then(() => {
   // Configurar IPC para recibir mensajes del renderer
   ipcMain.on('show-native-notification', (event, title, body, eventId) => {
     showNativeNotification(title, body, eventId);
+  });
+
+  // Handler para crear nueva ventana desde el renderer
+  ipcMain.handle('create-new-window', async () => {
+    createWindow();
+    return { success: true };
   });
 
   // Handler para iniciar servicio
@@ -3019,9 +3065,15 @@ print("✅ Cliente de debugging conectado", file=sys.stderr)
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
-    } else if (mainWindow) {
-      mainWindow.show();
-      mainWindow.focus();
+    } else if (windows.length > 0) {
+      // Mostrar todas las ventanas
+      windows.forEach(win => {
+        if (win && !win.isDestroyed()) {
+          if (win.isMinimized()) win.restore();
+          win.show();
+          win.focus();
+        }
+      });
     }
   });
 });

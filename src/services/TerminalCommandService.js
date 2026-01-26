@@ -459,6 +459,148 @@ class TerminalCommandService {
 
     return true;
   }
+
+  // Obtener todos los grupos de todas las terminales
+  async getAllGroups() {
+    await this.loadCommandsData();
+    
+    const allGroups = [];
+    
+    // Iterar sobre todas las terminales
+    Object.entries(this.commandsData).forEach(([termId, termData]) => {
+      if (termData.groups) {
+        Object.entries(termData.groups).forEach(([groupId, group]) => {
+          // Contar comandos en este grupo
+          let commandCount = 0;
+          if (termData.commands) {
+            Object.values(termData.commands).forEach(cmdData => {
+              const cmdGroupId = typeof cmdData === 'object' ? cmdData.groupId : null;
+              if (cmdGroupId === groupId) {
+                commandCount++;
+              }
+            });
+          }
+          
+          allGroups.push({
+            terminalId: termId,
+            groupId: groupId,
+            name: group.name,
+            color: group.color,
+            commandCount: commandCount,
+            createdAt: group.createdAt
+          });
+        });
+      }
+    });
+    
+    return allGroups;
+  }
+
+  // Copiar un grupo de una terminal a otra (incluyendo sus comandos)
+  async copyGroupToTerminal(sourceTerminalId, targetTerminalId, sourceGroupId) {
+    await this.loadCommandsData();
+    
+    // Verificar que el grupo fuente existe
+    if (!this.commandsData[sourceTerminalId] || 
+        !this.commandsData[sourceTerminalId].groups || 
+        !this.commandsData[sourceTerminalId].groups[sourceGroupId]) {
+      return false;
+    }
+    
+    const sourceGroup = this.commandsData[sourceTerminalId].groups[sourceGroupId];
+    
+    // Inicializar terminal destino si no existe
+    if (!this.commandsData[targetTerminalId]) {
+      this.commandsData[targetTerminalId] = {
+        commands: {},
+        groups: {},
+        lastUpdated: new Date().toISOString()
+      };
+    }
+    
+    if (!this.commandsData[targetTerminalId].groups) {
+      this.commandsData[targetTerminalId].groups = {};
+    }
+    
+    // Verificar si ya existe un grupo con el mismo nombre en la terminal destino
+    const existingGroup = Object.values(this.commandsData[targetTerminalId].groups)
+      .find(g => g.name === sourceGroup.name);
+    
+    if (existingGroup) {
+      // Si ya existe, no copiar (o podríamos fusionar, pero por ahora solo retornar false)
+      return false;
+    }
+    
+    // Crear nuevo grupo en la terminal destino
+    const newGroupId = `group-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    this.commandsData[targetTerminalId].groups[newGroupId] = {
+      name: sourceGroup.name,
+      color: sourceGroup.color,
+      createdAt: new Date().toISOString(),
+      copiedFrom: `${sourceTerminalId}:${sourceGroupId}`
+    };
+    
+    // Copiar comandos del grupo fuente a la terminal destino
+    if (this.commandsData[sourceTerminalId].commands) {
+      Object.entries(this.commandsData[sourceTerminalId].commands).forEach(([command, cmdData]) => {
+        const cmdGroupId = typeof cmdData === 'object' ? cmdData.groupId : null;
+        if (cmdGroupId === sourceGroupId) {
+          // Copiar el comando a la terminal destino
+          const trimmedCommand = command.trim();
+          if (!this.commandsData[targetTerminalId].commands[trimmedCommand]) {
+            const cmdCount = typeof cmdData === 'number' ? cmdData : cmdData.count;
+            this.commandsData[targetTerminalId].commands[trimmedCommand] = {
+              count: cmdCount,
+              groupId: newGroupId
+            };
+          } else {
+            // Si el comando ya existe, asignarlo al nuevo grupo
+            if (typeof this.commandsData[targetTerminalId].commands[trimmedCommand] === 'number') {
+              this.commandsData[targetTerminalId].commands[trimmedCommand] = {
+                count: this.commandsData[targetTerminalId].commands[trimmedCommand],
+                groupId: newGroupId
+              };
+            } else {
+              this.commandsData[targetTerminalId].commands[trimmedCommand].groupId = newGroupId;
+            }
+          }
+        }
+      });
+    }
+    
+    this.commandsData[targetTerminalId].lastUpdated = new Date().toISOString();
+    await this.saveCommandsData();
+    
+    return newGroupId;
+  }
+
+  // Remover un grupo de una terminal (sin eliminar los comandos, solo desasignarlos)
+  async removeGroupFromTerminal(terminalId, groupId) {
+    await this.loadCommandsData();
+    
+    if (!this.commandsData[terminalId] || 
+        !this.commandsData[terminalId].groups || 
+        !this.commandsData[terminalId].groups[groupId]) {
+      return false;
+    }
+    
+    // Desasignar comandos del grupo
+    if (this.commandsData[terminalId].commands) {
+      Object.keys(this.commandsData[terminalId].commands).forEach(command => {
+        const cmdData = this.commandsData[terminalId].commands[command];
+        if (typeof cmdData === 'object' && cmdData.groupId === groupId) {
+          cmdData.groupId = null;
+        }
+      });
+    }
+    
+    // Eliminar el grupo
+    delete this.commandsData[terminalId].groups[groupId];
+    this.commandsData[terminalId].lastUpdated = new Date().toISOString();
+    await this.saveCommandsData();
+    
+    return true;
+  }
 }
 
 export default new TerminalCommandService();

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Plus, Trash2, Edit2, Save, Folder, Tag } from 'lucide-react';
+import { X, Plus, Trash2, Edit2, Save, Folder, Tag, Search, Check, XCircle } from 'lucide-react';
 import terminalCommandService from '../services/TerminalCommandService';
 
 export default function TerminalCommandGroupsModal({ 
@@ -13,6 +13,9 @@ export default function TerminalCommandGroupsModal({
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupColor, setNewGroupColor] = useState('#3b82f6');
   const [selectedGroup, setSelectedGroup] = useState(null);
+  const [showAllGroups, setShowAllGroups] = useState(false);
+  const [allGroups, setAllGroups] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
 
   // Cargar grupos y comandos
   useEffect(() => {
@@ -28,6 +31,10 @@ export default function TerminalCommandGroupsModal({
     // Cargar todos los comandos (sin filtro de grupo)
     const allCommands = await terminalCommandService.getFrequentCommands(terminalId, 1000, null);
     setCommands(allCommands);
+    
+    // Cargar todos los grupos de todas las terminales
+    const allGroupsData = await terminalCommandService.getAllGroups();
+    setAllGroups(allGroupsData);
   };
 
   const handleCreateGroup = async () => {
@@ -74,6 +81,48 @@ export default function TerminalCommandGroupsModal({
     await loadData();
   };
 
+  // Agregar grupo de otra terminal a la terminal actual
+  const handleAddGroup = async (sourceTerminalId, sourceGroupId) => {
+    const newGroupId = await terminalCommandService.copyGroupToTerminal(
+      sourceTerminalId,
+      terminalId,
+      sourceGroupId
+    );
+    
+    if (newGroupId) {
+      await loadData();
+    } else {
+      alert('El grupo ya existe en esta terminal o no se pudo copiar.');
+    }
+  };
+
+  // Remover grupo de la terminal actual
+  const handleRemoveGroup = async (groupId) => {
+    if (!window.confirm(`¿Quitar el grupo "${groups[groupId]?.name}" de esta terminal? Los comandos no se eliminarán, solo se desasignarán del grupo.`)) {
+      return;
+    }
+    
+    await terminalCommandService.removeGroupFromTerminal(terminalId, groupId);
+    await loadData();
+    if (selectedGroup === groupId) {
+      setSelectedGroup(null);
+    }
+  };
+
+  // Filtrar grupos disponibles
+  const availableGroups = allGroups.filter(group => {
+    // Excluir grupos que ya están en la terminal actual
+    const isInCurrentTerminal = group.terminalId === terminalId;
+    const matchesSearch = !searchTerm || 
+      group.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      group.terminalId.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    return !isInCurrentTerminal && matchesSearch;
+  });
+
+  // Grupos de la terminal actual
+  const currentTerminalGroups = allGroups.filter(group => group.terminalId === terminalId);
+
   // Agrupar comandos por grupo
   const commandsByGroup = {};
   const ungroupedCommands = [];
@@ -108,16 +157,101 @@ export default function TerminalCommandGroupsModal({
               Gestión de Grupos de Comandos
             </h2>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                setShowAllGroups(!showAllGroups);
+                if (!showAllGroups) {
+                  loadData();
+                }
+              }}
+              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center gap-2 text-sm"
+              title="Ver todos los grupos disponibles"
+            >
+              <Search className="w-4 h-4" />
+              <span>{showAllGroups ? 'Mis Grupos' : 'Todos los Grupos'}</span>
+            </button>
+            <button
+              onClick={onClose}
+              className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {showAllGroups ? (
+            /* Vista de todos los grupos disponibles */
+            <div className="space-y-4">
+              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 border border-blue-200 dark:border-blue-800">
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                  Todos los Grupos Disponibles
+                </h3>
+                <p className="text-xs text-gray-600 dark:text-gray-400 mb-3">
+                  Grupos creados en otras terminales que puedes agregar a esta terminal
+                </p>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Buscar grupos por nombre o terminal..."
+                    className="w-full pl-10 pr-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  />
+                </div>
+              </div>
+
+              {availableGroups.length === 0 ? (
+                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                  <Folder className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                  <p>
+                    {searchTerm 
+                      ? 'No se encontraron grupos que coincidan con la búsqueda'
+                      : 'No hay grupos disponibles de otras terminales'}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {availableGroups.map((group) => (
+                    <div
+                      key={`${group.terminalId}-${group.groupId}`}
+                      className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-800"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 flex-1">
+                          <div
+                            className="w-4 h-4 rounded"
+                            style={{ backgroundColor: group.color }}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="font-semibold text-gray-900 dark:text-gray-100">
+                              {group.name}
+                            </div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                              Terminal: {group.terminalId.substring(0, 20)}... • {group.commandCount} comandos
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleAddGroup(group.terminalId, group.groupId)}
+                          className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors flex items-center gap-1.5 text-sm"
+                          title="Agregar grupo a esta terminal"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>Agregar</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Vista normal - Grupos de la terminal actual */
+            <>
           {/* Crear nuevo grupo */}
           <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
             <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
@@ -230,9 +364,16 @@ export default function TerminalCommandGroupsModal({
                                 <Edit2 className="w-4 h-4" />
                               </button>
                               <button
+                                onClick={() => handleRemoveGroup(groupId)}
+                                className="p-1.5 text-orange-400 hover:text-orange-600 transition-colors"
+                                title="Quitar grupo de esta terminal"
+                              >
+                                <XCircle className="w-4 h-4" />
+                              </button>
+                              <button
                                 onClick={() => handleDeleteGroup(groupId)}
                                 className="p-1.5 text-red-400 hover:text-red-600 transition-colors"
-                                title="Eliminar grupo"
+                                title="Eliminar grupo permanentemente"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
@@ -317,6 +458,8 @@ export default function TerminalCommandGroupsModal({
                 ))}
               </div>
             </div>
+          )}
+            </>
           )}
         </div>
 

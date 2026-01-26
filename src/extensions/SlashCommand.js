@@ -265,6 +265,25 @@ export const SlashCommand = Extension.create({
   },
 },
           {
+  label: "Tabla Excel",
+  description: "Crear tabla tipo Excel con redimensionamiento de columnas y filas, copiar/pegar y captura de pantalla",
+  icon: "📊",
+  keywords: ["excel", "spreadsheet", "hoja", "calculos", "tabla excel", "tabla calculo"],
+  command: ({ editor, range }) => {
+    // Pedir dimensiones al usuario
+    const rows = parseInt(prompt('¿Cuántas filas? (por defecto 5):', '5') || '5') || 5;
+    const cols = parseInt(prompt('¿Cuántas columnas? (por defecto 5):', '5') || '5') || 5;
+    
+    editor.chain().focus().deleteRange(range).insertContent({
+      type: 'excelTable',
+      attrs: {
+        rows: Math.max(1, Math.min(100, rows)),
+        cols: Math.max(1, Math.min(50, cols))
+      }
+    }).run();
+  },
+},
+          {
   label: "Plantilla Financiero",
   description: "Crear sistema financiero completo con Ingresos, Egresos y Deudas interconectadas",
   icon: "💰",

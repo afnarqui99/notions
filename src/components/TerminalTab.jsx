@@ -297,6 +297,64 @@ export default function TerminalTab({
     }
   }, [terminal.output, isActive]);
 
+  // Ref para los botones de navegación
+  const navButtonsRef = useRef(null);
+
+  // Actualizar posición de los botones cuando se hace scroll
+  useEffect(() => {
+    if (!outputRef.current || !navButtonsRef.current) return;
+
+    const updateButtonPosition = () => {
+      const container = outputRef.current;
+      const buttons = navButtonsRef.current;
+      if (!container || !buttons) return;
+
+      const rect = container.getBoundingClientRect();
+      const scrollTop = container.scrollTop;
+      const scrollHeight = container.scrollHeight;
+      const clientHeight = container.clientHeight;
+
+      // Calcular la posición vertical del viewport visible en el contenedor
+      const viewportTop = rect.top;
+      const viewportCenter = viewportTop + (clientHeight / 2);
+
+      // Posicionar los botones en el centro del viewport visible
+      buttons.style.top = `${viewportCenter}px`;
+      buttons.style.transform = 'translateY(-50%)';
+    };
+
+    // Actualizar posición inicial
+    updateButtonPosition();
+
+    // Actualizar posición cuando se hace scroll
+    const handleScroll = () => {
+      updateButtonPosition();
+    };
+
+    outputRef.current.addEventListener('scroll', handleScroll);
+    window.addEventListener('resize', updateButtonPosition);
+
+    return () => {
+      if (outputRef.current) {
+        outputRef.current.removeEventListener('scroll', handleScroll);
+      }
+      window.removeEventListener('resize', updateButtonPosition);
+    };
+  }, [isActive, terminal.output]);
+
+  // Funciones para navegación rápida en el output
+  const scrollToTop = () => {
+    if (outputRef.current) {
+      outputRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const scrollToBottom = () => {
+    if (outputRef.current) {
+      outputRef.current.scrollTo({ top: outputRef.current.scrollHeight, behavior: 'smooth' });
+    }
+  };
+
   // Enfocar input cuando se activa o cuando cambia el terminal
   useEffect(() => {
     if (isActive && inputRef.current) {
@@ -1017,8 +1075,62 @@ export default function TerminalTab({
           minHeight: '200px'
         }}
       >
-        {/* Botones de control de proceso y acciones */}
-        <div className="absolute top-2 right-2 flex gap-1 z-10">
+        {/* Wrapper para contenido y botones sticky */}
+        <div className="relative min-h-full">
+          {/* Botones de navegación rápida (arriba/abajo) - al lado izquierdo del scrollbar */}
+          {terminal.output && (
+            <div 
+              ref={navButtonsRef}
+              className="fixed flex flex-col gap-1 z-10"
+              style={{ 
+                right: '8px',
+                pointerEvents: 'none',
+                width: 'fit-content'
+              }}
+            >
+              <button
+                onClick={scrollToTop}
+                className="p-1.5 rounded transition-all opacity-60 hover:opacity-100 pointer-events-auto"
+                style={{
+                  backgroundColor: 'rgba(0, 0, 0, 0.4)',
+                  color: terminalStyles.textColor,
+                  backdropFilter: 'blur(4px)',
+                }}
+                title="Ir al inicio"
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.6)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.4)';
+                }}
+              >
+                <ChevronUp className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={scrollToBottom}
+                className="p-1.5 rounded transition-all opacity-60 hover:opacity-100 pointer-events-auto"
+                style={{
+                  backgroundColor: 'rgba(0, 0, 0, 0.4)',
+                  color: terminalStyles.textColor,
+                  backdropFilter: 'blur(4px)',
+                }}
+                title="Ir al final"
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.6)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.4)';
+                }}
+              >
+                <ChevronDown className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* Contenido del output */}
+          <div className="relative">
+            {/* Botones de control de proceso y acciones */}
+            <div className="absolute top-2 right-2 flex gap-1 z-10">
           {/* Botones de control de proceso (si hay un proceso corriendo) */}
           {isProcessRunning && (
             <>
@@ -1160,19 +1272,23 @@ export default function TerminalTab({
               )}
             </>
           )}
+            </div>
+
+            {/* Contenido del output */}
+            {terminal.output ? (
+              <div 
+                className="whitespace-pre-wrap break-words font-mono" 
+                style={{ fontSize: `${terminalStyles.outputFontSize || terminalStyles.fontSize || 14}px` }}
+              >
+                {renderTextWithUrls(terminal.output)}
+              </div>
+            ) : (
+              <div className="text-gray-500" style={{ fontSize: `${terminalStyles.outputFontSize || terminalStyles.fontSize || 14}px` }}>
+                Terminal {terminal.name || terminal.id} listo. Escribe comandos para comenzar.
+              </div>
+            )}
+          </div>
         </div>
-        {terminal.output ? (
-          <div 
-            className="whitespace-pre-wrap break-words font-mono" 
-            style={{ fontSize: `${terminalStyles.outputFontSize || terminalStyles.fontSize || 14}px` }}
-          >
-            {renderTextWithUrls(terminal.output)}
-          </div>
-        ) : (
-          <div className="text-gray-500" style={{ fontSize: `${terminalStyles.outputFontSize || terminalStyles.fontSize || 14}px` }}>
-            Terminal {terminal.name || terminal.id} listo. Escribe comandos para comenzar.
-          </div>
-        )}
       </div>
 
       {/* Input area */}
