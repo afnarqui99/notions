@@ -574,6 +574,7 @@ export default function ConnectBDNode({ node, updateAttributes, editor, getPos }
       case 'postgresql': return '5432';
       case 'mysql': return '3306';
       case 'sqlserver': return '1433';
+      case 'visualfoxpro': return ''; // Visual FoxPro no usa puerto
       default: return '';
     }
   };
@@ -705,57 +706,60 @@ export default function ConnectBDNode({ node, updateAttributes, editor, getPos }
             <option value="postgresql">PostgreSQL</option>
             <option value="mysql">MySQL</option>
             <option value="sqlserver">SQL Server</option>
+            <option value="visualfoxpro">Visual FoxPro</option>
           </select>
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Host
+            Host {dbType === 'visualfoxpro' && '(opcional)'}
           </label>
           <input
             type="text"
             value={host}
             onChange={(e) => setHost(e.target.value)}
-            placeholder="localhost"
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+            placeholder={dbType === 'visualfoxpro' ? 'Opcional para Visual FoxPro' : 'localhost'}
+            disabled={dbType === 'visualfoxpro'}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
           />
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Puerto
+            Puerto {dbType === 'visualfoxpro' && '(no requerido)'}
           </label>
           <input
             type="number"
             value={port}
             onChange={(e) => setPort(e.target.value)}
             placeholder={getDefaultPort()}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+            disabled={dbType === 'visualfoxpro'}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
           />
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Base de Datos
+            Base de Datos {dbType === 'visualfoxpro' && '(DSN o ruta)'}
           </label>
           <input
             type="text"
             value={database}
             onChange={(e) => setDatabase(e.target.value)}
-            placeholder="nombre_db"
+            placeholder={dbType === 'visualfoxpro' ? 'DSN o ruta a la BD (ej: C:\\datos\\mi_bd.dbc)' : 'nombre_db'}
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
           />
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Usuario
+            Usuario {dbType === 'visualfoxpro' && '(opcional)'}
           </label>
           <input
             type="text"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            placeholder="usuario"
+            placeholder={dbType === 'visualfoxpro' ? 'Opcional para Visual FoxPro' : 'usuario'}
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
           />
         </div>
@@ -796,7 +800,7 @@ export default function ConnectBDNode({ node, updateAttributes, editor, getPos }
       <div className="flex items-center gap-2">
         <button
           onClick={handleConnect}
-          disabled={isConnecting || !host || !database || !username || !isElectron}
+          disabled={isConnecting || !database || !isElectron || (dbType !== 'visualfoxpro' && (!host || !username))}
           className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
           title={!isElectron ? 'Solo disponible en Electron' : ''}
         >

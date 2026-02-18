@@ -56,6 +56,7 @@
     "mermaid": "^11.12.2",
     "mssql": "^12.2.0",
     "mysql2": "^3.16.1",
+    "odbc": "^2.4.7",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^5.4.530",
     "pg": "^8.17.2",
@@ -97,6 +98,7 @@
       "node_modules/pg/**/*",
       "node_modules/mysql2/**/*",
       "node_modules/mssql/**/*",
+      "node_modules/odbc/**/*",
       "!docker/**/*",
       "!**/*.map",
       "!**/*.test.js",
@@ -119,7 +121,8 @@
       "node_modules/auto-launch/**/*",
       "node_modules/pg/**/*",
       "node_modules/mysql2/**/*",
-      "node_modules/mssql/**/*"
+      "node_modules/mssql/**/*",
+      "node_modules/odbc/**/*"
     ],
     "extraResources": [
       {
