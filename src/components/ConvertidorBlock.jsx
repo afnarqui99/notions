@@ -274,19 +274,26 @@ export default function ConvertidorBlock({ node, updateAttributes, deleteNode, e
       const paddingPx = 40; // Padding de 20mm en cada lado
       const contentWidth = a4WidthPx - (paddingPx * 2);
       
-      // Estilos para el contenedor
+      // Estilos para el contenedor - usar fixed para mejor captura con html2canvas
       tempDiv.style.position = 'fixed';
       tempDiv.style.left = '0';
       tempDiv.style.top = '0';
       tempDiv.style.width = `${a4WidthPx}px`;
       tempDiv.style.maxWidth = `${a4WidthPx}px`;
+      tempDiv.style.minHeight = 'auto';
+      tempDiv.style.height = 'auto';
+      tempDiv.style.overflow = 'visible';
       tempDiv.style.padding = `${paddingPx}px`;
+      tempDiv.style.margin = '0';
       tempDiv.style.fontFamily = 'Arial, "Helvetica Neue", Helvetica, sans-serif';
       tempDiv.style.fontSize = '12pt';
       tempDiv.style.lineHeight = '1.6';
       tempDiv.style.backgroundColor = '#ffffff';
       tempDiv.style.color = '#000000';
       tempDiv.style.boxSizing = 'border-box';
+      tempDiv.style.wordWrap = 'break-word';
+      tempDiv.style.overflowWrap = 'break-word';
+      tempDiv.style.zIndex = '9999';
       
       // Estilos para evitar cortes de página en elementos
       const style = document.createElement('style');
@@ -347,78 +354,342 @@ export default function ConvertidorBlock({ node, updateAttributes, deleteNode, e
 
       // Esperar a que se renderice completamente
       await new Promise(resolve => {
+        // Forzar un reflow inicial
+        void tempDiv.offsetHeight;
+        
         // Esperar a que las imágenes se carguen
         const images = tempDiv.querySelectorAll('img');
         if (images.length === 0) {
-          setTimeout(resolve, 200);
+          // Dar tiempo para que el contenido se renderice
+          setTimeout(() => {
+            void tempDiv.offsetHeight;
+            resolve();
+          }, 300);
         } else {
           let loaded = 0;
+          const totalImages = images.length;
+          
           images.forEach(img => {
-            if (img.complete) {
+            // Asegurar que las imágenes tengan max-width
+            if (!img.style.maxWidth) {
+              img.style.maxWidth = '100%';
+              img.style.height = 'auto';
+            }
+            
+            if (img.complete && img.naturalHeight !== 0) {
               loaded++;
             } else {
               img.onload = () => {
                 loaded++;
-                if (loaded === images.length) {
+                if (loaded === totalImages) {
+                  void tempDiv.offsetHeight;
                   setTimeout(resolve, 200);
                 }
               };
               img.onerror = () => {
                 loaded++;
-                if (loaded === images.length) {
+                if (loaded === totalImages) {
+                  void tempDiv.offsetHeight;
                   setTimeout(resolve, 200);
                 }
               };
             }
           });
-          if (loaded === images.length) {
+          
+          if (loaded === totalImages) {
+            void tempDiv.offsetHeight;
             setTimeout(resolve, 200);
           }
         }
       });
 
       // Obtener dimensiones reales del contenido
+      // Forzar múltiples reflows para asegurar cálculo correcto
+      void tempDiv.offsetHeight;
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      void tempDiv.offsetHeight;
+      await new Promise(resolve => setTimeout(resolve, 100));
+      void tempDiv.offsetHeight;
+      
+      // Asegurar que el elemento esté completamente visible antes de medir
+      tempDiv.style.visibility = 'visible';
+      tempDiv.style.opacity = '1';
+      
       const elementWidth = tempDiv.scrollWidth || tempDiv.offsetWidth || a4WidthPx;
       const elementHeight = tempDiv.scrollHeight || tempDiv.offsetHeight;
+      
+      console.log('[ConvertidorBlock] Dimensiones del contenido:', {
+        width: elementWidth,
+        height: elementHeight,
+        scrollWidth: tempDiv.scrollWidth,
+        scrollHeight: tempDiv.scrollHeight,
+        offsetWidth: tempDiv.offsetWidth,
+        offsetHeight: tempDiv.offsetHeight,
+        innerHTMLLength: tempDiv.innerHTML.length
+      });
+      
+      // Verificar que el contenido tenga altura válida
+      if (!elementHeight || elementHeight < 100) {
+        console.warn('[ConvertidorBlock] Altura del contenido parece incorrecta, usando altura mínima');
+      }
 
-      // Generar PDF con mejor manejo de páginas
-      await html2pdf()
-        .set({
-          margin: [0, 0, 0, 0], // Sin márgenes adicionales, el padding ya los incluye
-          filename: 'documento.pdf',
-          image: { type: 'jpeg', quality: 0.98 },
-          html2canvas: {
+      // html2pdf tiene problemas conocidos con documentos largos, cortando el contenido
+      // Usar siempre la estrategia de división en secciones para documentos > 3000px
+      // Esto asegura que se capture TODO el contenido sin cortes
+      const MAX_CANVAS_HEIGHT = 8000; // Altura máxima por sección
+      const USE_CHUNKING = elementHeight > 3000; // Usar chunking para documentos > 3000px (aprox 3-4 páginas)
+      
+      console.log('[ConvertidorBlock] Estrategia seleccionada:', {
+        elementHeight,
+        USE_CHUNKING,
+        MAX_CANVAS_HEIGHT
+      });
+
+      if (USE_CHUNKING) {
+        console.log('[ConvertidorBlock] Documento largo detectado, dividiendo en secciones');
+        
+        // html2canvas viene como dependencia de html2pdf.js
+        // Intentar importarlo dinámicamente
+        const html2canvasModule = await import('html2canvas');
+        const html2canvas = html2canvasModule.default || html2canvasModule;
+        
+        // Crear PDF maestro
+        const pdf = new jsPDF({
+          unit: 'mm',
+          format: 'a4',
+          orientation: 'portrait',
+          compress: true
+        });
+        
+        const a4WidthMm = 210;
+        const a4HeightMm = 297;
+        const paddingMm = 20;
+        const contentWidthMm = a4WidthMm - (paddingMm * 2);
+        
+        // Dividir en secciones con solapamiento para evitar cortes
+        // Usar un solapamiento de 400px (aproximadamente 4-5 líneas de texto)
+        // Esto proporciona más espacio al final e inicio de cada página
+        const OVERLAP = 400; // Píxeles de solapamiento entre secciones
+        const CHUNK_HEIGHT = MAX_CANVAS_HEIGHT;
+        const EFFECTIVE_CHUNK_HEIGHT = CHUNK_HEIGHT - OVERLAP; // Altura efectiva sin solapamiento
+        
+        // Calcular número de chunks considerando el solapamiento
+        let numChunks = 1;
+        if (elementHeight > EFFECTIVE_CHUNK_HEIGHT) {
+          numChunks = Math.ceil((elementHeight - CHUNK_HEIGHT) / EFFECTIVE_CHUNK_HEIGHT) + 1;
+        }
+        
+        console.log(`[ConvertidorBlock] Dividiendo en ${numChunks} secciones de máximo ${CHUNK_HEIGHT}px con solapamiento de ${OVERLAP}px`);
+        
+        // Asegurar que el elemento esté visible
+        tempDiv.style.position = 'fixed';
+        tempDiv.style.left = '0';
+        tempDiv.style.top = '0';
+        tempDiv.style.visibility = 'visible';
+        tempDiv.style.opacity = '1';
+        
+        // Procesar cada sección
+        for (let i = 0; i < numChunks; i++) {
+          // Calcular posición de inicio con solapamiento
+          let startY = 0;
+          if (i === 0) {
+            startY = 0;
+          } else {
+            startY = i * EFFECTIVE_CHUNK_HEIGHT;
+          }
+          
+          // Calcular posición de fin
+          let endY = Math.min(startY + CHUNK_HEIGHT, elementHeight);
+          
+          // Ajustar para la última sección
+          if (i === numChunks - 1) {
+            endY = elementHeight;
+          }
+          
+          const chunkHeight = endY - startY;
+          
+          console.log(`[ConvertidorBlock] Procesando sección ${i + 1}/${numChunks} (${startY}px - ${endY}px, altura: ${chunkHeight}px)`);
+          
+          // Crear contenedor para esta sección
+          const chunkDiv = document.createElement('div');
+          chunkDiv.className = 'markdown-preview-chunk';
+          chunkDiv.style.position = 'fixed';
+          chunkDiv.style.left = '0';
+          chunkDiv.style.top = '0';
+          chunkDiv.style.width = `${elementWidth}px`;
+          chunkDiv.style.height = `${chunkHeight}px`;
+          chunkDiv.style.overflow = 'hidden';
+          chunkDiv.style.padding = `${paddingPx}px`;
+          chunkDiv.style.margin = '0';
+          chunkDiv.style.fontFamily = 'Arial, "Helvetica Neue", Helvetica, sans-serif';
+          chunkDiv.style.fontSize = '12pt';
+          chunkDiv.style.lineHeight = '1.6';
+          chunkDiv.style.backgroundColor = '#ffffff';
+          chunkDiv.style.color = '#000000';
+          chunkDiv.style.boxSizing = 'border-box';
+          chunkDiv.style.zIndex = '9999';
+          
+          // Clonar el contenido y ajustar posición para mostrar solo esta sección
+          const clonedContent = tempDiv.cloneNode(true);
+          // Remover estilos que puedan interferir
+          clonedContent.style.position = 'relative';
+          clonedContent.style.top = `-${startY}px`;
+          clonedContent.style.left = '0';
+          clonedContent.style.margin = '0';
+          clonedContent.style.padding = '0';
+          clonedContent.style.width = `${elementWidth}px`;
+          clonedContent.style.height = 'auto';
+          clonedContent.style.minHeight = 'auto';
+          clonedContent.style.overflow = 'visible';
+          clonedContent.style.visibility = 'visible';
+          clonedContent.style.opacity = '1';
+          chunkDiv.appendChild(clonedContent);
+          
+          // Forzar reflow para asegurar que el contenido se renderice
+          void chunkDiv.offsetHeight;
+          
+          document.body.appendChild(chunkDiv);
+          
+          // Esperar renderizado
+          await new Promise(resolve => {
+            requestAnimationFrame(() => {
+              requestAnimationFrame(resolve);
+            });
+          });
+          
+          // Capturar esta sección
+          const canvas = await html2canvas(chunkDiv, {
             scale: 2,
             useCORS: true,
             backgroundColor: '#ffffff',
             logging: false,
             width: elementWidth,
-            height: elementHeight,
+            height: chunkHeight,
             windowWidth: elementWidth,
-            windowHeight: elementHeight,
+            windowHeight: chunkHeight,
             x: 0,
             y: 0,
             scrollX: 0,
             scrollY: 0,
-            // Configuración para evitar cortes
             allowTaint: true,
-            letterRendering: true,
-          },
-          jsPDF: { 
-            unit: 'mm', 
-            format: 'a4', 
-            orientation: 'portrait',
-            compress: true
-          },
-          pagebreak: { 
-            mode: ['avoid-all', 'css', 'legacy'],
-            before: '.page-break-before',
-            after: '.page-break-after',
-            avoid: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'pre', 'table', 'img', 'blockquote']
+            letterRendering: true
+          });
+          
+          // Convertir a imagen
+          const imgData = canvas.toDataURL('image/jpeg', 0.98);
+          
+          // Calcular dimensiones para el PDF
+          const imgWidthMm = contentWidthMm;
+          const imgHeightMm = (chunkHeight / elementWidth) * contentWidthMm;
+          
+          // Agregar nueva página si no es la primera
+          if (i > 0) {
+            pdf.addPage();
           }
-        })
-        .from(tempDiv)
-        .save();
+          
+          // Calcular el solapamiento en píxeles del canvas para recortar
+          // Recortar la parte superior de cada sección (excepto la primera) para eliminar el solapamiento
+          const overlapPx = i > 0 ? (OVERLAP / elementWidth) * canvas.width : 0;
+          const overlapMm = i > 0 ? (OVERLAP / elementWidth) * imgWidthMm : 0;
+          
+          // Si hay solapamiento, recortar la parte superior de la imagen
+          let finalCanvas = canvas;
+          let finalImgData = imgData;
+          let finalImgHeightMm = imgHeightMm;
+          
+          if (overlapPx > 0) {
+            // Crear un canvas recortado sin el solapamiento superior
+            const trimmedCanvas = document.createElement('canvas');
+            trimmedCanvas.width = canvas.width;
+            trimmedCanvas.height = canvas.height - overlapPx;
+            const trimmedCtx = trimmedCanvas.getContext('2d');
+            trimmedCtx.drawImage(canvas, 0, overlapPx, canvas.width, canvas.height - overlapPx, 0, 0, canvas.width, canvas.height - overlapPx);
+            finalCanvas = trimmedCanvas;
+            finalImgData = trimmedCanvas.toDataURL('image/jpeg', 0.98);
+            finalImgHeightMm = imgHeightMm - overlapMm;
+          }
+          
+          // Agregar imagen al PDF
+          // Si la imagen es más alta que una página, dividirla en múltiples páginas
+          const pageHeightMm = a4HeightMm - (paddingMm * 2);
+          if (finalImgHeightMm > pageHeightMm) {
+            // Dividir la imagen en múltiples páginas
+            let currentY = 0;
+            while (currentY < finalImgHeightMm) {
+              if (currentY > 0) {
+                pdf.addPage();
+              }
+              const remainingHeight = finalImgHeightMm - currentY;
+              const heightToAdd = Math.min(pageHeightMm, remainingHeight);
+              
+              // Calcular la porción de la imagen a mostrar
+              const sourceY = (currentY / finalImgHeightMm) * finalCanvas.height;
+              const sourceHeight = (heightToAdd / finalImgHeightMm) * finalCanvas.height;
+              
+              // Crear un canvas temporal con solo esta porción
+              const tempCanvas = document.createElement('canvas');
+              tempCanvas.width = finalCanvas.width;
+              tempCanvas.height = sourceHeight;
+              const tempCtx = tempCanvas.getContext('2d');
+              tempCtx.drawImage(finalCanvas, 0, sourceY, finalCanvas.width, sourceHeight, 0, 0, finalCanvas.width, sourceHeight);
+              
+              const tempImgData = tempCanvas.toDataURL('image/jpeg', 0.98);
+              pdf.addImage(tempImgData, 'JPEG', paddingMm, paddingMm, imgWidthMm, heightToAdd);
+              
+              currentY += heightToAdd;
+            }
+          } else {
+            pdf.addImage(finalImgData, 'JPEG', paddingMm, paddingMm, imgWidthMm, finalImgHeightMm);
+          }
+          
+          // Limpiar
+          document.body.removeChild(chunkDiv);
+        }
+        
+        // Guardar PDF
+        const pdfFilename = (fileName && fileName.endsWith('.md')) ? fileName.replace(/\.(md|markdown)$/i, '.pdf') : (fileName || 'documento.pdf');
+        pdf.save(pdfFilename);
+        
+        console.log('[ConvertidorBlock] PDF generado exitosamente con todas las secciones');
+      } else {
+        // Para documentos normales, usar html2pdf directamente
+        await html2pdf()
+          .set({
+            margin: [0, 0, 0, 0],
+            filename: (fileName && fileName.endsWith('.md')) ? fileName.replace(/\.(md|markdown)$/i, '.pdf') : (fileName || 'documento.pdf'),
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: {
+              scale: 2,
+              useCORS: true,
+              backgroundColor: '#ffffff',
+              logging: false,
+              width: elementWidth,
+              height: elementHeight,
+              windowWidth: elementWidth,
+              windowHeight: elementHeight,
+              x: 0,
+              y: 0,
+              scrollX: 0,
+              scrollY: 0,
+              allowTaint: true,
+              letterRendering: true
+            },
+            jsPDF: { 
+              unit: 'mm', 
+              format: 'a4', 
+              orientation: 'portrait',
+              compress: true
+            },
+            pagebreak: { 
+              mode: ['avoid-all', 'css', 'legacy'],
+              before: '.page-break-before',
+              after: '.page-break-after',
+              avoid: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'pre', 'table', 'img', 'blockquote']
+            }
+          })
+          .from(tempDiv)
+          .save();
+      }
 
       // Limpiar
       document.body.removeChild(tempDiv);
