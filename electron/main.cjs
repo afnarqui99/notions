@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, Tray, Menu, nativeImage, Notification, ipcMain, dialog, session, desktopCapturer } = require('electron');
+const { app, BrowserWindow, shell, Tray, Menu, nativeImage, Notification, ipcMain, dialog, session, desktopCapturer, screen } = require('electron');
 const path = require('path');
 const { spawn, exec } = require('child_process');
 const fs = require('fs');
@@ -694,7 +694,8 @@ function createWindow() {
   // Permitir crear múltiples ventanas - siempre crear una nueva
   const iconPath = getIconPath();
   
-  const isDev = !app.isPackaged;
+  // En desarrollo, verificar si estamos en modo dev (por defecto si no está empaquetado)
+  const isDev = !app.isPackaged || process.env.NODE_ENV === 'development';
   
   mainWindow = new BrowserWindow({
     width: 1200,
@@ -718,13 +719,13 @@ function createWindow() {
   if (isDev) {
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
       const csp = "default-src 'self' http://localhost:5174 ws://localhost:5174; " +
-                  "script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:5174; " +
+                  "script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:5174 https://cdnjs.cloudflare.com https://pagead2.googlesyndication.com; " +
                   "style-src 'self' 'unsafe-inline' http://localhost:5174; " +
                   "img-src 'self' data: blob: http://localhost:5174; " +
-                  "connect-src 'self' http://localhost:5174 ws://localhost:5174 wss://localhost:5174; " +
+                  "connect-src 'self' http://localhost:5174 ws://localhost:5174 wss://localhost:5174 https://api.openai.com https://api.anthropic.com; " +
                   "font-src 'self' data:; " +
                   "object-src 'none'; " +
-                  "media-src 'self'; " +
+                  "media-src 'self' file: blob:; " +
                   "frame-src 'self';";
       
       callback({
@@ -928,8 +929,45 @@ function createWindow() {
     // Enfocar la ventana
     if (isDev) {
       mainWindow.focus();
+    // DevTools se pueden abrir manualmente con F12
+    // No abrir automáticamente
     }
   });
+  
+  // Agregar menú para abrir DevTools (útil en producción también)
+  const template = [
+    {
+      label: 'Ver',
+      submenu: [
+        {
+          label: 'Herramientas de Desarrollador',
+          accelerator: 'F12',
+          click: () => {
+            if (mainWindow) {
+              if (mainWindow.webContents.isDevToolsOpened()) {
+                mainWindow.webContents.closeDevTools();
+              } else {
+                mainWindow.webContents.openDevTools();
+              }
+            }
+          }
+        },
+        { type: 'separator' },
+        {
+          label: 'Recargar',
+          accelerator: 'Ctrl+R',
+          click: () => {
+            if (mainWindow) {
+              mainWindow.reload();
+            }
+          }
+        }
+      ]
+    }
+  ];
+  
+  const menu = Menu.buildFromTemplate(template);
+  mainWindow.setMenu(menu);
 
 
   // Manejar enlaces externos
@@ -3070,7 +3108,7 @@ print("✅ Cliente de debugging conectado", file=sys.stderr)
     try {
       const sources = await desktopCapturer.getSources({
         types: ['screen', 'window'],
-        thumbnailSize: { width: 1920, height: 1080 }
+        thumbnailSize: { width: 300, height: 200 } // Tamaño más pequeño para thumbnails
       });
       return sources.map(source => ({
         id: source.id,
@@ -3082,6 +3120,571 @@ print("✅ Cliente de debugging conectado", file=sys.stderr)
       return [];
     }
   });
+  
+  // Handler para obtener la posición global del cursor
+  ipcMain.handle('get-global-cursor-position', () => {
+    const point = screen.getCursorScreenPoint();
+    return { x: point.x, y: point.y };
+  });
+
+  // ========== HANDLERS DE GRABACIÓN DE PANTALLA ==========
+  
+  // Servicio para gestionar grabaciones de pantalla
+  const ScreenRecordingService = {
+    recordingsPath: path.join(app.getPath('userData'), 'screen-recordings'),
+    historyFile: path.join(app.getPath('userData'), 'screen-recordings-history.json'),
+    
+    // Inicializar directorio de grabaciones
+    init() {
+      if (!fs.existsSync(this.recordingsPath)) {
+        fs.mkdirSync(this.recordingsPath, { recursive: true });
+      }
+      if (!fs.existsSync(this.historyFile)) {
+        fs.writeFileSync(this.historyFile, JSON.stringify([]));
+      }
+    },
+    
+    // Obtener historial
+    getHistory() {
+      try {
+        if (!fs.existsSync(this.historyFile)) {
+          return [];
+        }
+        const data = fs.readFileSync(this.historyFile, 'utf8');
+        const history = JSON.parse(data);
+        // Filtrar grabaciones que ya no existen
+        return history.filter(rec => {
+          const filePath = path.join(this.recordingsPath, rec.filename);
+          return fs.existsSync(filePath);
+        });
+      } catch (error) {
+        console.error('Error leyendo historial:', error);
+        return [];
+      }
+    },
+    
+    // Guardar grabación en historial
+    saveToHistory(filename, duration, size, transcription = null) {
+      try {
+        const history = this.getHistory();
+        const recording = {
+          id: `rec-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          filename,
+          path: path.join(this.recordingsPath, filename),
+          duration,
+          size,
+          transcription: transcription || null,
+          transcribedAt: transcription ? new Date().toISOString() : null,
+          createdAt: new Date().toISOString()
+        };
+        history.unshift(recording); // Agregar al inicio
+        fs.writeFileSync(this.historyFile, JSON.stringify(history, null, 2));
+        return recording;
+      } catch (error) {
+        console.error('Error guardando en historial:', error);
+        throw error;
+      }
+    },
+    
+    // Actualizar transcripción en historial
+    updateTranscription(recordingId, transcription) {
+      try {
+        const history = this.getHistory();
+        const recording = history.find(r => r.id === recordingId);
+        if (!recording) {
+          return { success: false, error: 'Grabación no encontrada' };
+        }
+        
+        recording.transcription = transcription;
+        recording.transcribedAt = new Date().toISOString();
+        
+        fs.writeFileSync(this.historyFile, JSON.stringify(history, null, 2));
+        return { success: true, recording };
+      } catch (error) {
+        console.error('Error actualizando transcripción:', error);
+        return { success: false, error: error.message };
+      }
+    },
+    
+    // Eliminar grabación
+    deleteRecording(recordingId) {
+      try {
+        const history = this.getHistory();
+        const recording = history.find(r => r.id === recordingId);
+        if (!recording) {
+          return { success: false, error: 'Grabación no encontrada' };
+        }
+        
+        const filePath = path.join(this.recordingsPath, recording.filename);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+        
+        const updatedHistory = history.filter(r => r.id !== recordingId);
+        fs.writeFileSync(this.historyFile, JSON.stringify(updatedHistory, null, 2));
+        
+        return { success: true };
+      } catch (error) {
+        console.error('Error eliminando grabación:', error);
+        return { success: false, error: error.message };
+      }
+    }
+  };
+  
+  // Inicializar servicio
+  ScreenRecordingService.init();
+  
+  // Handler para guardar grabación de pantalla
+  ipcMain.handle('save-screen-recording', async (event, data, duration) => {
+    try {
+      console.log('[ScreenRecording] Guardando grabación...', {
+        dataType: typeof data,
+        isArray: Array.isArray(data),
+        isUint8Array: data instanceof Uint8Array,
+        dataLength: data?.length,
+        duration
+      });
+      
+      // Convertir datos a Buffer
+      let fileBuffer;
+      if (Buffer.isBuffer(data)) {
+        fileBuffer = data;
+      } else if (data instanceof Uint8Array) {
+        fileBuffer = Buffer.from(data);
+      } else if (Array.isArray(data)) {
+        fileBuffer = Buffer.from(data);
+      } else if (typeof data === 'object' && data.data) {
+        // Si viene serializado como objeto
+        fileBuffer = Buffer.from(data.data);
+      } else {
+        console.error('[ScreenRecording] Tipo de datos no soportado:', typeof data, data);
+        return { success: false, error: `Formato de datos no válido: ${typeof data}` };
+      }
+      
+      if (!fileBuffer || fileBuffer.length === 0) {
+        console.error('[ScreenRecording] Buffer vacío o inválido');
+        return { success: false, error: 'Buffer vacío - no hay datos para guardar' };
+      }
+      
+      // Asegurar que el directorio existe
+      if (!fs.existsSync(ScreenRecordingService.recordingsPath)) {
+        fs.mkdirSync(ScreenRecordingService.recordingsPath, { recursive: true });
+      }
+      
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const filename = `grabacion-${timestamp}.webm`;
+      const filePath = path.join(ScreenRecordingService.recordingsPath, filename);
+      
+      console.log('[ScreenRecording] Guardando en:', filePath);
+      console.log('[ScreenRecording] Tamaño del buffer:', fileBuffer.length, 'bytes');
+      
+      // Guardar archivo
+      fs.writeFileSync(filePath, fileBuffer);
+      
+      // Verificar que el archivo se guardó correctamente
+      if (!fs.existsSync(filePath)) {
+        console.error('[ScreenRecording] El archivo no se creó después de escribir');
+        return { success: false, error: 'Error: el archivo no se creó' };
+      }
+      
+      // Obtener tamaño del archivo
+      const stats = fs.statSync(filePath);
+      const size = stats.size;
+      
+      console.log('[ScreenRecording] Archivo guardado exitosamente');
+      console.log('[ScreenRecording] Tamaño del archivo:', size, 'bytes');
+      console.log('[ScreenRecording] Ruta completa:', filePath);
+      
+      if (size === 0) {
+        console.error('[ScreenRecording] ADVERTENCIA: El archivo se guardó pero tiene 0 bytes');
+        // Eliminar archivo vacío
+        fs.unlinkSync(filePath);
+        return { success: false, error: 'El archivo se guardó vacío - puede que no haya datos grabados' };
+      }
+      
+      // Guardar en historial
+      const recording = ScreenRecordingService.saveToHistory(filename, duration, size);
+      
+      console.log('[ScreenRecording] Grabación guardada en historial:', recording.id);
+      
+      return {
+        success: true,
+        path: filePath,
+        filename,
+        id: recording.id,
+        size,
+        duration
+      };
+    } catch (error) {
+      console.error('[ScreenRecording] Error guardando grabación:', error);
+      console.error('[ScreenRecording] Stack:', error.stack);
+      return { success: false, error: error.message || 'Error desconocido al guardar' };
+    }
+  });
+  
+  // Handler para obtener historial de grabaciones
+  ipcMain.handle('get-screen-recording-history', async () => {
+    try {
+      return ScreenRecordingService.getHistory();
+    } catch (error) {
+      console.error('Error obteniendo historial:', error);
+      return [];
+    }
+  });
+  
+  // Handler para eliminar grabación
+  ipcMain.handle('delete-screen-recording', async (event, recordingId) => {
+    try {
+      return ScreenRecordingService.deleteRecording(recordingId);
+    } catch (error) {
+      console.error('Error eliminando grabación:', error);
+      return { success: false, error: error.message };
+    }
+  });
+  
+  // Handler para abrir carpeta de grabaciones
+  ipcMain.handle('open-screen-recordings-folder', async () => {
+    try {
+      shell.openPath(ScreenRecordingService.recordingsPath);
+      return { success: true };
+    } catch (error) {
+      console.error('Error abriendo carpeta:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Handler para transcribir grabación
+  ipcMain.handle('transcribe-screen-recording', async (event, recordingId) => {
+    try {
+      const history = ScreenRecordingService.getHistory();
+      const recording = history.find(r => r.id === recordingId);
+      if (!recording) {
+        return { success: false, error: 'Grabación no encontrada' };
+      }
+
+      // Si ya tiene transcripción, retornarla
+      if (recording.transcription) {
+        return { success: true, transcription: recording.transcription };
+      }
+
+      const filePath = recording.path;
+      if (!fs.existsSync(filePath)) {
+        return { success: false, error: 'Archivo de video no encontrado' };
+      }
+
+      // Leer configuración de IA desde el renderer (se guarda en localStorage, pero necesitamos acceso desde main)
+      // Intentar leer desde un archivo de configuración compartido
+      const userDataPath = app.getPath('userData');
+      const aiConfigPath = path.join(userDataPath, 'ai-service-config.json');
+      let apiKey = null;
+      let apiProvider = 'openai';
+      
+      // También intentar desde localStorage del renderer (necesitamos que el renderer lo guarde en un archivo)
+      // Por ahora, el renderer debe guardar la configuración en un archivo cuando se configure
+      if (fs.existsSync(aiConfigPath)) {
+        try {
+          const config = JSON.parse(fs.readFileSync(aiConfigPath, 'utf8'));
+          apiKey = config.apiKey;
+          apiProvider = config.provider || 'openai';
+        } catch (error) {
+          console.error('Error leyendo configuración de IA:', error);
+        }
+      }
+      
+      // Si no existe, intentar leer desde una variable de entorno (para desarrollo)
+      if (!apiKey && process.env.OPENAI_API_KEY) {
+        apiKey = process.env.OPENAI_API_KEY;
+      }
+
+      if (!apiKey) {
+        return { success: false, error: 'API key de OpenAI no configurada. Por favor, configura tu API key en la configuración de IA.' };
+      }
+
+      // Asegurar que el directorio de grabaciones existe
+      if (!fs.existsSync(ScreenRecordingService.recordingsPath)) {
+        fs.mkdirSync(ScreenRecordingService.recordingsPath, { recursive: true });
+      }
+
+      // Extraer audio del video usando ffmpeg (si está disponible)
+      // Usar directorio temporal del sistema para archivos temporales
+      const tempDir = os.tmpdir();
+      const audioPath = path.join(tempDir, `audio-${recordingId}-${Date.now()}.mp3`);
+      
+      // Intentar extraer audio con ffmpeg
+      return new Promise((resolve) => {
+        exec(`ffmpeg -i "${filePath}" -vn -acodec libmp3lame -ar 16000 -ac 1 "${audioPath}"`, 
+          { timeout: 300000 }, // 5 minutos timeout
+          async (error, stdout, stderr) => {
+            // Verificar si el archivo de audio se creó exitosamente
+            const audioExists = fs.existsSync(audioPath);
+            
+            if (error || !audioExists) {
+              // Si ffmpeg no está disponible o falló, intentar usar el archivo webm directamente
+              console.warn('ffmpeg no disponible o falló, intentando transcribir directamente...', error?.message || 'Archivo no creado');
+              
+              // Limpiar archivo temporal si existe pero está corrupto
+              if (audioExists) {
+                try {
+                  fs.unlinkSync(audioPath);
+                } catch (e) {
+                  // Ignorar errores al eliminar
+                }
+              }
+              
+              try {
+                const audioBuffer = fs.readFileSync(filePath);
+                const transcription = await transcribeWithOpenAI(audioBuffer, apiKey, filePath.endsWith('.webm') ? 'webm' : 'mp4');
+                
+                // Actualizar historial con transcripción
+                const result = ScreenRecordingService.updateTranscription(recordingId, transcription);
+                
+                resolve({ success: true, transcription });
+                return;
+              } catch (transcribeError) {
+                resolve({ success: false, error: `Error transcribiendo: ${transcribeError.message}` });
+                return;
+              }
+            }
+
+            // Transcribir audio con OpenAI Whisper (solo si el archivo existe)
+            if (!audioExists) {
+              resolve({ success: false, error: 'No se pudo extraer el audio del video. Asegúrate de que ffmpeg esté instalado o que el video tenga audio.' });
+              return;
+            }
+
+            try {
+              const audioBuffer = fs.readFileSync(audioPath);
+              const transcription = await transcribeWithOpenAI(audioBuffer, apiKey, 'mp3');
+              
+              // Actualizar historial con transcripción
+              const result = ScreenRecordingService.updateTranscription(recordingId, transcription);
+              
+              // Limpiar archivo de audio temporal
+              if (fs.existsSync(audioPath)) {
+                try {
+                  fs.unlinkSync(audioPath);
+                } catch (e) {
+                  console.warn('Error eliminando archivo temporal:', e);
+                }
+              }
+              
+              resolve({ success: true, transcription });
+            } catch (transcribeError) {
+              // Limpiar archivo de audio temporal
+              if (fs.existsSync(audioPath)) {
+                try {
+                  fs.unlinkSync(audioPath);
+                } catch (e) {
+                  console.warn('Error eliminando archivo temporal:', e);
+                }
+              }
+              resolve({ success: false, error: `Error transcribiendo: ${transcribeError.message}` });
+            }
+          }
+        );
+      });
+    } catch (error) {
+      console.error('Error transcribiendo grabación:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Función helper para transcribir con OpenAI Whisper
+  async function transcribeWithOpenAI(audioBuffer, apiKey, format = 'webm') {
+    // Crear un archivo temporal para el audio
+    const tempPath = path.join(os.tmpdir(), `audio-${Date.now()}.${format}`);
+    fs.writeFileSync(tempPath, audioBuffer);
+    
+    try {
+      // Leer el archivo como stream
+      const fileStream = fs.createReadStream(tempPath);
+      const fileStats = fs.statSync(tempPath);
+      
+      // Crear form-data manualmente
+      const boundary = `----WebKitFormBoundary${Date.now()}`;
+      const formDataParts = [];
+      
+      // Agregar archivo
+      formDataParts.push(`--${boundary}\r\n`);
+      formDataParts.push(`Content-Disposition: form-data; name="file"; filename="audio.${format}"\r\n`);
+      formDataParts.push(`Content-Type: audio/${format}\r\n\r\n`);
+      
+      // Leer archivo y agregar al body
+      const fileContent = fs.readFileSync(tempPath);
+      const fileBuffer = Buffer.from(fileContent);
+      
+      // Agregar campos del formulario
+      const modelField = Buffer.from(`\r\n--${boundary}\r\nContent-Disposition: form-data; name="model"\r\n\r\nwhisper-1\r\n`);
+      const languageField = Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="language"\r\n\r\nes\r\n--${boundary}--\r\n`);
+      
+      const headerBuffer = Buffer.from(formDataParts.join(''));
+      const bodyBuffer = Buffer.concat([headerBuffer, fileBuffer, modelField, languageField]);
+
+      const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': `multipart/form-data; boundary=${boundary}`,
+          'Content-Length': bodyBuffer.length.toString()
+        },
+        body: bodyBuffer
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error?.message || `Error de API: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data.text;
+    } finally {
+      // Limpiar archivo temporal
+      if (fs.existsSync(tempPath)) {
+        fs.unlinkSync(tempPath);
+      }
+    }
+  }
+
+  // Handler para guardar configuración de IA
+  ipcMain.handle('save-ai-config', async (event, config) => {
+    try {
+      const aiConfigPath = path.join(app.getPath('userData'), 'ai-service-config.json');
+      fs.writeFileSync(aiConfigPath, JSON.stringify(config, null, 2));
+      return { success: true };
+    } catch (error) {
+      console.error('Error guardando configuración de IA:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Handler para consultar IA sobre grabaciones
+  ipcMain.handle('query-screen-recordings', async (event, question, recordingIds = null) => {
+    try {
+      const history = ScreenRecordingService.getHistory();
+      
+      // Filtrar grabaciones si se especifican IDs
+      let recordingsToQuery = history;
+      if (recordingIds && recordingIds.length > 0) {
+        recordingsToQuery = history.filter(r => recordingIds.includes(r.id));
+      }
+      
+      // Filtrar solo las que tienen transcripción
+      const transcribedRecordings = recordingsToQuery.filter(r => r.transcription);
+      
+      if (transcribedRecordings.length === 0) {
+        return { 
+          success: false, 
+          error: 'No hay grabaciones transcritas disponibles. Por favor, transcribe algunas grabaciones primero.' 
+        };
+      }
+
+      // Leer configuración de IA
+      const aiConfigPath = path.join(app.getPath('userData'), 'ai-service-config.json');
+      let apiKey = null;
+      let apiProvider = 'openai';
+      
+      if (fs.existsSync(aiConfigPath)) {
+        try {
+          const config = JSON.parse(fs.readFileSync(aiConfigPath, 'utf8'));
+          apiKey = config.apiKey;
+          apiProvider = config.provider || 'openai';
+        } catch (error) {
+          console.error('Error leyendo configuración de IA:', error);
+        }
+      }
+
+      if (!apiKey) {
+        return { success: false, error: 'API key de IA no configurada' };
+      }
+
+      // Construir contexto con todas las transcripciones
+      let context = 'Transcripciones de grabaciones de pantalla:\n\n';
+      transcribedRecordings.forEach((rec, index) => {
+        const date = new Date(rec.createdAt).toLocaleString('es-ES');
+        context += `--- Grabación ${index + 1} (${date}) ---\n`;
+        context += `${rec.transcription}\n\n`;
+      });
+
+      // Llamar a la API de IA
+      const systemMessage = `Eres un asistente que ayuda a analizar y responder preguntas sobre grabaciones de pantalla transcritas. 
+Responde de manera clara y concisa basándote en el contenido de las transcripciones proporcionadas.`;
+
+      const messages = [
+        { role: 'system', content: systemMessage },
+        { role: 'user', content: `Contexto:\n${context}\n\nPregunta: ${question}` }
+      ];
+
+      let response;
+      if (apiProvider === 'anthropic') {
+        response = await callAnthropicAPI(messages, apiKey);
+      } else {
+        response = await callOpenAIAPI(messages, apiKey);
+      }
+
+      return { success: true, answer: response };
+    } catch (error) {
+      console.error('Error consultando grabaciones:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Función helper para llamar a OpenAI
+  async function callOpenAIAPI(messages, apiKey) {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4-turbo-preview',
+        messages: messages,
+        temperature: 0.7,
+        max_tokens: 2000
+      })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error?.message || `Error de API: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.choices[0]?.message?.content || 'No se recibió respuesta de la IA.';
+  }
+
+  // Función helper para llamar a Anthropic
+  async function callAnthropicAPI(messages, apiKey) {
+    const anthropicMessages = messages.filter(m => m.role !== 'system').map(msg => ({
+      role: msg.role === 'assistant' ? 'assistant' : 'user',
+      content: msg.content
+    }));
+
+    const systemMessage = messages.find(m => m.role === 'system')?.content || '';
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-3-opus-20240229',
+        max_tokens: 2000,
+        system: systemMessage,
+        messages: anthropicMessages
+      })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error?.message || `Error de API: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.content[0]?.text || 'No se recibió respuesta de la IA.';
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

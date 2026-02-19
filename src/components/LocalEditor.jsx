@@ -73,6 +73,7 @@ import CommandButtonModal from "./CommandButtonModal";
 import ExcelTableDimensionsModal from "./ExcelTableDimensionsModal";
 import { getSlashCommandItems } from "../utils/slashCommandItems";
 import WelcomeExamples from "./WelcomeExamples";
+import ScreenRecordingHistory from "./ScreenRecordingHistory";
 
 export default function LocalEditor({ onShowConfig }) {
   // Función helper para extraer emoji del título
@@ -159,6 +160,7 @@ export default function LocalEditor({ onShowConfig }) {
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
   const [showSlashCommandModal, setShowSlashCommandModal] = useState(false);
   const [showExcelTableDimensionsModal, setShowExcelTableDimensionsModal] = useState(false);
+  const [showScreenRecordingHistory, setShowScreenRecordingHistory] = useState(false);
   const [cursorPosition, setCursorPosition] = useState({ top: 160, left: 300 });
   // Múltiples modales de Visual Code fullscreen
   const [visualCodeFullscreenModals, setVisualCodeFullscreenModals] = useState([]);
@@ -1388,6 +1390,20 @@ export default function LocalEditor({ onShowConfig }) {
     window.addEventListener('open-excel-table-dimensions', handleOpenExcelTableDimensions);
     return () => {
       window.removeEventListener('open-excel-table-dimensions', handleOpenExcelTableDimensions);
+    };
+  }, []);
+
+  // Escuchar evento para abrir historial de grabaciones de pantalla
+  useEffect(() => {
+    const handleOpenScreenRecordingHistory = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setShowScreenRecordingHistory(true);
+    };
+
+    window.addEventListener('open-screen-recording-history', handleOpenScreenRecordingHistory);
+    return () => {
+      window.removeEventListener('open-screen-recording-history', handleOpenScreenRecordingHistory);
     };
   }, []);
 
@@ -2841,6 +2857,12 @@ export default function LocalEditor({ onShowConfig }) {
             }
           }
         }}
+      />
+
+      {/* Modal de Historial de Grabaciones de Pantalla */}
+      <ScreenRecordingHistory
+        isOpen={showScreenRecordingHistory}
+        onClose={() => setShowScreenRecordingHistory(false)}
       />
 
       {/* Modal de selección */}

@@ -33,8 +33,18 @@ export default function AIChatPanel({
       const config = JSON.parse(localStorage.getItem('ai-service-config') || '{}');
       setApiKey(config.apiKey || '');
       setApiProvider(config.provider || 'openai');
+    } else {
+      // Si no hay API key, mostrar el panel de configuración automáticamente
+      setShowSettings(true);
     }
   }, []);
+  
+  // Mostrar configuración automáticamente cuando se abre el panel si no hay API key
+  useEffect(() => {
+    if (isOpen && !AIService.hasApiKey()) {
+      setShowSettings(true);
+    }
+  }, [isOpen]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

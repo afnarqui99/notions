@@ -193,6 +193,17 @@ export function getSlashCommandItems() {
       },
     },
     {
+      label: "Grabar Pantalla",
+      description: "Grabar pantalla con audio, transcribir y consultar con IA - Ver historial de grabaciones",
+      icon: "🎥",
+      keywords: ["grabar", "pantalla", "video", "recording", "screen", "record", "grabacion", "transcribir", "ia"],
+      command: ({ editor, range }) => {
+        editor.chain().focus().deleteRange(range).run();
+        // Disparar evento para abrir el historial de grabaciones
+        window.dispatchEvent(new CustomEvent('open-screen-recording-history'));
+      },
+    },
+    {
       label: "Plantilla Financiero",
       description: "Crear sistema financiero completo con Ingresos, Egresos y Deudas interconectadas",
       icon: "💰",

@@ -9,7 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "electron": "electron .",
-    "electron:dev": "NODE_ENV=development electron .",
+    "electron:dev": "electron .",
     "electron:build": "npm run build && electron-builder",
     "clean-release": "powershell -ExecutionPolicy Bypass -File scripts/clean-release.ps1",
     "electron:build:win": "npm run build && electron-builder --win",

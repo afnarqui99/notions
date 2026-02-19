@@ -259,6 +259,39 @@ const electronAPI = {
         // Obtener fuentes de captura de pantalla
         getScreenSources: () => {
           return ipcRenderer.invoke('get-screen-sources');
+        },
+        // Obtener posición global del cursor
+        getGlobalCursorPosition: () => {
+          return ipcRenderer.invoke('get-global-cursor-position');
+        },
+        // ========== GRABACIÓN DE PANTALLA ==========
+        // Guardar grabación de pantalla
+        saveScreenRecording: (buffer, duration) => {
+          return ipcRenderer.invoke('save-screen-recording', buffer, duration);
+        },
+        // Obtener historial de grabaciones
+        getScreenRecordingHistory: () => {
+          return ipcRenderer.invoke('get-screen-recording-history');
+        },
+        // Eliminar grabación
+        deleteScreenRecording: (recordingId) => {
+          return ipcRenderer.invoke('delete-screen-recording', recordingId);
+        },
+        // Abrir carpeta de grabaciones
+        openScreenRecordingsFolder: () => {
+          return ipcRenderer.invoke('open-screen-recordings-folder');
+        },
+        // Transcribir grabación
+        transcribeScreenRecording: (recordingId) => {
+          return ipcRenderer.invoke('transcribe-screen-recording', recordingId);
+        },
+        // Consultar IA sobre grabaciones
+        queryScreenRecordings: (question, recordingIds) => {
+          return ipcRenderer.invoke('query-screen-recordings', question, recordingIds);
+        },
+        // Guardar configuración de IA
+        saveAIConfig: (config) => {
+          return ipcRenderer.invoke('save-ai-config', config);
         }
 };
 

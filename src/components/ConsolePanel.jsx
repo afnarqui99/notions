@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, Play, Maximize2, Minimize2, FolderOpen, Terminal, Settings, BookOpen, Eye, Code, Sidebar, Info, CheckCircle, AlertCircle, FilePlus, Sparkles, Copy, Check, Layout, Split } from 'lucide-react';
+import { X, Play, Maximize2, Minimize2, FolderOpen, Terminal, Settings, BookOpen, Eye, Code, Sidebar, Info, CheckCircle, AlertCircle, FilePlus, Sparkles, Copy, Check, Layout, Split, Video, Square, History } from 'lucide-react';
 import cursosService from '../services/CursosService';
 import codeIntelligenceService from '../services/CodeIntelligenceService';
+import screenRecordingService from '../services/ScreenRecordingService';
 import FileExplorer from './FileExplorer';
 import ConsolePluginsModal from './ConsolePluginsModal';
 import MultiTerminalView from './MultiTerminalView';
+import ScreenRecordingHistory from './ScreenRecordingHistory';
 
 export default function ConsolePanel({ isOpen, onClose, editor = null }) {
   // TODOS LOS HOOKS DEBEN IR PRIMERO (regla de React)
@@ -47,6 +49,10 @@ export default function ConsolePanel({ isOpen, onClose, editor = null }) {
   const [terminalMode, setTerminalMode] = useState(false);
   const [terminals, setTerminals] = useState([]);
   const [activeTerminalId, setActiveTerminalId] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const [showRecordingHistory, setShowRecordingHistory] = useState(false);
+  const recordingIntervalRef = useRef(null);
   const outputRef = useRef(null);
   const codeTextareaRef = useRef(null);
   const codeHighlightRef = useRef(null);
@@ -1164,6 +1170,81 @@ ${code}
 
   const handleKeyDown = handleKeyDownWithPlugins;
 
+  // Funciones para grabación de pantalla
+  const startRecording = async () => {
+    try {
+      const result = await screenRecordingService.startRecording();
+      setIsRecording(true);
+      setRecordingDuration(0);
+      
+      // Iniciar contador de duración
+      recordingIntervalRef.current = setInterval(() => {
+        setRecordingDuration(prev => prev + 1);
+      }, 1000);
+      
+      setOutput(`🎥 ${result.message}\n\n` +
+        `La grabación ha comenzado. Puedes compartir tu pantalla y audio.\n` +
+        `Para detener, haz clic en el botón de detener o detén el compartir de pantalla.`);
+    } catch (error) {
+      setOutput(`❌ Error al iniciar grabación: ${error.message}\n\n` +
+        `Asegúrate de permitir el acceso a la pantalla y al micrófono.`);
+    }
+  };
+
+  const stopRecording = async () => {
+    try {
+      const result = await screenRecordingService.stopRecording();
+      
+      // Detener contador
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+        recordingIntervalRef.current = null;
+      }
+      
+      setIsRecording(false);
+      const durationSeconds = Math.floor(recordingDuration);
+      const minutes = Math.floor(durationSeconds / 60);
+      const seconds = durationSeconds % 60;
+      
+      setOutput(`🛑 ${result.message}\n\n` +
+        `Duración: ${minutes}:${seconds.toString().padStart(2, '0')}\n` +
+        `El video se está guardando...`);
+      
+      // Esperar un momento para que se complete el guardado
+      setTimeout(async () => {
+        const status = screenRecordingService.getStatus();
+        if (status.path) {
+          setOutput(prev => prev + `\n✅ Video guardado exitosamente\n` +
+            `Ruta: ${status.path}\n\n` +
+            `Puedes ver el historial de grabaciones haciendo clic en el botón de historial (📹).`);
+        }
+      }, 2000);
+    } catch (error) {
+      setOutput(`❌ Error al detener grabación: ${error.message}`);
+      setIsRecording(false);
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+        recordingIntervalRef.current = null;
+      }
+    }
+  };
+
+  // Limpiar intervalo al desmontar
+  useEffect(() => {
+    return () => {
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+      }
+    };
+  }, []);
+
+  // Formatear duración de grabación
+  const formatDuration = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   // Manejar redimensionamiento
   useEffect(() => {
     const handleMouseMove = (e) => {
@@ -1542,7 +1623,35 @@ ${code}
                 </div>
               )}
             </div>
-            <div className="relative">
+            <div className="relative flex items-center gap-2">
+              {/* Botones de grabación de pantalla */}
+              {!isRecording ? (
+                <button
+                  onClick={startRecording}
+                  className="p-2 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                  title="Iniciar grabación de pantalla con audio"
+                >
+                  <Video className="w-5 h-5" />
+                </button>
+              ) : (
+                <button
+                  onClick={stopRecording}
+                  className="p-2 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors animate-pulse"
+                  title={`Detener grabación (${formatDuration(recordingDuration)})`}
+                >
+                  <Square className="w-5 h-5" />
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  setShowRecordingHistory(true);
+                  setShowHelp(false);
+                }}
+                className="p-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                title="Ver historial de grabaciones"
+              >
+                <History className="w-5 h-5" />
+              </button>
               <button
                 onClick={() => {
                   setShowPluginsModal(true);
@@ -2958,6 +3067,12 @@ ${code}
         // Guardar en localStorage
         localStorage.setItem('console-plugins', JSON.stringify(newPlugins));
       }}
+    />
+
+    {/* Modal de Historial de Grabaciones */}
+    <ScreenRecordingHistory
+      isOpen={showRecordingHistory}
+      onClose={() => setShowRecordingHistory(false)}
     />
     </>
   );

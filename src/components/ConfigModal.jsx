@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Settings, FolderOpen, Save, AlertCircle, CheckCircle, X, Upload, BookOpen } from 'lucide-react';
+import { Settings, FolderOpen, Save, AlertCircle, CheckCircle, X, Upload, BookOpen, Sparkles } from 'lucide-react';
 import LocalStorageService from '../services/LocalStorageService';
 import DirectorySelectorModal from './DirectorySelectorModal';
 import ImportPagesModal from './ImportPagesModal';
 import Modal from './Modal';
 import cursosService from '../services/CursosService';
+import AIService from '../services/AIService';
 
 export default function ConfigModal({ isOpen, onClose }) {
   const [useLocalStorage, setUseLocalStorage] = useState(false);
@@ -15,6 +16,8 @@ export default function ConfigModal({ isOpen, onClose }) {
   const [showImportModal, setShowImportModal] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [showMessageModal, setShowMessageModal] = useState(false);
+  const [aiApiKey, setAiApiKey] = useState('');
+  const [aiProvider, setAiProvider] = useState('openai');
 
   useEffect(() => {
     if (isOpen) {
@@ -22,6 +25,16 @@ export default function ConfigModal({ isOpen, onClose }) {
       setUseLocalStorage(config.useLocalStorage || false);
       setSelectedPath(config.basePath || config.lastSelectedPath || '');
       setCursosExternosPath(config.cursosExternosPath || cursosService.getCursosExternosPath() || '');
+      
+      // Cargar configuración de IA
+      if (AIService.hasApiKey()) {
+        const aiConfig = JSON.parse(localStorage.getItem('ai-service-config') || '{}');
+        setAiApiKey(aiConfig.apiKey || '');
+        setAiProvider(aiConfig.provider || 'openai');
+      } else {
+        setAiApiKey('');
+        setAiProvider('openai');
+      }
     }
   }, [isOpen]);
 
@@ -90,6 +103,11 @@ export default function ConfigModal({ isOpen, onClose }) {
     // También guardar en cursosService
     if (cursosExternosPath) {
       cursosService.setCursosExternosPath(cursosExternosPath);
+    }
+
+    // Guardar configuración de IA si se proporcionó una API key
+    if (aiApiKey.trim()) {
+      AIService.setApiKey(aiApiKey.trim(), aiProvider);
     }
 
     setMessage({ 
@@ -327,6 +345,76 @@ export default function ConfigModal({ isOpen, onClose }) {
                     <strong>💡 Tip:</strong> Puedes copiar los cursos desde <code className="bg-green-100 dark:bg-green-900 px-1 rounded">ejemplos-consola/</code> a tu carpeta externa para tenerlos disponibles sin reinstalar la aplicación.
                   </p>
                 </div>
+              </div>
+            </div>
+
+            {/* Configuración de IA */}
+            <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-6">
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-purple-600" />
+                Configuración de IA (ChatGPT/Claude/Copilot)
+              </h3>
+
+              <div className="space-y-4">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  Configura tu API key para usar el asistente de IA integrado. Puedes usar OpenAI (GPT-4), Anthropic (Claude) o GitHub Copilot.
+                </p>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Proveedor de IA
+                  </label>
+                  <select
+                    value={aiProvider}
+                    onChange={(e) => setAiProvider(e.target.value)}
+                    className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  >
+                    <option value="openai">OpenAI (GPT-4)</option>
+                    <option value="anthropic">Anthropic (Claude)</option>
+                    <option value="copilot">GitHub Copilot</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    API Key
+                  </label>
+                  <input
+                    type="password"
+                    value={aiApiKey}
+                    onChange={(e) => setAiApiKey(e.target.value)}
+                    placeholder={aiProvider === 'openai' ? 'sk-...' : aiProvider === 'anthropic' ? 'sk-ant-...' : 'ghp_... o token de GitHub'}
+                    className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                    {aiProvider === 'openai' 
+                      ? 'Obtén tu API key en: https://platform.openai.com/api-keys'
+                      : aiProvider === 'anthropic'
+                      ? 'Obtén tu API key en: https://console.anthropic.com/'
+                      : 'Obtén tu token en: https://github.com/settings/tokens (requiere GitHub Copilot subscription)'}
+                  </p>
+                </div>
+
+                {AIService.hasApiKey() && (
+                  <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                    <p className="text-sm text-green-800 dark:text-green-200 flex items-start gap-2">
+                      <CheckCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                      <span>
+                        <strong>API key configurada:</strong> El asistente de IA está disponible. 
+                        Puedes usarlo desde el panel de IA (icono de chat/IA en la aplicación).
+                      </span>
+                    </p>
+                  </div>
+                )}
+
+                {!AIService.hasApiKey() && (
+                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                    <p className="text-sm text-blue-800 dark:text-blue-200">
+                      <strong>Nota:</strong> Ingresa tu API key para habilitar el asistente de IA. 
+                      La API key se guarda localmente y solo se usa para comunicarte con los servicios de IA.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
 
