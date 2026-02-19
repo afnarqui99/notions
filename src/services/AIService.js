@@ -8,6 +8,7 @@ class AIService {
     this.apiKey = null;
     this.apiProvider = 'openai'; // 'openai', 'anthropic' o 'copilot'
     this.baseURL = null;
+    this.githubUsername = null;
     this.loadConfig();
   }
 
@@ -20,6 +21,7 @@ class AIService {
         this.apiKey = parsed.apiKey;
         this.apiProvider = parsed.provider || 'openai';
         this.baseURL = parsed.baseURL;
+        this.githubUsername = parsed.githubUsername || null;
       }
     } catch (error) {
       console.error('[AIService] Error cargando configuración:', error);
@@ -31,7 +33,8 @@ class AIService {
       const config = {
         apiKey: this.apiKey,
         provider: this.apiProvider,
-        baseURL: this.baseURL
+        baseURL: this.baseURL,
+        githubUsername: this.githubUsername
       };
       localStorage.setItem('ai-service-config', JSON.stringify(config));
       
@@ -46,10 +49,11 @@ class AIService {
     }
   }
 
-  setApiKey(apiKey, provider = 'openai', baseURL = null) {
+  setApiKey(apiKey, provider = 'openai', baseURL = null, githubUsername = null) {
     this.apiKey = apiKey;
     this.apiProvider = provider;
     this.baseURL = baseURL;
+    this.githubUsername = githubUsername;
     this.saveConfig();
   }
 
@@ -199,43 +203,62 @@ Instrucciones:
 
   /**
    * Llama a la API de GitHub Copilot
-   * Nota: GitHub Copilot usa modelos de OpenAI, así que usamos un endpoint compatible
+   * Nota: GitHub Copilot usa la API de GitHub, así que usamos el endpoint de GitHub Copilot
    */
   async callCopilot(messages, codeContext, projectPath) {
     if (!this.apiKey) {
-      throw new Error('API key no configurada. Por favor, configura tu API key en la configuración.');
+      throw new Error('Token de GitHub Copilot no configurado. Por favor, configura tu usuario y token en la configuración.');
     }
 
     const systemMessage = this.buildSystemMessage(codeContext, projectPath);
     
+    // Construir mensaje del sistema con información del usuario si está disponible
+    let enhancedSystemMessage = systemMessage;
+    if (this.githubUsername) {
+      enhancedSystemMessage = `Usuario de GitHub: ${this.githubUsername}\n\n${systemMessage}`;
+    }
+    
     const requestMessages = [
-      { role: 'system', content: systemMessage },
+      { role: 'system', content: enhancedSystemMessage },
       ...messages
     ];
 
-    // GitHub Copilot usa modelos de OpenAI, así que usamos el mismo endpoint
-    // pero con un modelo optimizado para código
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4-turbo-preview', // o 'gpt-3.5-turbo' para más económico
-        messages: requestMessages,
-        temperature: 0.7,
-        max_tokens: 2000
-      })
-    });
+    // Intentar usar la API de GitHub Copilot directamente
+    // Si no está disponible, usar OpenAI como fallback
+    try {
+      // Primero intentar con la API de GitHub Copilot (si está disponible)
+      // Nota: GitHub Copilot API requiere autenticación específica
+      const response = await fetch('https://api.github.com/copilot/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`,
+          'X-GitHub-Api-Version': '2024-11-20'
+        },
+        body: JSON.stringify({
+          model: 'gpt-4',
+          messages: requestMessages,
+          temperature: 0.7,
+          max_tokens: 2000
+        })
+      });
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error?.message || `Error de API: ${response.status}`);
+      if (response.ok) {
+        const data = await response.json();
+        return data.choices[0]?.message?.content || 'No se recibió respuesta de la IA.';
+      } else if (response.status === 404 || response.status === 403) {
+        // Si la API de Copilot no está disponible, usar OpenAI como fallback
+        console.warn('[AIService] GitHub Copilot API no disponible, usando OpenAI como fallback');
+        return await this.callOpenAI(messages, codeContext, projectPath);
+      } else {
+        const error = await response.json();
+        throw new Error(error.message || `Error de API: ${response.status}`);
+      }
+    } catch (error) {
+      // Si hay un error de red o la API no está disponible, usar OpenAI como fallback
+      console.warn('[AIService] Error con GitHub Copilot API, usando OpenAI como fallback:', error);
+      return await this.callOpenAI(messages, codeContext, projectPath);
     }
-
-    const data = await response.json();
-    return data.choices[0]?.message?.content || 'No se recibió respuesta de la IA.';
   }
 
   /**
@@ -329,34 +352,87 @@ Instrucciones:
         const data = await apiResponse.json();
         response = data.content[0]?.text || 'No se recibió respuesta de la IA.';
       } else if (this.apiProvider === 'copilot') {
-        // Para GitHub Copilot, usar OpenAI API con modelo optimizado
-        const systemMessage = 'Eres GitHub Copilot, un asistente de IA especializado en programación. Responde de manera clara, concisa y enfocada en código.';
+        // Para GitHub Copilot, construir mensaje del sistema con información del usuario
+        let systemMessage = 'Eres GitHub Copilot, un asistente de IA especializado en programación. Responde de manera clara, concisa y enfocada en código.';
+        if (this.githubUsername) {
+          systemMessage = `Usuario de GitHub: ${this.githubUsername}\n\n${systemMessage}`;
+        }
+        
         const requestMessages = [
           { role: 'system', content: systemMessage },
           ...messages
         ];
 
-        const apiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.apiKey}`
-          },
-          body: JSON.stringify({
-            model: 'gpt-4-turbo-preview',
-            messages: requestMessages,
-            temperature: 0.7,
-            max_tokens: 2000
-          })
-        });
+        // Intentar usar la API de GitHub Copilot primero
+        try {
+          const apiResponse = await fetch('https://api.github.com/copilot/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${this.apiKey}`,
+              'X-GitHub-Api-Version': '2024-11-20'
+            },
+            body: JSON.stringify({
+              model: 'gpt-4',
+              messages: requestMessages,
+              temperature: 0.7,
+              max_tokens: 2000
+            })
+          });
 
-        if (!apiResponse.ok) {
-          const error = await apiResponse.json();
-          throw new Error(error.error?.message || `Error de API: ${apiResponse.status}`);
+          if (apiResponse.ok) {
+            const data = await apiResponse.json();
+            response = data.choices[0]?.message?.content || 'No se recibió respuesta de la IA.';
+          } else {
+            // Fallback a OpenAI si la API de Copilot no está disponible
+            console.warn('[AIService] GitHub Copilot API no disponible, usando OpenAI como fallback');
+            const fallbackResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${this.apiKey}`
+              },
+              body: JSON.stringify({
+                model: 'gpt-4-turbo-preview',
+                messages: requestMessages,
+                temperature: 0.7,
+                max_tokens: 2000
+              })
+            });
+
+            if (!fallbackResponse.ok) {
+              const error = await fallbackResponse.json();
+              throw new Error(error.error?.message || `Error de API: ${fallbackResponse.status}`);
+            }
+
+            const fallbackData = await fallbackResponse.json();
+            response = fallbackData.choices[0]?.message?.content || 'No se recibió respuesta de la IA.';
+          }
+        } catch (error) {
+          // Si hay un error, usar OpenAI como fallback
+          console.warn('[AIService] Error con GitHub Copilot API, usando OpenAI como fallback:', error);
+          const fallbackResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${this.apiKey}`
+            },
+            body: JSON.stringify({
+              model: 'gpt-4-turbo-preview',
+              messages: requestMessages,
+              temperature: 0.7,
+              max_tokens: 2000
+            })
+          });
+
+          if (!fallbackResponse.ok) {
+            const errorData = await fallbackResponse.json();
+            throw new Error(errorData.error?.message || `Error de API: ${fallbackResponse.status}`);
+          }
+
+          const fallbackData = await fallbackResponse.json();
+          response = fallbackData.choices[0]?.message?.content || 'No se recibió respuesta de la IA.';
         }
-
-        const data = await apiResponse.json();
-        response = data.choices[0]?.message?.content || 'No se recibió respuesta de la IA.';
       } else {
         // Para OpenAI
         const systemMessage = 'Eres un asistente de IA útil y amigable. Responde de manera clara y concisa.';

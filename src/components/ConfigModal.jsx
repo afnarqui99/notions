@@ -18,6 +18,7 @@ export default function ConfigModal({ isOpen, onClose }) {
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [aiApiKey, setAiApiKey] = useState('');
   const [aiProvider, setAiProvider] = useState('openai');
+  const [githubUsername, setGithubUsername] = useState('');
 
   useEffect(() => {
     if (isOpen) {
@@ -31,9 +32,11 @@ export default function ConfigModal({ isOpen, onClose }) {
         const aiConfig = JSON.parse(localStorage.getItem('ai-service-config') || '{}');
         setAiApiKey(aiConfig.apiKey || '');
         setAiProvider(aiConfig.provider || 'openai');
+        setGithubUsername(aiConfig.githubUsername || '');
       } else {
         setAiApiKey('');
         setAiProvider('openai');
+        setGithubUsername('');
       }
     }
   }, [isOpen]);
@@ -107,7 +110,7 @@ export default function ConfigModal({ isOpen, onClose }) {
 
     // Guardar configuración de IA si se proporcionó una API key
     if (aiApiKey.trim()) {
-      AIService.setApiKey(aiApiKey.trim(), aiProvider);
+      AIService.setApiKey(aiApiKey.trim(), aiProvider, null, githubUsername.trim());
     }
 
     setMessage({ 
@@ -358,6 +361,11 @@ export default function ConfigModal({ isOpen, onClose }) {
               <div className="space-y-4">
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
                   Configura tu API key para usar el asistente de IA integrado. Puedes usar OpenAI (GPT-4), Anthropic (Claude) o GitHub Copilot.
+                  {aiProvider === 'copilot' && (
+                    <span className="block mt-2 text-blue-600 dark:text-blue-400">
+                      Para GitHub Copilot, necesitas ingresar tu usuario de GitHub y un Personal Access Token con permisos de Copilot.
+                    </span>
+                  )}
                 </p>
 
                 <div>
@@ -366,7 +374,13 @@ export default function ConfigModal({ isOpen, onClose }) {
                   </label>
                   <select
                     value={aiProvider}
-                    onChange={(e) => setAiProvider(e.target.value)}
+                    onChange={(e) => {
+                      setAiProvider(e.target.value);
+                      // Limpiar campos cuando cambia el proveedor
+                      if (e.target.value !== 'copilot') {
+                        setGithubUsername('');
+                      }
+                    }}
                     className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
                   >
                     <option value="openai">OpenAI (GPT-4)</option>
@@ -375,32 +389,72 @@ export default function ConfigModal({ isOpen, onClose }) {
                   </select>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    API Key
-                  </label>
-                  <input
-                    type="password"
-                    value={aiApiKey}
-                    onChange={(e) => setAiApiKey(e.target.value)}
-                    placeholder={aiProvider === 'openai' ? 'sk-...' : aiProvider === 'anthropic' ? 'sk-ant-...' : 'ghp_... o token de GitHub'}
-                    className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  />
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                    {aiProvider === 'openai' 
-                      ? 'Obtén tu API key en: https://platform.openai.com/api-keys'
-                      : aiProvider === 'anthropic'
-                      ? 'Obtén tu API key en: https://console.anthropic.com/'
-                      : 'Obtén tu token en: https://github.com/settings/tokens (requiere GitHub Copilot subscription)'}
-                  </p>
-                </div>
+                {aiProvider === 'copilot' ? (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Usuario de GitHub
+                      </label>
+                      <input
+                        type="text"
+                        value={githubUsername}
+                        onChange={(e) => setGithubUsername(e.target.value)}
+                        placeholder="tu-usuario-github"
+                        className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      />
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                        Ingresa tu nombre de usuario de GitHub
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Token/Clave de GitHub Copilot
+                      </label>
+                      <input
+                        type="password"
+                        value={aiApiKey}
+                        onChange={(e) => setAiApiKey(e.target.value)}
+                        placeholder="ghp_... o Personal Access Token"
+                        className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      />
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                        Obtén tu Personal Access Token en: <a href="https://github.com/settings/tokens" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">https://github.com/settings/tokens</a> (requiere suscripción a GitHub Copilot)
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        El token debe tener permisos: <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">copilot</code> y <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">read:user</code>
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      API Key
+                    </label>
+                    <input
+                      type="password"
+                      value={aiApiKey}
+                      onChange={(e) => setAiApiKey(e.target.value)}
+                      placeholder={aiProvider === 'openai' ? 'sk-...' : 'sk-ant-...'}
+                      className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                      {aiProvider === 'openai' 
+                        ? 'Obtén tu API key en: https://platform.openai.com/api-keys'
+                        : 'Obtén tu API key en: https://console.anthropic.com/'}
+                    </p>
+                  </div>
+                )}
 
                 {AIService.hasApiKey() && (
                   <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
                     <p className="text-sm text-green-800 dark:text-green-200 flex items-start gap-2">
                       <CheckCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
                       <span>
-                        <strong>API key configurada:</strong> El asistente de IA está disponible. 
+                        <strong>Configuración de IA lista:</strong> El asistente de IA está disponible. 
+                        {aiProvider === 'copilot' && githubUsername && (
+                          <span className="block mt-1">Usuario de GitHub: <strong>{githubUsername}</strong></span>
+                        )}
                         Puedes usarlo desde el panel de IA (icono de chat/IA en la aplicación).
                       </span>
                     </p>
