@@ -497,9 +497,7 @@ class ScreenRecordingService {
       // NO crear MediaRecorder aquí - se creará más adelante cuando el canvas esté listo
       // Solo guardar las opciones y el stream para usarlos después
       this.canvasStream = canvasStream;
-      this.mediaRecorderOptions = options; else {
-        console.warn('[ScreenRecording] MediaRecorder ya existe, estado:', this.mediaRecorder.state);
-      }
+      this.mediaRecorderOptions = options;
       
       // Variables para el cursor y clics
       this.mousePosition = { x: 0, y: 0 };
