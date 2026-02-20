@@ -221,7 +221,7 @@ export default function ScreenRecordingHistory({ isOpen, onClose }) {
       }, 1000);
       recordingIntervalRef.current = interval;
       
-      alert(`🎥 ${result?.message || 'Grabación iniciada'}\n\nLa grabación ha comenzado. Puedes compartir tu pantalla y audio.\nPara detener, haz clic en el botón de detener o detén el compartir de pantalla.`);
+      alert(`🎥 ${result?.message || 'Grabación iniciada'}\n\n📌 IMPORTANTE:\n• Selecciona "Compartir audio" en el diálogo para capturar el audio del sistema (incluye audio de otras personas en reuniones)\n• Puedes cambiar de ventana durante la grabación\n• El micrófono también se capturará si lo permites\n\nPara detener, haz clic en el botón de detener o detén el compartir de pantalla.`);
     } catch (error) {
       if (error.message === 'SCREEN_SOURCE_SELECTION_NEEDED') {
         // Esto no debería pasar ahora, pero por si acaso

@@ -10,6 +10,8 @@ const https = require('https');
 const url = require('url');
 const WebSocket = require('ws');
 const DatabaseService = require('./DatabaseService.cjs');
+const FTPService = require('./FTPService.cjs');
+const SFTPService = require('./SFTPService.cjs');
 
 // Configurar auto-inicio en Windows
 let autoLauncher;
@@ -713,6 +715,42 @@ function createWindow() {
     show: false, // No mostrar hasta que esté listo
     autoHideMenuBar: true, // Ocultar barra de menú por defecto
   });
+  
+  // Agregar listeners para debugging
+  mainWindow.webContents.on('did-finish-load', () => {
+    console.log('[Electron] ✅ Página terminó de cargar');
+    // Mostrar ventana después de cargar
+    if (!mainWindow.isVisible()) {
+      mainWindow.show();
+    }
+    // Abrir DevTools automáticamente en desarrollo para ver errores
+    if (isDev) {
+      mainWindow.webContents.openDevTools();
+    }
+  });
+  
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+    if (isMainFrame) {
+      console.error('[Electron] ❌ Error cargando página principal:', {
+        errorCode,
+        errorDescription,
+        validatedURL
+      });
+      // Mostrar mensaje de error
+      mainWindow.loadURL('data:text/html,<html><head><meta charset="utf-8"><title>Error</title></head><body style="padding:20px;font-family:Arial;text-align:center;background:#f5f5f5;"><div style="max-width:600px;margin:50px auto;background:white;padding:30px;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,0.1);"><h1 style="color:#e74c3c;">❌ Error al cargar</h1><p><strong>Código:</strong> ' + errorCode + '</p><p><strong>Descripción:</strong> ' + errorDescription + '</p><p><strong>URL:</strong> ' + validatedURL + '</p><p style="margin-top:20px;">Verifica que Vite esté corriendo: <code style="background:#f0f0f0;padding:2px 6px;border-radius:3px;">npm run dev</code></p></div></body></html>');
+      mainWindow.show();
+    }
+  });
+  
+  mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    if (level >= 2) { // Solo errores y advertencias
+      console.log(`[Renderer ${level === 2 ? 'WARN' : 'ERROR'}]`, message);
+    }
+  });
+  
+  mainWindow.webContents.on('dom-ready', () => {
+    console.log('[Electron] 📄 DOM listo');
+  });
 
   // Configurar Content Security Policy solo en desarrollo
   // En producción, webSecurity: false es suficiente para archivos locales
@@ -740,7 +778,80 @@ function createWindow() {
   // Cargar la aplicación
   if (isDev) {
     // En desarrollo, cargar desde Vite
-    mainWindow.loadURL('http://localhost:5174');
+    // Esperar a que Vite esté listo antes de cargar
+    const checkViteAndLoad = async () => {
+      const http = require('http');
+      const maxAttempts = 30;
+      let attempts = 0;
+      
+      const checkVite = () => {
+        return new Promise((resolve) => {
+          const req = http.get('http://localhost:5174', (res) => {
+            resolve(true);
+          });
+          req.on('error', () => {
+            resolve(false);
+          });
+          req.setTimeout(1000, () => {
+            req.destroy();
+            resolve(false);
+          });
+        });
+      };
+      
+      while (attempts < maxAttempts) {
+        const isReady = await checkVite();
+        if (isReady) {
+          console.log('[Electron] Vite está listo, cargando aplicación...');
+          try {
+            await mainWindow.loadURL('http://localhost:5174');
+            console.log('[Electron] ✅ Aplicación cargada exitosamente');
+            
+            // Verificar que la página se cargó correctamente después de un momento
+            setTimeout(() => {
+              mainWindow.webContents.executeJavaScript(`
+                (function() {
+                  if (document.body && document.body.innerHTML.trim() === '') {
+                    console.error('[Electron] Página cargada pero está vacía');
+                    return false;
+                  }
+                  return true;
+                })();
+              `).then((isLoaded) => {
+                if (!isLoaded) {
+                  console.warn('[Electron] ⚠️ La página parece estar vacía, mostrando mensaje de ayuda');
+                  mainWindow.loadURL('data:text/html,<html><head><meta charset="utf-8"><title>Error</title></head><body style="padding:20px;font-family:Arial;text-align:center;background:#f5f5f5;"><div style="max-width:600px;margin:50px auto;background:white;padding:30px;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,0.1);"><h1 style="color:#e74c3c;">⚠️ Problema al cargar la aplicación</h1><p>La aplicación se cargó pero está vacía.</p><p style="margin-top:20px;"><strong>Posibles soluciones:</strong></p><ul style="text-align:left;margin:20px 0;"><li>Verifica la consola del navegador (F12) para ver errores</li><li>Recarga la página (Ctrl+R)</li><li>Reinicia Vite: <code style="background:#f0f0f0;padding:2px 6px;border-radius:3px;">npm run dev</code></li></ul><button onclick="location.reload()" style="padding:10px 20px;background:#3498db;color:white;border:none;border-radius:5px;cursor:pointer;font-size:16px;margin-top:20px;">Recargar</button></div></body></html>');
+                }
+              }).catch(err => {
+                console.error('[Electron] Error verificando contenido:', err);
+              });
+            }, 2000);
+          } catch (err) {
+            console.error('[Electron] Error cargando URL:', err);
+            mainWindow.loadURL('data:text/html,<html><head><meta charset="utf-8"><title>Error</title></head><body style="padding:20px;font-family:Arial;text-align:center;background:#f5f5f5;"><div style="max-width:600px;margin:50px auto;background:white;padding:30px;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,0.1);"><h1 style="color:#e74c3c;">Error al conectar con Vite</h1><p>Ejecuta en otra terminal:</p><p style="font-family:monospace;background:#f0f0f0;padding:10px;border-radius:5px;display:inline-block;margin:10px 0;">npm run dev</p><p>Error: ' + err.message + '</p></div></body></html>');
+          }
+          return;
+        }
+        attempts++;
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+      
+      // Si no se pudo conectar después de varios intentos
+      console.error('[Electron] No se pudo conectar con Vite después de', maxAttempts, 'intentos');
+      mainWindow.loadURL('data:text/html,<html><body style="padding:20px;font-family:Arial;text-align:center;"><h1>⚠️ Vite no está corriendo</h1><p>Por favor ejecuta en otra terminal:</p><p style="font-family:monospace;background:#f0f0f0;padding:10px;border-radius:5px;display:inline-block;">npm run dev</p><p>Luego recarga esta ventana (Ctrl+R)</p></body></html>');
+    };
+    
+    checkViteAndLoad();
+    
+    // También agregar listener para recargar si Vite se conecta después
+    mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+      if (isDev && validatedURL && validatedURL.includes('localhost:5174')) {
+        console.log('[Electron] Error cargando Vite, reintentando en 2 segundos...');
+        setTimeout(() => {
+          checkViteAndLoad();
+        }, 2000);
+      }
+    });
   } else {
     // En producción, cargar desde los archivos estáticos
     // Cuando está empaquetada, __dirname apunta a resources/app.asar/electron o resources/app/electron
@@ -3075,6 +3186,292 @@ print("✅ Cliente de debugging conectado", file=sys.stderr)
     }
   });
 
+  // ========== HANDLERS DE FTP ==========
+  
+  // Conectar a servidor FTP
+  ipcMain.handle('ftp-connect', async (event, config) => {
+    try {
+      return await FTPService.connect(config);
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Desconectar de servidor FTP
+  ipcMain.handle('ftp-disconnect', async (event, connectionId) => {
+    try {
+      await FTPService.disconnect(connectionId);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Listar archivos
+  ipcMain.handle('ftp-list-files', async (event, connectionId, remotePath) => {
+    try {
+      const files = await FTPService.listFiles(connectionId, remotePath);
+      return { success: true, files };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Subir archivo
+  ipcMain.handle('ftp-upload-file', async (event, connectionId, localPath, remotePath) => {
+    try {
+      await FTPService.uploadFile(connectionId, localPath, remotePath);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Descargar archivo
+  ipcMain.handle('ftp-download-file', async (event, connectionId, remotePath, localPath) => {
+    try {
+      const result = await FTPService.downloadFile(connectionId, remotePath, localPath);
+      return { success: true, localPath: result.localPath };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Eliminar archivo
+  ipcMain.handle('ftp-delete-file', async (event, connectionId, remotePath) => {
+    try {
+      await FTPService.deleteFile(connectionId, remotePath);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Crear directorio
+  ipcMain.handle('ftp-create-directory', async (event, connectionId, remotePath) => {
+    try {
+      await FTPService.createDirectory(connectionId, remotePath);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Eliminar directorio
+  ipcMain.handle('ftp-delete-directory', async (event, connectionId, remotePath) => {
+    try {
+      await FTPService.deleteDirectory(connectionId, remotePath);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Cambiar directorio
+  ipcMain.handle('ftp-change-directory', async (event, connectionId, remotePath) => {
+    try {
+      const result = await FTPService.changeDirectory(connectionId, remotePath);
+      return { success: true, currentPath: result.currentPath };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Obtener directorio actual
+  ipcMain.handle('ftp-get-current-directory', async (event, connectionId) => {
+    try {
+      const result = await FTPService.getCurrentDirectory(connectionId);
+      return { success: true, currentPath: result.currentPath };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Obtener conexiones guardadas
+  ipcMain.handle('ftp-get-saved-connections', async () => {
+    try {
+      return FTPService.getSavedConnections();
+    } catch (error) {
+      return [];
+    }
+  });
+
+  // Guardar conexión
+  ipcMain.handle('ftp-save-connection', async (event, connectionData) => {
+    try {
+      const connection = FTPService.saveConnection(connectionData);
+      return { success: true, connection };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Eliminar conexión guardada
+  ipcMain.handle('ftp-delete-saved-connection', async (event, connectionId) => {
+    try {
+      FTPService.deleteConnection(connectionId);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // ========== HANDLERS DE SFTP ==========
+  
+  // Conectar a servidor SFTP
+  ipcMain.handle('sftp-connect', async (event, config) => {
+    try {
+      return await SFTPService.connect(config);
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Desconectar de servidor SFTP
+  ipcMain.handle('sftp-disconnect', async (event, connectionId) => {
+    try {
+      await SFTPService.disconnect(connectionId);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Listar archivos
+  ipcMain.handle('sftp-list-files', async (event, connectionId, remotePath) => {
+    try {
+      const files = await SFTPService.listFiles(connectionId, remotePath);
+      return { success: true, files };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Subir archivo
+  ipcMain.handle('sftp-upload-file', async (event, connectionId, localPath, remotePath) => {
+    try {
+      await SFTPService.uploadFile(connectionId, localPath, remotePath);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Descargar archivo
+  ipcMain.handle('sftp-download-file', async (event, connectionId, remotePath, localPath) => {
+    try {
+      const result = await SFTPService.downloadFile(connectionId, remotePath, localPath);
+      return { success: true, localPath: result.localPath };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Eliminar archivo
+  ipcMain.handle('sftp-delete-file', async (event, connectionId, remotePath) => {
+    try {
+      await SFTPService.deleteFile(connectionId, remotePath);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Crear directorio
+  ipcMain.handle('sftp-create-directory', async (event, connectionId, remotePath) => {
+    try {
+      await SFTPService.createDirectory(connectionId, remotePath);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Eliminar directorio
+  ipcMain.handle('sftp-delete-directory', async (event, connectionId, remotePath) => {
+    try {
+      await SFTPService.deleteDirectory(connectionId, remotePath);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Cambiar directorio
+  ipcMain.handle('sftp-change-directory', async (event, connectionId, remotePath) => {
+    try {
+      const result = await SFTPService.changeDirectory(connectionId, remotePath);
+      return { success: true, currentPath: result.currentPath };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Obtener directorio actual
+  ipcMain.handle('sftp-get-current-directory', async (event, connectionId) => {
+    try {
+      const result = await SFTPService.getCurrentDirectory(connectionId);
+      return { success: true, currentPath: result.currentPath };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Obtener conexiones guardadas
+  ipcMain.handle('sftp-get-saved-connections', async () => {
+    try {
+      return SFTPService.getSavedConnections();
+    } catch (error) {
+      return [];
+    }
+  });
+
+  // Guardar conexión
+  ipcMain.handle('sftp-save-connection', async (event, connectionData) => {
+    try {
+      const connection = SFTPService.saveConnection(connectionData);
+      return { success: true, connection };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Eliminar conexión guardada
+  ipcMain.handle('sftp-delete-saved-connection', async (event, connectionId) => {
+    try {
+      SFTPService.deleteConnection(connectionId);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Handler para obtener ruta local de un archivo (para drag & drop)
+  ipcMain.handle('get-file-local-path', async (event, file) => {
+    // En Electron, los archivos del File API no tienen ruta directa
+    // Necesitamos usar showOpenDialog o guardar temporalmente
+    // Por ahora, retornamos null y manejamos la subida de otra forma
+    return null;
+  });
+
+  // Handler para mostrar diálogo de guardar archivo
+  ipcMain.handle('show-save-dialog', async (event, options) => {
+    const result = await dialog.showSaveDialog(mainWindow, options || {});
+    if (result.canceled) {
+      return null;
+    }
+    return result.filePath;
+  });
+
+  // Handler para mostrar diálogo de abrir archivo
+  ipcMain.handle('show-open-dialog', async (event, options) => {
+    const result = await dialog.showOpenDialog(mainWindow, options || {});
+    return {
+      canceled: result.canceled,
+      filePaths: result.filePaths || []
+    };
+  });
+
   // Handler para verificar si Docker está instalado
   ipcMain.handle('check-docker-installed', async () => {
     return new Promise((resolve) => {
@@ -3133,6 +3530,8 @@ print("✅ Cliente de debugging conectado", file=sys.stderr)
   const ScreenRecordingService = {
     recordingsPath: path.join(app.getPath('userData'), 'screen-recordings'),
     historyFile: path.join(app.getPath('userData'), 'screen-recordings-history.json'),
+    systemAudioProcess: null, // Proceso de FFmpeg para capturar audio del sistema
+    systemAudioPath: null, // Ruta del archivo de audio temporal
     
     // Inicializar directorio de grabaciones
     init() {
@@ -3234,6 +3633,182 @@ print("✅ Cliente de debugging conectado", file=sys.stderr)
   // Inicializar servicio
   ScreenRecordingService.init();
   
+  // Handler para iniciar captura de audio del sistema (Windows WASAPI)
+  ipcMain.handle('start-system-audio-capture', async (event, recordingId) => {
+    if (process.platform !== 'win32') {
+      return { success: false, error: 'La captura de audio del sistema solo está disponible en Windows' };
+    }
+    
+    try {
+      // Detener captura anterior si existe
+      if (ScreenRecordingService.systemAudioProcess) {
+        ScreenRecordingService.systemAudioProcess.kill();
+        ScreenRecordingService.systemAudioProcess = null;
+      }
+      
+      // Crear archivo temporal para el audio
+      const tempDir = os.tmpdir();
+      ScreenRecordingService.systemAudioPath = path.join(tempDir, `system-audio-${recordingId}-${Date.now()}.wav`);
+      
+      // Comando FFmpeg para capturar audio del sistema usando WASAPI
+      // wasapi: captura el audio que se reproduce en el sistema (loopback)
+      console.log('[SystemAudio] Iniciando captura de audio del sistema...');
+      console.log('[SystemAudio] Archivo temporal:', ScreenRecordingService.systemAudioPath);
+      
+      // Buscar FFmpeg en el PATH
+      let ffmpegPath = 'ffmpeg';
+      if (process.platform === 'win32') {
+        try {
+          // Intentar encontrar ffmpeg usando where.exe (más confiable)
+          const { execSync } = require('child_process');
+          const output = execSync('where.exe ffmpeg', { 
+            encoding: 'utf8', 
+            timeout: 5000, 
+            stdio: ['ignore', 'pipe', 'pipe'],
+            shell: true
+          });
+          const ffmpegLocation = output.trim().split('\n')[0].trim();
+          if (ffmpegLocation && fs.existsSync(ffmpegLocation)) {
+            ffmpegPath = ffmpegLocation;
+            console.log('[SystemAudio] FFmpeg encontrado en:', ffmpegPath);
+          } else {
+            console.warn('[SystemAudio] FFmpeg no encontrado en:', ffmpegLocation);
+            // Intentar rutas comunes de FFmpeg en Windows (incluyendo WinGet)
+            const commonPaths = [
+              // WinGet installation path
+              path.join(process.env.LOCALAPPDATA || '', 'Microsoft\\WinGet\\Packages\\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\\ffmpeg-8.0.1-full_build\\bin\\ffmpeg.exe'),
+              // Otras rutas comunes
+              'C:\\ffmpeg\\bin\\ffmpeg.exe',
+              'C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe',
+              'C:\\Program Files (x86)\\ffmpeg\\bin\\ffmpeg.exe',
+              path.join(process.env.LOCALAPPDATA || '', 'ffmpeg\\bin\\ffmpeg.exe'),
+              path.join(process.env.ProgramFiles || '', 'ffmpeg\\bin\\ffmpeg.exe')
+            ];
+            for (const commonPath of commonPaths) {
+              if (fs.existsSync(commonPath)) {
+                ffmpegPath = commonPath;
+                console.log('[SystemAudio] FFmpeg encontrado en ruta común:', ffmpegPath);
+                break;
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('[SystemAudio] No se pudo encontrar FFmpeg con where.exe:', e.message);
+          // Intentar rutas comunes como último recurso
+          const commonPaths = [
+            path.join(process.env.LOCALAPPDATA || '', 'Microsoft\\WinGet\\Packages\\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\\ffmpeg-8.0.1-full_build\\bin\\ffmpeg.exe'),
+            'C:\\ffmpeg\\bin\\ffmpeg.exe'
+          ];
+          for (const commonPath of commonPaths) {
+            if (fs.existsSync(commonPath)) {
+              ffmpegPath = commonPath;
+              console.log('[SystemAudio] FFmpeg encontrado en ruta común (fallback):', ffmpegPath);
+              break;
+            }
+          }
+          if (ffmpegPath === 'ffmpeg') {
+            console.warn('[SystemAudio] Usando ffmpeg del PATH (puede fallar si no está instalado)');
+          }
+        }
+      }
+      
+      // Ejecutar FFmpeg en segundo plano
+      console.log('[SystemAudio] Ejecutando FFmpeg:', ffmpegPath);
+      ScreenRecordingService.systemAudioProcess = spawn(ffmpegPath, [
+        '-f', 'wasapi',
+        '-i', 'loopback',
+        '-acodec', 'pcm_s16le',
+        '-ar', '44100',
+        '-ac', '2',
+        '-y', // Sobrescribir si existe
+        ScreenRecordingService.systemAudioPath
+      ], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        shell: true,
+        env: { ...process.env, PATH: process.env.PATH }
+      });
+      
+      // Manejar errores
+      ScreenRecordingService.systemAudioProcess.stderr.on('data', (data) => {
+        const output = data.toString();
+        // FFmpeg escribe información en stderr, no necesariamente errores
+        if (output.includes('error') || output.includes('Error')) {
+          console.error('[SystemAudio] Error FFmpeg:', output);
+        } else {
+          console.log('[SystemAudio] FFmpeg:', output);
+        }
+      });
+      
+      ScreenRecordingService.systemAudioProcess.on('error', (error) => {
+        console.error('[SystemAudio] Error iniciando FFmpeg:', error);
+        ScreenRecordingService.systemAudioProcess = null;
+      });
+      
+      ScreenRecordingService.systemAudioProcess.on('exit', (code) => {
+        console.log('[SystemAudio] FFmpeg terminó con código:', code);
+        ScreenRecordingService.systemAudioProcess = null;
+      });
+      
+      // Esperar un momento para verificar que FFmpeg inició correctamente
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      if (ScreenRecordingService.systemAudioProcess && !ScreenRecordingService.systemAudioProcess.killed) {
+        console.log('[SystemAudio] ✅ Captura de audio del sistema iniciada');
+        return { 
+          success: true, 
+          message: 'Captura de audio del sistema iniciada',
+          audioPath: ScreenRecordingService.systemAudioPath
+        };
+      } else {
+        return { 
+          success: false, 
+          error: 'No se pudo iniciar la captura de audio del sistema. Asegúrate de que FFmpeg esté instalado.' 
+        };
+      }
+    } catch (error) {
+      console.error('[SystemAudio] Error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+  
+  // Handler para detener captura de audio del sistema
+  ipcMain.handle('stop-system-audio-capture', async () => {
+    try {
+      if (ScreenRecordingService.systemAudioProcess) {
+        console.log('[SystemAudio] Deteniendo captura de audio del sistema...');
+        // Enviar señal de terminación a FFmpeg (q para salir)
+        ScreenRecordingService.systemAudioProcess.stdin.write('q\n');
+        
+        // Esperar a que termine
+        await new Promise((resolve) => {
+          const timeout = setTimeout(() => {
+            if (ScreenRecordingService.systemAudioProcess) {
+              ScreenRecordingService.systemAudioProcess.kill();
+            }
+            resolve();
+          }, 2000);
+          
+          ScreenRecordingService.systemAudioProcess.on('exit', () => {
+            clearTimeout(timeout);
+            resolve();
+          });
+        });
+        
+        ScreenRecordingService.systemAudioProcess = null;
+        console.log('[SystemAudio] ✅ Captura de audio del sistema detenida');
+        
+        return { 
+          success: true, 
+          audioPath: ScreenRecordingService.systemAudioPath 
+        };
+      }
+      return { success: true, audioPath: ScreenRecordingService.systemAudioPath };
+    } catch (error) {
+      console.error('[SystemAudio] Error deteniendo captura:', error);
+      return { success: false, error: error.message };
+    }
+  });
+  
   // Handler para guardar grabación de pantalla
   ipcMain.handle('save-screen-recording', async (event, data, duration) => {
     try {
@@ -3274,12 +3849,70 @@ print("✅ Cliente de debugging conectado", file=sys.stderr)
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const filename = `grabacion-${timestamp}.webm`;
       const filePath = path.join(ScreenRecordingService.recordingsPath, filename);
+      const tempVideoPath = path.join(os.tmpdir(), `temp-video-${Date.now()}.webm`);
       
       console.log('[ScreenRecording] Guardando en:', filePath);
       console.log('[ScreenRecording] Tamaño del buffer:', fileBuffer.length, 'bytes');
       
-      // Guardar archivo
-      fs.writeFileSync(filePath, fileBuffer);
+      // Escribir archivo temporal primero
+      fs.writeFileSync(tempVideoPath, fileBuffer);
+      
+      // Si hay audio del sistema capturado, combinarlo con el video
+      if (ScreenRecordingService.systemAudioPath && fs.existsSync(ScreenRecordingService.systemAudioPath)) {
+        console.log('[ScreenRecording] Combinando video con audio del sistema...');
+        try {
+          // Combinar video y audio usando FFmpeg
+          const outputPath = filePath.replace(/\.webm$/, '.mp4'); // Cambiar a MP4 para mejor compatibilidad con audio
+          
+          const combineCommand = `ffmpeg -i "${tempVideoPath}" -i "${ScreenRecordingService.systemAudioPath}" -c:v copy -c:a aac -strict experimental -map 0:v:0 -map 1:a:0 -shortest -y "${outputPath}"`;
+          
+          console.log('[ScreenRecording] Ejecutando FFmpeg para combinar audio:', combineCommand);
+          
+          await new Promise((resolve, reject) => {
+            exec(combineCommand, { timeout: 120000, shell: true }, (error, stdout, stderr) => {
+              if (error) {
+                console.error('[ScreenRecording] Error combinando audio:', error);
+                console.error('[ScreenRecording] stderr:', stderr);
+                // Si falla, usar el video sin audio
+                fs.copyFileSync(tempVideoPath, filePath);
+                resolve();
+              } else {
+                console.log('[ScreenRecording] ✅ Video y audio combinados exitosamente');
+                // Mover el archivo combinado a la ubicación final
+                if (fs.existsSync(outputPath)) {
+                  fs.copyFileSync(outputPath, filePath);
+                  fs.unlinkSync(outputPath); // Eliminar temporal
+                }
+                resolve();
+              }
+            });
+          });
+          
+          // Limpiar archivos temporales
+          if (fs.existsSync(tempVideoPath)) {
+            fs.unlinkSync(tempVideoPath);
+          }
+          if (fs.existsSync(ScreenRecordingService.systemAudioPath)) {
+            fs.unlinkSync(ScreenRecordingService.systemAudioPath);
+          }
+          ScreenRecordingService.systemAudioPath = null;
+        } catch (combineError) {
+          console.error('[ScreenRecording] Error al combinar audio, guardando solo video:', combineError);
+          // Si falla, usar el video sin audio
+          fs.copyFileSync(tempVideoPath, filePath);
+          if (fs.existsSync(tempVideoPath)) {
+            fs.unlinkSync(tempVideoPath);
+          }
+        }
+      } else {
+        // No hay audio del sistema, guardar solo el video
+        console.log('[ScreenRecording] No hay audio del sistema capturado, guardando solo video');
+        console.log('[ScreenRecording] systemAudioPath:', ScreenRecordingService.systemAudioPath);
+        fs.copyFileSync(tempVideoPath, filePath);
+        if (fs.existsSync(tempVideoPath)) {
+          fs.unlinkSync(tempVideoPath);
+        }
+      }
       
       // Verificar que el archivo se guardó correctamente
       if (!fs.existsSync(filePath)) {
@@ -3433,12 +4066,45 @@ print("✅ Cliente de debugging conectado", file=sys.stderr)
               
               try {
                 const audioBuffer = fs.readFileSync(filePath);
-                const transcription = await transcribeWithOpenAI(audioBuffer, apiKey, filePath.endsWith('.webm') ? 'webm' : 'mp4');
+                const transcription = await transcribeWithOpenAI(audioBuffer, apiKey, filePath.endsWith('.webm') ? 'webm' : 'mp4', filePath);
+                
+                // Guardar transcripción como JSON en la misma carpeta del video
+                // Usar la carpeta de grabaciones directamente
+                const videoName = path.basename(filePath, path.extname(filePath));
+                const jsonPath = path.join(ScreenRecordingService.recordingsPath, `${videoName}.transcription.json`);
+                console.log('[Transcription] Guardando JSON en carpeta de grabaciones:', jsonPath);
+                const transcriptionData = {
+                  videoPath: filePath,
+                  transcription: transcription,
+                  transcribedAt: new Date().toISOString(),
+                  videoSize: fs.statSync(filePath).size,
+                  duration: null // Se puede agregar si se obtiene
+                };
+                
+                try {
+                  fs.writeFileSync(jsonPath, JSON.stringify(transcriptionData, null, 2), 'utf8');
+                  console.log('[Transcription] ✅ JSON guardado exitosamente en:', jsonPath);
+                  
+                  // Verificar que el archivo se guardó correctamente
+                  if (fs.existsSync(jsonPath)) {
+                    const savedStats = fs.statSync(jsonPath);
+                    console.log('[Transcription] ✅ Archivo JSON verificado:', {
+                      path: jsonPath,
+                      size: savedStats.size,
+                      exists: true
+                    });
+                  } else {
+                    console.error('[Transcription] ❌ ERROR: El archivo JSON no se creó:', jsonPath);
+                  }
+                } catch (jsonError) {
+                  console.error('[Transcription] ❌ Error guardando JSON:', jsonError);
+                  // Continuar aunque falle el guardado del JSON
+                }
                 
                 // Actualizar historial con transcripción
                 const result = ScreenRecordingService.updateTranscription(recordingId, transcription);
                 
-                resolve({ success: true, transcription });
+                resolve({ success: true, transcription, jsonPath });
                 return;
               } catch (transcribeError) {
                 resolve({ success: false, error: `Error transcribiendo: ${transcribeError.message}` });
@@ -3454,7 +4120,40 @@ print("✅ Cliente de debugging conectado", file=sys.stderr)
 
             try {
               const audioBuffer = fs.readFileSync(audioPath);
-              const transcription = await transcribeWithOpenAI(audioBuffer, apiKey, 'mp3');
+              const transcription = await transcribeWithOpenAI(audioBuffer, apiKey, 'mp3', filePath);
+              
+              // Guardar transcripción como JSON en la misma carpeta del video
+              // Usar la carpeta de grabaciones directamente
+              const videoName = path.basename(filePath, path.extname(filePath));
+              const jsonPath = path.join(ScreenRecordingService.recordingsPath, `${videoName}.transcription.json`);
+              console.log('[Transcription] Guardando JSON en carpeta de grabaciones:', jsonPath);
+              const transcriptionData = {
+                videoPath: filePath,
+                transcription: transcription,
+                transcribedAt: new Date().toISOString(),
+                videoSize: fs.statSync(filePath).size,
+                duration: null // Se puede agregar si se obtiene con ffprobe
+              };
+              
+              try {
+                fs.writeFileSync(jsonPath, JSON.stringify(transcriptionData, null, 2), 'utf8');
+                console.log('[Transcription] ✅ JSON guardado exitosamente en:', jsonPath);
+                
+                // Verificar que el archivo se guardó correctamente
+                if (fs.existsSync(jsonPath)) {
+                  const savedStats = fs.statSync(jsonPath);
+                  console.log('[Transcription] ✅ Archivo JSON verificado:', {
+                    path: jsonPath,
+                    size: savedStats.size,
+                    exists: true
+                  });
+                } else {
+                  console.error('[Transcription] ❌ ERROR: El archivo JSON no se creó:', jsonPath);
+                }
+              } catch (jsonError) {
+                console.error('[Transcription] ❌ Error guardando JSON:', jsonError);
+                // Continuar aunque falle el guardado del JSON
+              }
               
               // Actualizar historial con transcripción
               const result = ScreenRecordingService.updateTranscription(recordingId, transcription);
@@ -3468,7 +4167,7 @@ print("✅ Cliente de debugging conectado", file=sys.stderr)
                 }
               }
               
-              resolve({ success: true, transcription });
+              resolve({ success: true, transcription, jsonPath });
             } catch (transcribeError) {
               // Limpiar archivo de audio temporal
               if (fs.existsSync(audioPath)) {
@@ -3489,58 +4188,204 @@ print("✅ Cliente de debugging conectado", file=sys.stderr)
     }
   });
 
+  // Función helper para ejecutar comando y retornar promesa
+  function execPromise(command, options = {}) {
+    return new Promise((resolve, reject) => {
+      exec(command, options, (error, stdout, stderr) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve(stdout);
+        }
+      });
+    });
+  }
+
+  // Función helper para dividir video/audio en partes más pequeñas
+  async function splitAudioFile(videoPath, audioPath, maxSizeMB = 20) {
+    const maxSizeBytes = maxSizeMB * 1024 * 1024; // 20MB por defecto (menor al límite de 25MB de OpenAI)
+    const fileStats = fs.statSync(videoPath);
+    
+    // Si el archivo es menor al límite, no dividir
+    if (fileStats.size <= maxSizeBytes) {
+      return [videoPath]; // Retornar el archivo original
+    }
+
+    try {
+      // Obtener duración del video usando ffprobe
+      let duration;
+      try {
+        const durationOutput = await execPromise(
+          `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${videoPath}"`,
+          { timeout: 30000 }
+        );
+        duration = parseFloat(durationOutput.trim());
+        if (!duration || isNaN(duration)) {
+          throw new Error('Duración inválida');
+        }
+      } catch (error) {
+        console.warn('No se pudo obtener duración del video, intentando dividir por tamaño aproximado');
+        // Si no podemos obtener la duración, extraer audio primero y luego dividirlo
+        const tempDir = path.dirname(audioPath);
+        const baseName = path.basename(audioPath, path.extname(audioPath));
+        
+        // Extraer audio completo primero
+        await execPromise(
+          `ffmpeg -i "${videoPath}" -vn -acodec libmp3lame -ar 16000 -ac 1 "${audioPath}"`,
+          { timeout: 300000 }
+        );
+
+        // Obtener duración del audio
+        const audioDurationOutput = await execPromise(
+          `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${audioPath}"`,
+          { timeout: 30000 }
+        );
+        duration = parseFloat(audioDurationOutput.trim());
+        
+        if (!duration || isNaN(duration)) {
+          throw new Error('No se pudo obtener la duración del audio');
+        }
+      }
+
+      // Calcular cuántas partes necesitamos
+      const estimatedSizePerSecond = fileStats.size / duration;
+      const maxDurationPerPart = maxSizeBytes / estimatedSizePerSecond;
+      const totalParts = Math.ceil(duration / maxDurationPerPart);
+      
+      const parts = [];
+      const partDuration = duration / totalParts;
+      const tempDir = path.dirname(audioPath);
+      const baseName = path.basename(audioPath, path.extname(audioPath));
+
+      console.log(`Dividiendo video en ${totalParts} partes (duración por parte: ${partDuration.toFixed(2)}s)`);
+
+      // Extraer y dividir audio
+      for (let i = 0; i < totalParts; i++) {
+        const partPath = path.join(tempDir, `${baseName}_part${i + 1}.mp3`);
+        const startTime = i * partDuration;
+        
+        await execPromise(
+          `ffmpeg -i "${videoPath}" -ss ${startTime} -t ${partDuration} -vn -acodec libmp3lame -ar 16000 -ac 1 "${partPath}"`,
+          { timeout: 300000 }
+        );
+        
+        parts.push(partPath);
+        console.log(`Parte ${i + 1}/${totalParts} creada: ${partPath}`);
+      }
+      
+      return parts;
+    } catch (error) {
+      console.error('Error dividiendo archivo:', error);
+      throw error;
+    }
+  }
+
   // Función helper para transcribir con OpenAI Whisper
-  async function transcribeWithOpenAI(audioBuffer, apiKey, format = 'webm') {
+  async function transcribeWithOpenAI(audioBuffer, apiKey, format = 'webm', videoPath = null) {
     // Crear un archivo temporal para el audio
     const tempPath = path.join(os.tmpdir(), `audio-${Date.now()}.${format}`);
     fs.writeFileSync(tempPath, audioBuffer);
     
     try {
-      // Leer el archivo como stream
-      const fileStream = fs.createReadStream(tempPath);
       const fileStats = fs.statSync(tempPath);
-      
-      // Crear form-data manualmente
-      const boundary = `----WebKitFormBoundary${Date.now()}`;
-      const formDataParts = [];
-      
-      // Agregar archivo
-      formDataParts.push(`--${boundary}\r\n`);
-      formDataParts.push(`Content-Disposition: form-data; name="file"; filename="audio.${format}"\r\n`);
-      formDataParts.push(`Content-Type: audio/${format}\r\n\r\n`);
-      
-      // Leer archivo y agregar al body
-      const fileContent = fs.readFileSync(tempPath);
-      const fileBuffer = Buffer.from(fileContent);
-      
-      // Agregar campos del formulario
-      const modelField = Buffer.from(`\r\n--${boundary}\r\nContent-Disposition: form-data; name="model"\r\n\r\nwhisper-1\r\n`);
-      const languageField = Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="language"\r\n\r\nes\r\n--${boundary}--\r\n`);
-      
-      const headerBuffer = Buffer.from(formDataParts.join(''));
-      const bodyBuffer = Buffer.concat([headerBuffer, fileBuffer, modelField, languageField]);
+      const maxSizeMB = 20; // 20MB para dejar margen al límite de 25MB de OpenAI
+      const maxSizeBytes = maxSizeMB * 1024 * 1024;
 
-      const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': `multipart/form-data; boundary=${boundary}`,
-          'Content-Length': bodyBuffer.length.toString()
-        },
-        body: bodyBuffer
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error?.message || `Error de API: ${response.status}`);
+      // Si el archivo es muy grande, dividirlo
+      let audioParts = [tempPath];
+      if (fileStats.size > maxSizeBytes && videoPath) {
+        console.log(`Archivo grande detectado (${(fileStats.size / 1024 / 1024).toFixed(2)}MB), dividiendo en partes...`);
+        try {
+          audioParts = await splitAudioFile(videoPath, tempPath, maxSizeMB);
+          // Si se dividió, eliminar el archivo temporal original
+          if (audioParts.length > 1 && fs.existsSync(tempPath)) {
+            try {
+              fs.unlinkSync(tempPath);
+            } catch (e) {
+              console.warn('Error eliminando archivo temporal original:', e);
+            }
+          }
+        } catch (splitError) {
+          console.warn('Error dividiendo archivo, intentando transcribir completo:', splitError);
+          // Si el archivo es demasiado grande y no se puede dividir, lanzar error
+          if (fileStats.size > maxSizeBytes * 1.5) {
+            throw new Error(`El archivo es demasiado grande (${(fileStats.size / 1024 / 1024).toFixed(2)}MB) y no se pudo dividir. Asegúrate de que ffmpeg y ffprobe estén instalados.`);
+          }
+          // Continuar con el archivo original si es solo un poco más grande
+        }
       }
 
-      const data = await response.json();
-      return data.text;
+      // Transcribir cada parte
+      const transcriptions = [];
+      for (let i = 0; i < audioParts.length; i++) {
+        const partPath = audioParts[i];
+        const partStats = fs.statSync(partPath);
+        
+        console.log(`Transcribiendo parte ${i + 1}/${audioParts.length} (${(partStats.size / 1024 / 1024).toFixed(2)}MB)...`);
+        
+        // Leer el archivo como stream
+        const fileContent = fs.readFileSync(partPath);
+        const fileBuffer = Buffer.from(fileContent);
+        
+        // Crear form-data manualmente
+        const boundary = `----WebKitFormBoundary${Date.now()}`;
+        const formDataParts = [];
+        
+        // Agregar archivo
+        formDataParts.push(`--${boundary}\r\n`);
+        formDataParts.push(`Content-Disposition: form-data; name="file"; filename="audio.${format}"\r\n`);
+        formDataParts.push(`Content-Type: audio/${format}\r\n\r\n`);
+        
+        // Agregar campos del formulario
+        const modelField = Buffer.from(`\r\n--${boundary}\r\nContent-Disposition: form-data; name="model"\r\n\r\nwhisper-1\r\n`);
+        const languageField = Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="language"\r\n\r\nes\r\n--${boundary}--\r\n`);
+        
+        const headerBuffer = Buffer.from(formDataParts.join(''));
+        const bodyBuffer = Buffer.concat([headerBuffer, fileBuffer, modelField, languageField]);
+
+        const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': `multipart/form-data; boundary=${boundary}`,
+            'Content-Length': bodyBuffer.length.toString()
+          },
+          body: bodyBuffer
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error?.message || `Error de API: ${response.status}`);
+        }
+
+        const data = await response.json();
+        transcriptions.push({
+          part: i + 1,
+          text: data.text
+        });
+        
+        // Limpiar parte temporal si no es el archivo original
+        if (audioParts.length > 1 && fs.existsSync(partPath) && partPath !== tempPath) {
+          try {
+            fs.unlinkSync(partPath);
+          } catch (e) {
+            console.warn('Error eliminando parte temporal:', e);
+          }
+        }
+      }
+
+      // Combinar todas las transcripciones
+      const combinedText = transcriptions.map(t => t.text).join(' ');
+      
+      return combinedText;
     } finally {
-      // Limpiar archivo temporal
+      // Limpiar archivo temporal original si existe
       if (fs.existsSync(tempPath)) {
-        fs.unlinkSync(tempPath);
+        try {
+          fs.unlinkSync(tempPath);
+        } catch (e) {
+          console.warn('Error eliminando archivo temporal:', e);
+        }
       }
     }
   }
@@ -3686,6 +4531,1043 @@ Responde de manera clara y concisa basándote en el contenido de las transcripci
     return data.content[0]?.text || 'No se recibió respuesta de la IA.';
   }
 
+  // ========== CLASES DE INGLÉS ==========
+  // Servicio para guardar historial de clases de inglés
+  const EnglishClassService = {
+    configFile: path.join(app.getPath('userData'), 'english-classes-config.json'),
+    defaultClassesPath: path.join(app.getPath('userData'), 'english-classes'),
+    
+    getClassesPath() {
+      const config = this.loadConfig();
+      return config.customPath || this.defaultClassesPath;
+    },
+    
+    getImagesPath() {
+      return path.join(this.getClassesPath(), 'images');
+    },
+    
+    getHistoryFile() {
+      return path.join(this.getClassesPath(), 'history.json');
+    },
+    
+    getGroupsFile() {
+      return path.join(this.getClassesPath(), 'groups.json');
+    },
+    
+    getDailyHistoryPath() {
+      return path.join(this.getClassesPath(), 'daily');
+    },
+    
+    getCardsFile() {
+      return path.join(this.getClassesPath(), 'cards.json');
+    },
+    
+    getProgressFile() {
+      return path.join(this.getClassesPath(), 'progress.json');
+    },
+    
+    getStatsFile() {
+      return path.join(this.getClassesPath(), 'stats.json');
+    },
+    
+    loadGroups() {
+      try {
+        const groupsFile = this.getGroupsFile();
+        if (fs.existsSync(groupsFile)) {
+          const data = fs.readFileSync(groupsFile, 'utf8');
+          return JSON.parse(data);
+        }
+        return [];
+      } catch (error) {
+        console.error('[EnglishClass] Error cargando grupos:', error);
+        return [];
+      }
+    },
+    
+    saveGroups(groups) {
+      try {
+        const groupsFile = this.getGroupsFile();
+        fs.writeFileSync(groupsFile, JSON.stringify(groups, null, 2));
+        return { success: true };
+      } catch (error) {
+        console.error('[EnglishClass] Error guardando grupos:', error);
+        return { success: false, error: error.message };
+      }
+    },
+    
+    createGroup(groupName) {
+      try {
+        const groups = this.loadGroups();
+        const newGroup = {
+          id: Date.now().toString(),
+          name: groupName,
+          createdAt: new Date().toISOString(),
+        };
+        groups.push(newGroup);
+        this.saveGroups(groups);
+        return { success: true, groupId: newGroup.id, group: newGroup };
+      } catch (error) {
+        console.error('[EnglishClass] Error creando grupo:', error);
+        return { success: false, error: error.message };
+      }
+    },
+    
+    deleteGroup(groupId) {
+      try {
+        const groups = this.loadGroups();
+        const filteredGroups = groups.filter(g => g.id !== groupId);
+        this.saveGroups(filteredGroups);
+        
+        // Remover groupId de las entradas del historial
+        const history = this.loadHistory();
+        const updatedHistory = history.map(entry => {
+          if (entry.groupId === groupId) {
+            const { groupId, ...entryWithoutGroup } = entry;
+            return entryWithoutGroup;
+          }
+          return entry;
+        });
+        const historyFile = this.getHistoryFile();
+        fs.writeFileSync(historyFile, JSON.stringify(updatedHistory, null, 2));
+        
+        return { success: true };
+      } catch (error) {
+        console.error('[EnglishClass] Error eliminando grupo:', error);
+        return { success: false, error: error.message };
+      }
+    },
+    
+    // Guardar historial por día
+    saveEntryByDay(entry) {
+      try {
+        const dailyPath = this.getDailyHistoryPath();
+        if (!fs.existsSync(dailyPath)) {
+          fs.mkdirSync(dailyPath, { recursive: true });
+        }
+        
+        const date = new Date(entry.timestamp || Date.now());
+        const dateKey = date.toISOString().split('T')[0]; // YYYY-MM-DD
+        const dayFile = path.join(dailyPath, `${dateKey}.json`);
+        
+        let dayData = [];
+        if (fs.existsSync(dayFile)) {
+          const data = fs.readFileSync(dayFile, 'utf8');
+          dayData = JSON.parse(data);
+        }
+        
+        dayData.push(entry);
+        fs.writeFileSync(dayFile, JSON.stringify(dayData, null, 2));
+        
+        return { success: true, dateKey, dayFile };
+      } catch (error) {
+        console.error('[EnglishClass] Error guardando entrada por día:', error);
+        return { success: false, error: error.message };
+      }
+    },
+    
+    loadHistoryByDay(dateKey) {
+      try {
+        const dailyPath = this.getDailyHistoryPath();
+        const dayFile = path.join(dailyPath, `${dateKey}.json`);
+        
+        if (fs.existsSync(dayFile)) {
+          const data = fs.readFileSync(dayFile, 'utf8');
+          return JSON.parse(data);
+        }
+        return [];
+      } catch (error) {
+        console.error('[EnglishClass] Error cargando historial por día:', error);
+        return [];
+      }
+    },
+    
+    listDailyHistoryFiles() {
+      try {
+        const dailyPath = this.getDailyHistoryPath();
+        if (!fs.existsSync(dailyPath)) {
+          return [];
+        }
+        
+        const files = fs.readdirSync(dailyPath)
+          .filter(file => file.endsWith('.json'))
+          .map(file => {
+            const dateKey = file.replace('.json', '');
+            const filePath = path.join(dailyPath, file);
+            const stats = fs.statSync(filePath);
+            return {
+              dateKey,
+              filename: file,
+              path: filePath,
+              modified: stats.mtime.toISOString(),
+            };
+          })
+          .sort((a, b) => b.dateKey.localeCompare(a.dateKey)); // Más recientes primero
+        
+        return files;
+      } catch (error) {
+        console.error('[EnglishClass] Error listando archivos diarios:', error);
+        return [];
+      }
+    },
+    
+    loadConfig() {
+      try {
+        if (fs.existsSync(this.configFile)) {
+          const data = fs.readFileSync(this.configFile, 'utf8');
+          return JSON.parse(data);
+        }
+      } catch (error) {
+        console.error('[EnglishClass] Error cargando configuración:', error);
+      }
+      return { customPath: null };
+    },
+    
+    saveConfig(config) {
+      try {
+        fs.writeFileSync(this.configFile, JSON.stringify(config, null, 2));
+        return { success: true };
+      } catch (error) {
+        console.error('[EnglishClass] Error guardando configuración:', error);
+        return { success: false, error: error.message };
+      }
+    },
+    
+    setCustomPath(customPath) {
+      const config = this.loadConfig();
+      config.customPath = customPath;
+      const result = this.saveConfig(config);
+      
+      if (result.success && customPath) {
+        // Crear carpetas en la nueva ubicación
+        this.init();
+      }
+      
+      return result;
+    },
+    
+    init() {
+      const classesPath = this.getClassesPath();
+      const imagesPath = this.getImagesPath();
+      const historyFile = this.getHistoryFile();
+      
+      // Crear carpetas si no existen
+      if (!fs.existsSync(classesPath)) {
+        fs.mkdirSync(classesPath, { recursive: true });
+      }
+      if (!fs.existsSync(imagesPath)) {
+        fs.mkdirSync(imagesPath, { recursive: true });
+      }
+      // Asegurar que el archivo de historial existe
+      if (!fs.existsSync(historyFile)) {
+        fs.writeFileSync(historyFile, JSON.stringify([], null, 2));
+      }
+    },
+    
+    loadHistory() {
+      try {
+        const historyFile = this.getHistoryFile();
+        if (fs.existsSync(historyFile)) {
+          const data = fs.readFileSync(historyFile, 'utf8');
+          return JSON.parse(data);
+        }
+        return [];
+      } catch (error) {
+        console.error('[EnglishClass] Error cargando historial:', error);
+        return [];
+      }
+    },
+    
+    saveEntry(entry) {
+      try {
+        const history = this.loadHistory();
+        history.unshift(entry); // Agregar al inicio
+        // Mantener solo las últimas 1000 entradas
+        const limitedHistory = history.slice(0, 1000);
+        const historyFile = this.getHistoryFile();
+        fs.writeFileSync(historyFile, JSON.stringify(limitedHistory, null, 2));
+        return { success: true };
+      } catch (error) {
+        console.error('[EnglishClass] Error guardando entrada:', error);
+        return { success: false, error: error.message };
+      }
+    },
+    
+    async saveImage(imageData, filename) {
+      try {
+        // imageData puede ser base64 o Buffer
+        let buffer;
+        if (typeof imageData === 'string') {
+          // Si es base64, remover el prefijo data:image/...;base64, si existe
+          const base64Data = imageData.replace(/^data:image\/\w+;base64,/, '');
+          buffer = Buffer.from(base64Data, 'base64');
+        } else {
+          buffer = imageData;
+        }
+        
+        const imagesPath = this.getImagesPath();
+        const imagePath = path.join(imagesPath, filename);
+        fs.writeFileSync(imagePath, buffer);
+        return { success: true, path: imagePath, filename };
+      } catch (error) {
+        console.error('[EnglishClass] Error guardando imagen:', error);
+        return { success: false, error: error.message };
+      }
+    },
+    
+    getImagePath(filename) {
+      const imagesPath = this.getImagesPath();
+      const imagePath = path.join(imagesPath, filename);
+      if (fs.existsSync(imagePath)) {
+        return imagePath;
+      }
+      return null;
+    },
+    
+    deleteImage(filename) {
+      try {
+        const imagesPath = this.getImagesPath();
+        const imagePath = path.join(imagesPath, filename);
+        if (fs.existsSync(imagePath)) {
+          fs.unlinkSync(imagePath);
+          return { success: true };
+        }
+        return { success: false, error: 'Archivo no encontrado' };
+      } catch (error) {
+        console.error('[EnglishClass] Error eliminando imagen:', error);
+        return { success: false, error: error.message };
+      }
+    },
+    
+    listImages() {
+      try {
+        const imagesPath = this.getImagesPath();
+        if (!fs.existsSync(imagesPath)) {
+          return [];
+        }
+        const files = fs.readdirSync(imagesPath);
+        return files.filter(file => {
+          const ext = path.extname(file).toLowerCase();
+          return ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'].includes(ext);
+        });
+      } catch (error) {
+        console.error('[EnglishClass] Error listando imágenes:', error);
+        return [];
+      }
+    },
+    
+    // Exportar clases agrupadas por día
+    exportClassesByDay(format = 'markdown') {
+      try {
+        const history = this.loadHistory();
+        const images = this.listImages();
+        
+        // Agrupar por día
+        const classesByDay = {};
+        
+        history.forEach(entry => {
+          const date = new Date(entry.timestamp);
+          const dateKey = date.toISOString().split('T')[0]; // YYYY-MM-DD
+          
+          if (!classesByDay[dateKey]) {
+            classesByDay[dateKey] = {
+              date: dateKey,
+              dateFormatted: date.toLocaleDateString('es-ES', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+              }),
+              entries: [],
+              images: []
+            };
+          }
+          
+          classesByDay[dateKey].entries.push(entry);
+        });
+        
+            // Asociar imágenes por fecha (si tienen timestamp en el nombre)
+            const imagesPath = this.getImagesPath();
+            images.forEach(imageFile => {
+              // Intentar extraer fecha del nombre del archivo
+              const match = imageFile.match(/^(\d{13})-/);
+              if (match) {
+                const timestamp = parseInt(match[1]);
+                const date = new Date(timestamp);
+                const dateKey = date.toISOString().split('T')[0];
+                
+                if (classesByDay[dateKey]) {
+                  classesByDay[dateKey].images.push(imageFile);
+                }
+              }
+            });
+        
+        // Crear carpeta de exportación
+        const classesPath = this.getClassesPath();
+        const exportPath = path.join(classesPath, 'exports');
+        if (!fs.existsSync(exportPath)) {
+          fs.mkdirSync(exportPath, { recursive: true });
+        }
+        
+        const exportedFiles = [];
+        
+        // Exportar cada día
+        Object.keys(classesByDay).sort().reverse().forEach(dateKey => {
+          const dayData = classesByDay[dateKey];
+          
+          if (format === 'markdown') {
+            // Exportar como Markdown
+            let markdown = `# Clase de Inglés - ${dayData.dateFormatted}\n\n`;
+            markdown += `**Fecha:** ${dayData.date}\n\n`;
+            markdown += `---\n\n`;
+            
+            // Traducciones
+            if (dayData.entries.length > 0) {
+              markdown += `## Traducciones\n\n`;
+              dayData.entries.forEach((entry, index) => {
+                markdown += `### ${index + 1}. ${entry.spanish || entry.english}\n\n`;
+                
+                if (entry.spanish) {
+                  markdown += `**Español:** ${entry.spanish}\n\n`;
+                }
+                if (entry.english) {
+                  markdown += `**Inglés:** ${entry.english}\n\n`;
+                }
+                if (entry.englishPronunciation) {
+                  markdown += `**Pronunciación (EN):** ${entry.englishPronunciation}\n\n`;
+                }
+                if (entry.spanishPronunciation) {
+                  markdown += `**Pronunciación (ES):** ${entry.spanishPronunciation}\n\n`;
+                }
+                
+                const entryTime = new Date(entry.timestamp).toLocaleTimeString('es-ES', { 
+                  hour: '2-digit', 
+                  minute: '2-digit' 
+                });
+                markdown += `*${entryTime}*\n\n`;
+                markdown += `---\n\n`;
+              });
+            }
+            
+            // Imágenes
+            if (dayData.images.length > 0) {
+              markdown += `## Imágenes\n\n`;
+              dayData.images.forEach(imageFile => {
+                const imagePath = path.join(imagesPath, imageFile);
+                markdown += `![${imageFile}](${imagePath})\n\n`;
+              });
+            }
+            
+            const filename = `clase-${dateKey}.md`;
+            const filePath = path.join(exportPath, filename);
+            fs.writeFileSync(filePath, markdown, 'utf8');
+            exportedFiles.push({ date: dateKey, file: filename, path: filePath, format: 'markdown' });
+          } else {
+            // Exportar como JSON
+            const jsonData = {
+              date: dayData.date,
+              dateFormatted: dayData.dateFormatted,
+              entries: dayData.entries,
+              images: dayData.images
+            };
+            
+            const filename = `clase-${dateKey}.json`;
+            const filePath = path.join(exportPath, filename);
+            fs.writeFileSync(filePath, JSON.stringify(jsonData, null, 2), 'utf8');
+            exportedFiles.push({ date: dateKey, file: filename, path: filePath, format: 'json' });
+          }
+        });
+        
+        return { 
+          success: true, 
+          exportedFiles,
+          exportPath,
+          totalDays: Object.keys(classesByDay).length
+        };
+      } catch (error) {
+        console.error('[EnglishClass] Error exportando clases:', error);
+        return { success: false, error: error.message };
+      }
+    },
+    
+    // ========== SISTEMA DE TARJETAS (FLASHCARDS) ==========
+    
+    // Cargar todas las tarjetas
+    loadCards() {
+      try {
+        const cardsFile = this.getCardsFile();
+        if (fs.existsSync(cardsFile)) {
+          const data = fs.readFileSync(cardsFile, 'utf8');
+          return JSON.parse(data);
+        }
+        return [];
+      } catch (error) {
+        console.error('[EnglishClass] Error cargando tarjetas:', error);
+        return [];
+      }
+    },
+    
+    // Guardar tarjetas
+    saveCards(cards) {
+      try {
+        const cardsFile = this.getCardsFile();
+        fs.writeFileSync(cardsFile, JSON.stringify(cards, null, 2));
+        return { success: true };
+      } catch (error) {
+        console.error('[EnglishClass] Error guardando tarjetas:', error);
+        return { success: false, error: error.message };
+      }
+    },
+    
+    // Crear tarjeta desde entrada del historial
+    createCardFromHistory(entry) {
+      try {
+        const cards = this.loadCards();
+        const newCard = {
+          id: `card_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          spanish: entry.spanish || '',
+          english: entry.english || '',
+          englishPronunciation: entry.englishPronunciation || '',
+          spanishPronunciation: entry.spanishPronunciation || '',
+          groupId: entry.groupId || null,
+          // Sistema de repetición espaciada (Leitner System)
+          box: 1, // Nivel de dificultad (1-5)
+          nextReview: new Date().toISOString(), // Próxima revisión
+          lastReview: null,
+          reviewCount: 0,
+          correctCount: 0,
+          incorrectCount: 0,
+          easeFactor: 2.5, // Factor de facilidad (SM-2 algorithm)
+          interval: 1, // Días hasta próxima revisión
+          createdAt: new Date().toISOString(),
+          // Metadatos
+          sourceEntryId: entry.id,
+          tags: [],
+          difficulty: 'medium', // easy, medium, hard
+        };
+        cards.push(newCard);
+        this.saveCards(cards);
+        return { success: true, card: newCard };
+      } catch (error) {
+        console.error('[EnglishClass] Error creando tarjeta:', error);
+        return { success: false, error: error.message };
+      }
+    },
+    
+    // Obtener tarjetas para revisar (basado en nextReview)
+    getCardsToReview(limit = 20) {
+      try {
+        const cards = this.loadCards();
+        const now = new Date();
+        const cardsToReview = cards
+          .filter(card => {
+            const nextReview = new Date(card.nextReview);
+            return nextReview <= now;
+          })
+          .sort((a, b) => {
+            // Priorizar tarjetas más antiguas y con más errores
+            const aPriority = a.incorrectCount * 10 + (new Date(a.nextReview) - now);
+            const bPriority = b.incorrectCount * 10 + (new Date(b.nextReview) - now);
+            return aPriority - bPriority;
+          })
+          .slice(0, limit);
+        return cardsToReview;
+      } catch (error) {
+        console.error('[EnglishClass] Error obteniendo tarjetas para revisar:', error);
+        return [];
+      }
+    },
+    
+    // Actualizar tarjeta después de revisión (SM-2 Algorithm)
+    updateCardAfterReview(cardId, wasCorrect) {
+      try {
+        const cards = this.loadCards();
+        const cardIndex = cards.findIndex(c => c.id === cardId);
+        if (cardIndex === -1) {
+          return { success: false, error: 'Tarjeta no encontrada' };
+        }
+        
+        const card = cards[cardIndex];
+        const now = new Date();
+        
+        // Actualizar estadísticas
+        card.reviewCount += 1;
+        card.lastReview = now.toISOString();
+        
+        if (wasCorrect) {
+          card.correctCount += 1;
+          
+          // Algoritmo SM-2 (Spaced Repetition)
+          if (card.reviewCount === 1) {
+            card.interval = 1;
+          } else if (card.reviewCount === 2) {
+            card.interval = 6;
+          } else {
+            card.interval = Math.round(card.interval * card.easeFactor);
+          }
+          
+          // Aumentar facilidad ligeramente
+          card.easeFactor = Math.min(2.5, card.easeFactor + 0.1);
+          
+          // Avanzar de caja si es necesario
+          if (card.box < 5 && card.reviewCount % 3 === 0) {
+            card.box += 1;
+          }
+        } else {
+          card.incorrectCount += 1;
+          
+          // Reducir facilidad significativamente
+          card.easeFactor = Math.max(1.3, card.easeFactor - 0.2);
+          
+          // Volver a caja 1 si hay muchos errores
+          if (card.incorrectCount > card.correctCount) {
+            card.box = 1;
+            card.interval = 1;
+          } else {
+            card.interval = Math.max(1, Math.round(card.interval / 2));
+          }
+        }
+        
+        // Calcular próxima revisión
+        const nextReview = new Date(now);
+        nextReview.setDate(nextReview.getDate() + card.interval);
+        card.nextReview = nextReview.toISOString();
+        
+        // Actualizar dificultad basada en estadísticas
+        const successRate = card.correctCount / card.reviewCount;
+        if (successRate > 0.8) {
+          card.difficulty = 'easy';
+        } else if (successRate < 0.5) {
+          card.difficulty = 'hard';
+        } else {
+          card.difficulty = 'medium';
+        }
+        
+        cards[cardIndex] = card;
+        this.saveCards(cards);
+        
+        return { success: true, card };
+      } catch (error) {
+        console.error('[EnglishClass] Error actualizando tarjeta:', error);
+        return { success: false, error: error.message };
+      }
+    },
+    
+    // Eliminar tarjeta
+    deleteCard(cardId) {
+      try {
+        const cards = this.loadCards();
+        const filteredCards = cards.filter(c => c.id !== cardId);
+        this.saveCards(filteredCards);
+        return { success: true };
+      } catch (error) {
+        console.error('[EnglishClass] Error eliminando tarjeta:', error);
+        return { success: false, error: error.message };
+      }
+    },
+    
+    // Crear tarjetas automáticamente desde historial
+    createCardsFromHistory(groupId = null) {
+      try {
+        const history = this.loadHistory();
+        const cards = this.loadCards();
+        const existingCardIds = new Set(cards.map(c => c.sourceEntryId));
+        
+        let created = 0;
+        const historyToProcess = groupId 
+          ? history.filter(e => e.groupId === groupId)
+          : history;
+        
+        historyToProcess.forEach(entry => {
+          if (!existingCardIds.has(entry.id) && entry.spanish && entry.english) {
+            const result = this.createCardFromHistory(entry);
+            if (result.success) {
+              created++;
+              existingCardIds.add(entry.id);
+            }
+          }
+        });
+        
+        return { success: true, created };
+      } catch (error) {
+        console.error('[EnglishClass] Error creando tarjetas desde historial:', error);
+        return { success: false, error: error.message };
+      }
+    },
+    
+    // ========== SISTEMA DE PROGRESO Y ESTADÍSTICAS ==========
+    
+    // Cargar progreso del usuario
+    loadProgress() {
+      try {
+        const progressFile = this.getProgressFile();
+        if (fs.existsSync(progressFile)) {
+          const data = fs.readFileSync(progressFile, 'utf8');
+          return JSON.parse(data);
+        }
+        return {
+          level: 1,
+          xp: 0,
+          xpToNextLevel: 100,
+          totalCardsReviewed: 0,
+          totalCorrect: 0,
+          totalIncorrect: 0,
+          currentStreak: 0,
+          longestStreak: 0,
+          lastStudyDate: null,
+          studyDays: [],
+          achievements: [],
+        };
+      } catch (error) {
+        console.error('[EnglishClass] Error cargando progreso:', error);
+        return {
+          level: 1,
+          xp: 0,
+          xpToNextLevel: 100,
+          totalCardsReviewed: 0,
+          totalCorrect: 0,
+          totalIncorrect: 0,
+          currentStreak: 0,
+          longestStreak: 0,
+          lastStudyDate: null,
+          studyDays: [],
+          achievements: [],
+        };
+      }
+    },
+    
+    // Guardar progreso
+    saveProgress(progress) {
+      try {
+        const progressFile = this.getProgressFile();
+        fs.writeFileSync(progressFile, JSON.stringify(progress, null, 2));
+        return { success: true };
+      } catch (error) {
+        console.error('[EnglishClass] Error guardando progreso:', error);
+        return { success: false, error: error.message };
+      }
+    },
+    
+    // Actualizar progreso después de una sesión de estudio
+    updateProgress(cardsReviewed, correctAnswers) {
+      try {
+        const progress = this.loadProgress();
+        const now = new Date();
+        const today = now.toISOString().split('T')[0];
+        
+        // Actualizar estadísticas
+        progress.totalCardsReviewed += cardsReviewed;
+        progress.totalCorrect += correctAnswers;
+        progress.totalIncorrect += (cardsReviewed - correctAnswers);
+        
+        // Calcular XP (10 XP por tarjeta correcta, 5 por incorrecta)
+        const xpGained = (correctAnswers * 10) + ((cardsReviewed - correctAnswers) * 5);
+        progress.xp += xpGained;
+        
+        // Subir de nivel
+        while (progress.xp >= progress.xpToNextLevel) {
+          progress.xp -= progress.xpToNextLevel;
+          progress.level += 1;
+          progress.xpToNextLevel = Math.round(progress.xpToNextLevel * 1.2); // Aumenta 20% por nivel
+        }
+        
+        // Actualizar racha (streak)
+        const lastDate = progress.lastStudyDate ? new Date(progress.lastStudyDate).toISOString().split('T')[0] : null;
+        if (lastDate === today) {
+          // Ya estudió hoy, no hacer nada
+        } else if (lastDate) {
+          const yesterday = new Date(now);
+          yesterday.setDate(yesterday.getDate() - 1);
+          const yesterdayStr = yesterday.toISOString().split('T')[0];
+          
+          if (lastDate === yesterdayStr) {
+            // Continúa la racha
+            progress.currentStreak += 1;
+          } else {
+            // Racha rota
+            progress.currentStreak = 1;
+          }
+        } else {
+          // Primera vez estudiando
+          progress.currentStreak = 1;
+        }
+        
+        if (progress.currentStreak > progress.longestStreak) {
+          progress.longestStreak = progress.currentStreak;
+        }
+        
+        // Actualizar días de estudio
+        if (!progress.studyDays.includes(today)) {
+          progress.studyDays.push(today);
+        }
+        
+        progress.lastStudyDate = now.toISOString();
+        
+        // Verificar logros
+        this.checkAchievements(progress);
+        
+        this.saveProgress(progress);
+        return { success: true, progress, xpGained };
+      } catch (error) {
+        console.error('[EnglishClass] Error actualizando progreso:', error);
+        return { success: false, error: error.message };
+      }
+    },
+    
+    // Verificar y otorgar logros
+    checkAchievements(progress) {
+      const achievements = progress.achievements || [];
+      const newAchievements = [];
+      
+      // Logro: Primera tarjeta
+      if (progress.totalCardsReviewed >= 1 && !achievements.includes('first_card')) {
+        newAchievements.push('first_card');
+      }
+      
+      // Logro: 10 tarjetas
+      if (progress.totalCardsReviewed >= 10 && !achievements.includes('ten_cards')) {
+        newAchievements.push('ten_cards');
+      }
+      
+      // Logro: 100 tarjetas
+      if (progress.totalCardsReviewed >= 100 && !achievements.includes('hundred_cards')) {
+        newAchievements.push('hundred_cards');
+      }
+      
+      // Logro: Racha de 7 días
+      if (progress.currentStreak >= 7 && !achievements.includes('week_streak')) {
+        newAchievements.push('week_streak');
+      }
+      
+      // Logro: Racha de 30 días
+      if (progress.currentStreak >= 30 && !achievements.includes('month_streak')) {
+        newAchievements.push('month_streak');
+      }
+      
+      // Logro: Nivel 5
+      if (progress.level >= 5 && !achievements.includes('level_5')) {
+        newAchievements.push('level_5');
+      }
+      
+      // Logro: Nivel 10
+      if (progress.level >= 10 && !achievements.includes('level_10')) {
+        newAchievements.push('level_10');
+      }
+      
+      if (newAchievements.length > 0) {
+        progress.achievements = [...achievements, ...newAchievements];
+        return newAchievements;
+      }
+      
+      return [];
+    },
+    
+    // Obtener estadísticas detalladas
+    getStats() {
+      try {
+        const cards = this.loadCards();
+        const progress = this.loadProgress();
+        
+        const stats = {
+          totalCards: cards.length,
+          cardsToReview: cards.filter(c => new Date(c.nextReview) <= new Date()).length,
+          cardsByBox: {
+            1: cards.filter(c => c.box === 1).length,
+            2: cards.filter(c => c.box === 2).length,
+            3: cards.filter(c => c.box === 3).length,
+            4: cards.filter(c => c.box === 4).length,
+            5: cards.filter(c => c.box === 5).length,
+          },
+          cardsByDifficulty: {
+            easy: cards.filter(c => c.difficulty === 'easy').length,
+            medium: cards.filter(c => c.difficulty === 'medium').length,
+            hard: cards.filter(c => c.difficulty === 'hard').length,
+          },
+          averageSuccessRate: progress.totalCardsReviewed > 0
+            ? (progress.totalCorrect / progress.totalCardsReviewed * 100).toFixed(1)
+            : 0,
+          progress,
+        };
+        
+        return stats;
+      } catch (error) {
+        console.error('[EnglishClass] Error obteniendo estadísticas:', error);
+        return null;
+      }
+    }
+  };
+  
+  // Inicializar servicio
+  EnglishClassService.init();
+  
+  // Handler para guardar entrada de clase de inglés
+  ipcMain.handle('save-english-class-entry', async (event, entry) => {
+    return EnglishClassService.saveEntry(entry);
+  });
+  
+  // Handler para cargar historial de clases de inglés
+  ipcMain.handle('load-english-class-history', async () => {
+    return EnglishClassService.loadHistory();
+  });
+  
+  // Handler para guardar imagen de clase de inglés
+  ipcMain.handle('save-english-class-image', async (event, imageData, filename) => {
+    return EnglishClassService.saveImage(imageData, filename);
+  });
+  
+  // Handler para obtener ruta de imagen
+  ipcMain.handle('get-english-class-image-path', async (event, filename) => {
+    const imagePath = EnglishClassService.getImagePath(filename);
+    if (imagePath) {
+      // En Electron, podemos retornar la ruta del archivo
+      // El renderer puede usar file:// protocol o convertir a base64
+      return imagePath;
+    }
+    return null;
+  });
+  
+  // Handler para leer imagen como base64
+  ipcMain.handle('read-english-class-image', async (event, filename) => {
+    try {
+      const imagePath = EnglishClassService.getImagePath(filename);
+      if (imagePath && fs.existsSync(imagePath)) {
+        const imageBuffer = fs.readFileSync(imagePath);
+        const base64 = imageBuffer.toString('base64');
+        const ext = path.extname(filename).toLowerCase().substring(1);
+        const mimeType = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' :
+                        ext === 'png' ? 'image/png' :
+                        ext === 'gif' ? 'image/gif' :
+                        ext === 'webp' ? 'image/webp' : 'image/png';
+        return `data:${mimeType};base64,${base64}`;
+      }
+      return null;
+    } catch (error) {
+      console.error('[EnglishClass] Error leyendo imagen:', error);
+      return null;
+    }
+  });
+  
+  // Handler para eliminar imagen
+  ipcMain.handle('delete-english-class-image', async (event, filename) => {
+    return EnglishClassService.deleteImage(filename);
+  });
+  
+  // Handler para listar imágenes
+  ipcMain.handle('list-english-class-images', async () => {
+    return EnglishClassService.listImages();
+  });
+  
+  // Handler para exportar clases agrupadas por día
+  ipcMain.handle('export-english-classes-by-day', async (event, format = 'markdown') => {
+    return EnglishClassService.exportClassesByDay(format);
+  });
+  
+  // Handler para seleccionar carpeta personalizada para clases de inglés
+  ipcMain.handle('select-english-classes-folder', async () => {
+    try {
+      const result = await dialog.showOpenDialog(mainWindow, {
+        properties: ['openDirectory'],
+        title: 'Seleccionar carpeta para clases de inglés'
+      });
+      
+      if (!result.canceled && result.filePaths.length > 0) {
+        const selectedPath = result.filePaths[0];
+        const saveResult = EnglishClassService.setCustomPath(selectedPath);
+        
+        if (saveResult.success) {
+          return { success: true, path: selectedPath };
+        } else {
+          return { success: false, error: saveResult.error };
+        }
+      }
+      
+      return { success: false, canceled: true };
+    } catch (error) {
+      console.error('[EnglishClass] Error seleccionando carpeta:', error);
+      return { success: false, error: error.message };
+    }
+  });
+  
+  // Handler para obtener la carpeta actual de clases
+  ipcMain.handle('get-english-classes-folder', async () => {
+    const config = EnglishClassService.loadConfig();
+    return {
+      path: EnglishClassService.getClassesPath(),
+      isCustom: config.customPath !== null,
+      customPath: config.customPath
+    };
+  });
+  
+  // Handler para resetear a la carpeta por defecto
+  ipcMain.handle('reset-english-classes-folder', async () => {
+    return EnglishClassService.setCustomPath(null);
+  });
+  
+  // ========== HANDLERS PARA GRUPOS ==========
+  
+  // Handler para cargar grupos
+  ipcMain.handle('load-english-class-groups', async () => {
+    return EnglishClassService.loadGroups();
+  });
+  
+  // Handler para crear grupo
+  ipcMain.handle('create-english-class-group', async (event, groupName) => {
+    return EnglishClassService.createGroup(groupName);
+  });
+  
+  // Handler para eliminar grupo
+  ipcMain.handle('delete-english-class-group', async (event, groupId) => {
+    return EnglishClassService.deleteGroup(groupId);
+  });
+  
+  // ========== HANDLERS PARA SISTEMA DE TARJETAS ==========
+  
+  // Cargar tarjetas
+  ipcMain.handle('load-english-class-cards', async () => {
+    return EnglishClassService.loadCards();
+  });
+  
+  // Crear tarjeta desde historial
+  ipcMain.handle('create-english-class-card', async (event, entry) => {
+    return EnglishClassService.createCardFromHistory(entry);
+  });
+  
+  // Obtener tarjetas para revisar
+  ipcMain.handle('get-english-class-cards-to-review', async (event, limit) => {
+    return EnglishClassService.getCardsToReview(limit || 20);
+  });
+  
+  // Actualizar tarjeta después de revisión
+  ipcMain.handle('update-english-class-card-review', async (event, cardId, wasCorrect) => {
+    return EnglishClassService.updateCardAfterReview(cardId, wasCorrect);
+  });
+  
+  // Eliminar tarjeta
+  ipcMain.handle('delete-english-class-card', async (event, cardId) => {
+    return EnglishClassService.deleteCard(cardId);
+  });
+  
+  // Crear tarjetas automáticamente desde historial
+  ipcMain.handle('create-english-class-cards-from-history', async (event, groupId) => {
+    return EnglishClassService.createCardsFromHistory(groupId || null);
+  });
+  
+  // ========== HANDLERS PARA PROGRESO Y ESTADÍSTICAS ==========
+  
+  // Cargar progreso
+  ipcMain.handle('load-english-class-progress', async () => {
+    return EnglishClassService.loadProgress();
+  });
+  
+  // Actualizar progreso
+  ipcMain.handle('update-english-class-progress', async (event, cardsReviewed, correctAnswers) => {
+    return EnglishClassService.updateProgress(cardsReviewed || 0, correctAnswers || 0);
+  });
+  
+  // Obtener estadísticas
+  ipcMain.handle('get-english-class-stats', async () => {
+    return EnglishClassService.getStats();
+  });
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
@@ -3702,12 +5584,14 @@ Responde de manera clara y concisa basándote en el contenido de las transcripci
   });
 });
 
-// Desconectar todas las conexiones de base de datos al cerrar
+// Desconectar todas las conexiones de base de datos, FTP y SFTP al cerrar
 app.on('before-quit', async () => {
   try {
     await DatabaseService.disconnectAll();
+    await FTPService.disconnectAll();
+    await SFTPService.disconnectAll();
   } catch (error) {
-    console.error('Error desconectando bases de datos:', error);
+    console.error('Error desconectando conexiones:', error);
   }
 });
 

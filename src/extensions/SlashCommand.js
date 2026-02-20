@@ -265,50 +265,6 @@ export const SlashCommand = Extension.create({
   },
 },
           {
-  label: "Tabla Excel",
-  description: "Crear tabla tipo Excel con redimensionamiento de columnas y filas, copiar/pegar y captura de pantalla",
-  icon: "📊",
-  keywords: ["excel", "spreadsheet", "hoja", "calculos", "tabla excel", "tabla calculo"],
-  command: ({ editor, range }) => {
-    editor.chain().focus().deleteRange(range).run();
-    // Disparar evento para abrir el modal de dimensiones
-    window.dispatchEvent(new CustomEvent('open-excel-table-dimensions', {
-      detail: { editor, range }
-    }));
-  },
-},
-          {
-  label: "Recorte de Pantalla",
-  description: "Capturar pantalla y agregar anotaciones (rectángulos, flechas, texto)",
-  icon: "📸",
-  keywords: ["captura", "screenshot", "pantalla", "recorte", "screen", "capture", "print screen"],
-  command: ({ editor, range }) => {
-    editor.chain().focus().deleteRange(range).insertContent({
-      type: 'screenCapture',
-      attrs: {
-        image: null,
-        annotations: []
-      }
-    }).run();
-  },
-},
-          {
-  label: "Recorte Avanzado",
-  description: "Capturar pantalla completa, seleccionar área, agregar anotaciones (rectángulos, triángulos, flechas, texto) y descargar",
-  icon: "✂️",
-  keywords: ["recorte", "snipper", "recortar", "crop", "anotar", "triangulo", "cuadro", "flecha"],
-  command: ({ editor, range }) => {
-    editor.chain().focus().deleteRange(range).insertContent({
-      type: 'screenSnipper',
-      attrs: {
-        image: null,
-        selectedArea: null,
-        annotations: []
-      }
-    }).run();
-  },
-},
-          {
   label: "Plantilla Financiero",
   description: "Crear sistema financiero completo con Ingresos, Egresos y Deudas interconectadas",
   icon: "💰",
@@ -325,6 +281,17 @@ export const SlashCommand = Extension.create({
         content: [{ type: 'text', text: '💰 Sistema Financiero' }]
       },
       // Párrafo separador
+      { type: 'paragraph', content: [] },
+      // Título de gráficas
+      {
+        type: 'heading',
+        attrs: { level: 2 },
+        content: [{ type: 'text', text: '📊 Resumen Financiero' }]
+      },
+      { type: 'paragraph', content: [] },
+      {
+        type: 'resumenFinanciero'
+      },
       { type: 'paragraph', content: [] },
       // Primera tabla: Ingresos
       {
@@ -875,32 +842,6 @@ export const SlashCommand = Extension.create({
                   bodyType: 'json',
                   response: '',
                   collections: '[]',
-                },
-              }).run();
-            },
-          },
-          {
-            icon: '🗄️',
-            label: 'Conectar BD',
-            description: 'Conectar y consultar bases de datos (PostgreSQL, MySQL, SQL Server)',
-            keywords: ['connectbd', 'database', 'bd', 'postgresql', 'mysql', 'sqlserver', 'sql', 'db', 'base de datos'],
-            command: ({ editor, range }) => {
-              editor.chain().focus().deleteRange(range).run();
-              editor.chain().focus().insertContent({
-                type: 'connectBD',
-                attrs: {
-                  dbType: 'postgresql',
-                  host: '',
-                  port: '',
-                  database: '',
-                  username: '',
-                  password: '',
-                  ssl: false,
-                  connectionId: null,
-                  connectionName: '',
-                  isConnected: false,
-                  queryHistory: '[]',
-                  savedQueries: '[]',
                 },
               }).run();
             },

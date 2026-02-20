@@ -1,9 +1,9 @@
 import { Node } from '@tiptap/core';
 import { ReactNodeViewRenderer } from '@tiptap/react';
-import ConnectBDNode from './ConnectBDNode';
+import SFTPNode from './SFTPNode';
 
-export const ConnectBDNodeExtension = Node.create({
-  name: 'connectBD',
+export const SFTPNodeExtension = Node.create({
+  name: 'sftpBlock',
 
   group: 'block',
 
@@ -17,17 +17,11 @@ export const ConnectBDNodeExtension = Node.create({
       connectionName: {
         default: '',
       },
-      dbType: {
-        default: 'postgresql',
-      },
       host: {
         default: '',
       },
       port: {
-        default: '',
-      },
-      database: {
-        default: '',
+        default: 22,
       },
       username: {
         default: '',
@@ -35,17 +29,20 @@ export const ConnectBDNodeExtension = Node.create({
       password: {
         default: '',
       },
-      ssl: {
+      privateKey: {
+        default: '',
+      },
+      passphrase: {
+        default: '',
+      },
+      usePrivateKey: {
         default: false,
       },
       isConnected: {
         default: false,
       },
-      queryHistory: {
-        default: '[]',
-      },
-      savedQueries: {
-        default: '[]',
+      currentPath: {
+        default: '/',
       },
     };
   },
@@ -53,34 +50,17 @@ export const ConnectBDNodeExtension = Node.create({
   parseHTML() {
     return [
       {
-        tag: 'div[data-type="connect-bd"]',
+        tag: 'div[data-type="sftp-block"]',
       },
     ];
   },
 
   renderHTML({ HTMLAttributes }) {
-    return ['div', { 'data-type': 'connect-bd', ...HTMLAttributes }];
+    return ['div', { 'data-type': 'sftp-block', ...HTMLAttributes }];
   },
 
   addNodeView() {
-    return ReactNodeViewRenderer(ConnectBDNode);
+    return ReactNodeViewRenderer(SFTPNode);
   },
 });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

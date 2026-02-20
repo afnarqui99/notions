@@ -1,0 +1,17 @@
+.vscode/**
+.vscode-test/**
+src/**
+.gitignore
+.git/**
+node_modules/**
+*.vsix
+*.code-workspace
+**/*.map
+**/*.ts
+!out/**/*.js.map
+COMO_*.md
+ESTADO_*.md
+GUIA_*.md
+PRIMEROS_*.md
+PUBLICACION.md
+

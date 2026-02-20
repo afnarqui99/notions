@@ -269,6 +269,12 @@ const electronAPI = {
         saveScreenRecording: (buffer, duration) => {
           return ipcRenderer.invoke('save-screen-recording', buffer, duration);
         },
+        startSystemAudioCapture: (recordingId) => {
+          return ipcRenderer.invoke('start-system-audio-capture', recordingId);
+        },
+        stopSystemAudioCapture: () => {
+          return ipcRenderer.invoke('stop-system-audio-capture');
+        },
         // Obtener historial de grabaciones
         getScreenRecordingHistory: () => {
           return ipcRenderer.invoke('get-screen-recording-history');
@@ -292,6 +298,227 @@ const electronAPI = {
         // Guardar configuración de IA
         saveAIConfig: (config) => {
           return ipcRenderer.invoke('save-ai-config', config);
+        },
+        // ========== FTP ==========
+        // Conectar a servidor FTP
+        ftpConnect: (config) => {
+          return ipcRenderer.invoke('ftp-connect', config);
+        },
+        // Desconectar de servidor FTP
+        ftpDisconnect: (connectionId) => {
+          return ipcRenderer.invoke('ftp-disconnect', connectionId);
+        },
+        // Listar archivos
+        ftpListFiles: (connectionId, remotePath) => {
+          return ipcRenderer.invoke('ftp-list-files', connectionId, remotePath);
+        },
+        // Subir archivo
+        ftpUploadFile: (connectionId, localPath, remotePath) => {
+          return ipcRenderer.invoke('ftp-upload-file', connectionId, localPath, remotePath);
+        },
+        // Descargar archivo
+        ftpDownloadFile: (connectionId, remotePath, localPath) => {
+          return ipcRenderer.invoke('ftp-download-file', connectionId, remotePath, localPath);
+        },
+        // Eliminar archivo
+        ftpDeleteFile: (connectionId, remotePath) => {
+          return ipcRenderer.invoke('ftp-delete-file', connectionId, remotePath);
+        },
+        // Crear directorio
+        ftpCreateDirectory: (connectionId, remotePath) => {
+          return ipcRenderer.invoke('ftp-create-directory', connectionId, remotePath);
+        },
+        // Eliminar directorio
+        ftpDeleteDirectory: (connectionId, remotePath) => {
+          return ipcRenderer.invoke('ftp-delete-directory', connectionId, remotePath);
+        },
+        // Cambiar directorio
+        ftpChangeDirectory: (connectionId, remotePath) => {
+          return ipcRenderer.invoke('ftp-change-directory', connectionId, remotePath);
+        },
+        // Obtener directorio actual
+        ftpGetCurrentDirectory: (connectionId) => {
+          return ipcRenderer.invoke('ftp-get-current-directory', connectionId);
+        },
+        // Obtener conexiones guardadas
+        ftpGetSavedConnections: () => {
+          return ipcRenderer.invoke('ftp-get-saved-connections');
+        },
+        // Guardar conexión
+        ftpSaveConnection: (connectionData) => {
+          return ipcRenderer.invoke('ftp-save-connection', connectionData);
+        },
+        // Eliminar conexión guardada
+        ftpDeleteSavedConnection: (connectionId) => {
+          return ipcRenderer.invoke('ftp-delete-saved-connection', connectionId);
+        },
+        // ========== SFTP ==========
+        // Conectar a servidor SFTP
+        sftpConnect: (config) => {
+          return ipcRenderer.invoke('sftp-connect', config);
+        },
+        // Desconectar de servidor SFTP
+        sftpDisconnect: (connectionId) => {
+          return ipcRenderer.invoke('sftp-disconnect', connectionId);
+        },
+        // Listar archivos
+        sftpListFiles: (connectionId, remotePath) => {
+          return ipcRenderer.invoke('sftp-list-files', connectionId, remotePath);
+        },
+        // Subir archivo
+        sftpUploadFile: (connectionId, localPath, remotePath) => {
+          return ipcRenderer.invoke('sftp-upload-file', connectionId, localPath, remotePath);
+        },
+        // Descargar archivo
+        sftpDownloadFile: (connectionId, remotePath, localPath) => {
+          return ipcRenderer.invoke('sftp-download-file', connectionId, remotePath, localPath);
+        },
+        // Eliminar archivo
+        sftpDeleteFile: (connectionId, remotePath) => {
+          return ipcRenderer.invoke('sftp-delete-file', connectionId, remotePath);
+        },
+        // Crear directorio
+        sftpCreateDirectory: (connectionId, remotePath) => {
+          return ipcRenderer.invoke('sftp-create-directory', connectionId, remotePath);
+        },
+        // Eliminar directorio
+        sftpDeleteDirectory: (connectionId, remotePath) => {
+          return ipcRenderer.invoke('sftp-delete-directory', connectionId, remotePath);
+        },
+        // Cambiar directorio
+        sftpChangeDirectory: (connectionId, remotePath) => {
+          return ipcRenderer.invoke('sftp-change-directory', connectionId, remotePath);
+        },
+        // Obtener directorio actual
+        sftpGetCurrentDirectory: (connectionId) => {
+          return ipcRenderer.invoke('sftp-get-current-directory', connectionId);
+        },
+        // Obtener conexiones guardadas
+        sftpGetSavedConnections: () => {
+          return ipcRenderer.invoke('sftp-get-saved-connections');
+        },
+        // Guardar conexión
+        sftpSaveConnection: (connectionData) => {
+          return ipcRenderer.invoke('sftp-save-connection', connectionData);
+        },
+        // Eliminar conexión guardada
+        sftpDeleteSavedConnection: (connectionId) => {
+          return ipcRenderer.invoke('sftp-delete-saved-connection', connectionId);
+        },
+        // Obtener ruta local de un archivo (para drag & drop)
+        getFileLocalPath: (file) => {
+          return ipcRenderer.invoke('get-file-local-path', file);
+        },
+        // Mostrar diálogo para guardar archivo
+        showSaveDialog: (options) => {
+          return ipcRenderer.invoke('show-save-dialog', options);
+        },
+        // Mostrar diálogo para abrir archivo
+        showOpenDialog: (options) => {
+          return ipcRenderer.invoke('show-open-dialog', options);
+        },
+        // ========== CLASES DE INGLÉS ==========
+        // Guardar entrada de clase de inglés
+        saveEnglishClassEntry: (entry) => {
+          return ipcRenderer.invoke('save-english-class-entry', entry);
+        },
+        // Cargar historial de clases de inglés
+        loadEnglishClassHistory: () => {
+          return ipcRenderer.invoke('load-english-class-history');
+        },
+        // Guardar imagen de clase de inglés
+        saveEnglishClassImage: (imageData, filename) => {
+          return ipcRenderer.invoke('save-english-class-image', imageData, filename);
+        },
+        // Obtener ruta de imagen
+        getEnglishClassImagePath: (filename) => {
+          return ipcRenderer.invoke('get-english-class-image-path', filename);
+        },
+        // Leer imagen como base64
+        readEnglishClassImage: (filename) => {
+          return ipcRenderer.invoke('read-english-class-image', filename);
+        },
+        // Eliminar imagen
+        deleteEnglishClassImage: (filename) => {
+          return ipcRenderer.invoke('delete-english-class-image', filename);
+        },
+        // Listar imágenes
+        listEnglishClassImages: () => {
+          return ipcRenderer.invoke('list-english-class-images');
+        },
+        // Exportar clases agrupadas por día
+        exportEnglishClassesByDay: (format = 'markdown') => {
+          return ipcRenderer.invoke('export-english-classes-by-day', format);
+        },
+        // Seleccionar carpeta personalizada para clases
+        selectEnglishClassesFolder: () => {
+          return ipcRenderer.invoke('select-english-classes-folder');
+        },
+        // Obtener carpeta actual de clases
+        getEnglishClassesFolder: () => {
+          return ipcRenderer.invoke('get-english-classes-folder');
+        },
+        // Resetear a carpeta por defecto
+        resetEnglishClassesFolder: () => {
+          return ipcRenderer.invoke('reset-english-classes-folder');
+        },
+        // Cargar grupos
+        loadEnglishClassGroups: () => {
+          return ipcRenderer.invoke('load-english-class-groups');
+        },
+        // Crear grupo
+        createEnglishClassGroup: (groupName) => {
+          return ipcRenderer.invoke('create-english-class-group', groupName);
+        },
+        // Eliminar grupo
+        deleteEnglishClassGroup: (groupId) => {
+          return ipcRenderer.invoke('delete-english-class-group', groupId);
+        },
+        // Cargar historial por día
+        loadEnglishClassHistoryByDay: (dateKey) => {
+          return ipcRenderer.invoke('load-english-class-history-by-day', dateKey);
+        },
+        // Listar archivos de historial diario
+        listEnglishClassDailyFiles: () => {
+          return ipcRenderer.invoke('list-english-class-daily-files');
+        },
+        // ========== SISTEMA DE TARJETAS ==========
+        // Cargar tarjetas
+        loadEnglishClassCards: () => {
+          return ipcRenderer.invoke('load-english-class-cards');
+        },
+        // Crear tarjeta desde historial
+        createEnglishClassCard: (entry) => {
+          return ipcRenderer.invoke('create-english-class-card', entry);
+        },
+        // Obtener tarjetas para revisar
+        getEnglishClassCardsToReview: (limit) => {
+          return ipcRenderer.invoke('get-english-class-cards-to-review', limit);
+        },
+        // Actualizar tarjeta después de revisión
+        updateEnglishClassCardReview: (cardId, wasCorrect) => {
+          return ipcRenderer.invoke('update-english-class-card-review', cardId, wasCorrect);
+        },
+        // Eliminar tarjeta
+        deleteEnglishClassCard: (cardId) => {
+          return ipcRenderer.invoke('delete-english-class-card', cardId);
+        },
+        // Crear tarjetas automáticamente desde historial
+        createEnglishClassCardsFromHistory: (groupId) => {
+          return ipcRenderer.invoke('create-english-class-cards-from-history', groupId);
+        },
+        // ========== PROGRESO Y ESTADÍSTICAS ==========
+        // Cargar progreso
+        loadEnglishClassProgress: () => {
+          return ipcRenderer.invoke('load-english-class-progress');
+        },
+        // Actualizar progreso
+        updateEnglishClassProgress: (cardsReviewed, correctAnswers) => {
+          return ipcRenderer.invoke('update-english-class-progress', cardsReviewed, correctAnswers);
+        },
+        // Obtener estadísticas
+        getEnglishClassStats: () => {
+          return ipcRenderer.invoke('get-english-class-stats');
         }
 };
 

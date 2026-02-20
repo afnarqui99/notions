@@ -15,6 +15,7 @@ class ScreenRecordingService {
     this.canvasContext = null;
     this.videoElement = null;
     this.animationFrameId = null;
+    this.systemAudioRecordingId = null;
   }
 
   /**
@@ -50,48 +51,55 @@ class ScreenRecordingService {
     try {
       let displayStream;
       
-      // En Electron, intentar primero getDisplayMedia si está disponible (versiones recientes)
-      // Si no está disponible, usar desktopCapturer
-      if (window.electronAPI && window.electronAPI.getScreenSources) {
+      // PRIORIDAD: Siempre usar getDisplayMedia si está disponible (permite cambiar entre ventanas)
+      // getDisplayMedia es mejor porque permite al usuario seleccionar pantalla completa
+      // y cuando selecciona pantalla completa, puede cambiar entre ventanas dinámicamente
+      if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+        console.log('[ScreenRecording] Usando getDisplayMedia (recomendado - permite cambiar entre ventanas)...');
         try {
-          // Primero intentar getDisplayMedia directamente (funciona en Electron 17+)
-          if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
-            console.log('[ScreenRecording] Intentando usar getDisplayMedia directamente...');
-            try {
-              // Usar 'any' para permitir seleccionar pantalla, ventana o pestaña
-              displayStream = await navigator.mediaDevices.getDisplayMedia({
-                video: {
-                  displaySurface: 'any', // Permite seleccionar pantalla, ventana o pestaña
-                  width: { ideal: 1920 },
-                  height: { ideal: 1080 }
-                },
-                audio: false // El audio se captura del micrófono por separado
-              });
-              console.log('[ScreenRecording] ✅ getDisplayMedia funcionó directamente');
-            } catch (getDisplayMediaError) {
-              console.warn('[ScreenRecording] getDisplayMedia falló, usando desktopCapturer:', getDisplayMediaError);
-              throw getDisplayMediaError; // Lanzar para que se use desktopCapturer
+          // Usar 'monitor' para pantalla completa - captura toda la pantalla seleccionada
+          // IMPORTANTE: Con audio: true capturamos el audio del sistema (incluye audio de otras aplicaciones)
+          // 'monitor' es mejor para capturar toda la pantalla y poder cambiar entre ventanas
+          displayStream = await navigator.mediaDevices.getDisplayMedia({
+            video: {
+              displaySurface: 'monitor', // 'monitor' para pantalla completa (mejor que 'any' para capturar todo)
+              width: { ideal: 1920 },
+              height: { ideal: 1080 },
+              cursor: 'always' // Mostrar cursor en la grabación
+            },
+            audio: {
+              echoCancellation: false, // Desactivar cancelación de eco para capturar todo el audio
+              noiseSuppression: false, // Desactivar supresión de ruido
+              autoGainControl: false, // Desactivar control automático de ganancia
+              suppressLocalAudioPlayback: false // No suprimir audio local
             }
-          } else {
-            throw new Error('getDisplayMedia no disponible');
-          }
+          });
+          console.log('[ScreenRecording] ✅ getDisplayMedia funcionó - puedes cambiar entre ventanas durante la grabación');
         } catch (getDisplayMediaError) {
-          // Si getDisplayMedia no funciona, usar desktopCapturer
-          console.log('[ScreenRecording] Usando desktopCapturer como alternativa...');
-          try {
+          console.warn('[ScreenRecording] getDisplayMedia falló, intentando desktopCapturer como alternativa:', getDisplayMediaError);
+          // Continuar con desktopCapturer solo si getDisplayMedia falla
+        }
+      }
+      
+      // Si getDisplayMedia no está disponible o falló, usar desktopCapturer (fallback)
+      if (!displayStream && window.electronAPI && window.electronAPI.getScreenSources) {
+        // Si getDisplayMedia no funciona, usar desktopCapturer
+        console.log('[ScreenRecording] Usando desktopCapturer como alternativa (limitado a una pantalla fija)...');
+        try {
             // Obtener fuentes de pantalla disponibles usando desktopCapturer
             const sources = await window.electronAPI.getScreenSources();
             if (sources.length === 0) {
               throw new Error('No se encontraron fuentes de pantalla disponibles');
             }
             
-            // Si hay múltiples fuentes y no se pasó una fuente seleccionada, usar la primera pantalla completa
+            // Si hay múltiples fuentes y no se pasó una fuente seleccionada, 
+            // preferir pantalla completa para capturar cualquier ventana
             let screenSource;
             if (selectedSource) {
               // Usar la fuente pasada como parámetro
               screenSource = selectedSource;
             } else if (sources.length > 1) {
-              // Si hay múltiples fuentes, buscar la primera pantalla completa
+              // Buscar pantalla completa primero (permite capturar cualquier ventana)
               screenSource = sources.find(s => {
                 const name = s.name.toLowerCase();
                 return name.includes('entire screen') || 
@@ -99,7 +107,7 @@ class ScreenRecordingService {
                        name.includes('screen 1') ||
                        name.includes('pantalla 1') ||
                        (name.includes('screen') && !name.includes('window'));
-              }) || sources[0];
+              }) || sources[0]; // Si no hay pantalla completa, usar la primera disponible
             } else {
               // Solo hay una fuente, usarla directamente
               screenSource = sources[0];
@@ -161,12 +169,14 @@ class ScreenRecordingService {
             if (!streamObtained) {
               throw new Error('No se pudo obtener el stream con ningún formato de constraints');
             }
-          } catch (electronError) {
-            console.error('[ScreenRecording] Error en Electron capturando pantalla:', electronError);
-            throw new Error(`Error al acceder a la pantalla: ${electronError.message || 'No se pudo acceder a la pantalla. Asegúrate de permitir el acceso.'}`);
-          }
+        } catch (electronError) {
+          console.error('[ScreenRecording] Error en Electron capturando pantalla:', electronError);
+          throw new Error(`Error al acceder a la pantalla: ${electronError.message || 'No se pudo acceder a la pantalla. Asegúrate de permitir el acceso.'}`);
         }
-      } else {
+      }
+      
+      // Si getDisplayMedia no está disponible y no hay electronAPI, usar getDisplayMedia estándar del navegador
+      if (!displayStream) {
         // En navegador, usar getDisplayMedia estándar
         if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
           throw new Error('La API de captura de pantalla no está disponible en este navegador');
@@ -174,13 +184,16 @@ class ScreenRecordingService {
         
         displayStream = await navigator.mediaDevices.getDisplayMedia({
           video: {
-            displaySurface: 'monitor',
+            displaySurface: 'monitor', // 'monitor' para pantalla completa
             width: { ideal: 1920 },
-            height: { ideal: 1080 }
+            height: { ideal: 1080 },
+            cursor: 'always'
           },
           audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
+            echoCancellation: false, // Capturar todo el audio del sistema
+            noiseSuppression: false,
+            autoGainControl: false,
+            suppressLocalAudioPlayback: false,
             sampleRate: 44100
           }
         });
@@ -430,7 +443,29 @@ class ScreenRecordingService {
       // Crear un nuevo stream desde el canvas
       const canvasStream = this.canvas.captureStream(30); // 30 FPS
       
-      // Agregar audio del micrófono
+      // Verificar si el stream tiene audio del sistema
+      const systemAudioTracks = finalStream.getAudioTracks();
+      console.log('[ScreenRecording] Audio del sistema detectado en stream:', systemAudioTracks.length, 'tracks');
+      
+      if (systemAudioTracks.length > 0) {
+        // Si hay audio del sistema, agregarlo al canvas stream
+        systemAudioTracks.forEach(track => {
+          console.log('[ScreenRecording] ✅ Track de audio del sistema agregado:', {
+            label: track.label,
+            kind: track.kind,
+            enabled: track.enabled,
+            muted: track.muted,
+            readyState: track.readyState
+          });
+          canvasStream.addTrack(track);
+        });
+      } else {
+        console.warn('[ScreenRecording] ⚠️ No se detectó audio del sistema en el stream');
+        console.warn('[ScreenRecording] Esto es normal si seleccionaste "Pantalla completa" o "Ventana" en lugar de "Pestaña del navegador"');
+        console.warn('[ScreenRecording] El audio del sistema solo está disponible cuando se selecciona una pestaña del navegador');
+      }
+      
+      // Siempre agregar audio del micrófono (para que el usuario pueda hablar)
       try {
         console.log('[ScreenRecording] Solicitando acceso al micrófono...');
         const audioStream = await navigator.mediaDevices.getUserMedia({ 
@@ -455,22 +490,16 @@ class ScreenRecordingService {
         this.audioStream = audioStream;
       } catch (audioError) {
         console.warn('[ScreenRecording] ⚠️ No se pudo obtener audio del micrófono:', audioError);
-        console.warn('[ScreenRecording] Continuando sin audio...');
-        // Continuar sin audio si el usuario no permite el acceso
+        console.warn('[ScreenRecording] Continuando sin audio del micrófono...');
+        // Continuar sin micrófono
       }
       
-      // También agregar audio del stream original si está disponible
-      finalStream.getAudioTracks().forEach(track => {
-        canvasStream.addTrack(track);
-      });
-      
-      // Crear MediaRecorder con el stream del canvas
-      this.mediaRecorder = new MediaRecorder(canvasStream, options);
-      
-      console.log('[ScreenRecording] MediaRecorder creado con stream de Canvas:', {
-        state: this.mediaRecorder.state,
-        mimeType: options.mimeType
-      });
+      // NO crear MediaRecorder aquí - se creará más adelante cuando el canvas esté listo
+      // Solo guardar las opciones y el stream para usarlos después
+      this.canvasStream = canvasStream;
+      this.mediaRecorderOptions = options; else {
+        console.warn('[ScreenRecording] MediaRecorder ya existe, estado:', this.mediaRecorder.state);
+      }
       
       // Variables para el cursor y clics
       this.mousePosition = { x: 0, y: 0 };
@@ -740,10 +769,16 @@ class ScreenRecordingService {
       });
       captureFrame();
       
-      // Configurar ondataavailable para el nuevo MediaRecorder
-      let ondataavailableCallCount = 0;
-      
-      this.mediaRecorder.ondataavailable = (event) => {
+      // Método para configurar handlers del MediaRecorder
+      this.setupMediaRecorderHandlers = () => {
+        if (!this.mediaRecorder) {
+          console.error('[ScreenRecording] No se puede configurar handlers: MediaRecorder no existe');
+          return;
+        }
+        
+        let ondataavailableCallCount = 0;
+        
+        this.mediaRecorder.ondataavailable = (event) => {
         ondataavailableCallCount++;
         const hasData = !!event.data;
         const dataSize = event.data?.size || 0;
@@ -785,18 +820,33 @@ class ScreenRecordingService {
         }
       };
       
-      this.mediaRecorder.onerror = (event) => {
-        console.error('[ScreenRecording] ❌ Error en MediaRecorder [Canvas]:', event.error);
-        this.stopRecording();
+        this.mediaRecorder.onerror = (event) => {
+          console.error('[ScreenRecording] ❌ Error en MediaRecorder [Canvas]:', event.error);
+          this.stopRecording();
+        };
       };
       
       // Manejar cuando el usuario detiene el compartir de pantalla
-      displayStream.getVideoTracks()[0].addEventListener('ended', () => {
-        console.log('[ScreenRecording] Video track terminó');
-        if (this.isRecording) {
-          this.stopRecording();
-        }
-      });
+      // También detectar cuando cambia la fuente (el usuario cambia de ventana)
+      const videoTrack = displayStream.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.addEventListener('ended', () => {
+          console.log('[ScreenRecording] Video track terminó - usuario detuvo el compartir');
+          if (this.isRecording) {
+            this.stopRecording();
+          }
+        });
+        
+        // Detectar cuando el usuario cambia de ventana/pantalla durante la grabación
+        // Esto es útil cuando se usa getDisplayMedia con displaySurface: 'any'
+        videoTrack.addEventListener('mute', () => {
+          console.log('[ScreenRecording] Video track muteado - posible cambio de ventana');
+        });
+        
+        videoTrack.addEventListener('unmute', () => {
+          console.log('[ScreenRecording] Video track desmuteado - ventana restaurada');
+        });
+      }
       
       // Verificar que el stream del canvas esté activo antes de iniciar
       console.log('[ScreenRecording] Verificando stream del Canvas:', {
@@ -810,19 +860,47 @@ class ScreenRecordingService {
         }))
       });
       
-      // Iniciar grabación con timeslice
-      // NOTA: isRecording ya se estableció antes de iniciar captureFrame
+      // Crear MediaRecorder con el stream del canvas
+      // IMPORTANTE: Crear solo una vez, después de que el canvas esté listo
       console.log('[ScreenRecording] Iniciando MediaRecorder con stream de Canvas...');
       
       // Verificar que el MediaRecorder no esté ya grabando
-      if (this.mediaRecorder.state === 'recording') {
-        console.warn('[ScreenRecording] ⚠️ MediaRecorder ya está grabando, no se puede iniciar de nuevo');
-        return { success: true, message: 'Grabación ya iniciada' };
+      if (this.mediaRecorder) {
+        if (this.mediaRecorder.state === 'recording') {
+          console.warn('[ScreenRecording] ⚠️ MediaRecorder ya está grabando, deteniendo primero...');
+          try {
+            this.mediaRecorder.stop();
+            // Esperar a que se detenga
+            await new Promise(resolve => setTimeout(resolve, 500));
+          } catch (e) {
+            console.warn('[ScreenRecording] Error al detener MediaRecorder anterior:', e);
+          }
+        }
       }
       
-      this.mediaRecorder.start(1000); // Capturar datos cada 1 segundo
+      // Crear nuevo MediaRecorder solo si no existe o está inactivo
+      if (!this.mediaRecorder || this.mediaRecorder.state === 'inactive') {
+        this.mediaRecorder = new MediaRecorder(this.canvasStream, this.mediaRecorderOptions);
+        console.log('[ScreenRecording] MediaRecorder creado:', {
+          state: this.mediaRecorder.state,
+          mimeType: this.mediaRecorderOptions.mimeType
+        });
+        
+        // Configurar handlers inmediatamente después de crear el MediaRecorder
+        this.setupMediaRecorderHandlers();
+      }
       
-      console.log('[ScreenRecording] ✅ MediaRecorder iniciado, estado:', this.mediaRecorder.state);
+      // Iniciar grabación solo si no está grabando
+      if (this.mediaRecorder && this.mediaRecorder.state !== 'recording') {
+        this.mediaRecorder.start(1000); // Capturar datos cada 1 segundo
+        console.log('[ScreenRecording] ✅ MediaRecorder iniciado, estado:', this.mediaRecorder.state);
+      } else {
+        console.warn('[ScreenRecording] MediaRecorder ya está grabando o no existe');
+      }
+      
+      if (this.mediaRecorder) {
+        console.log('[ScreenRecording] ✅ MediaRecorder iniciado, estado:', this.mediaRecorder.state);
+      }
       
       // Forzar solicitud de datos después de un momento
       setTimeout(() => {
@@ -870,6 +948,29 @@ class ScreenRecordingService {
       
       // Crear indicador visual de grabación (overlay rojo)
       this.createRecordingIndicator();
+      
+      // Iniciar captura de audio del sistema (solo en Windows)
+      // IMPORTANTE: Esto debe ejecutarse después de que el stream esté listo
+      if (window.electronAPI && window.electronAPI.startSystemAudioCapture) {
+        try {
+          const recordingId = `recording-${Date.now()}`;
+          console.log('[ScreenRecording] Iniciando captura de audio del sistema...');
+          const audioResult = await window.electronAPI.startSystemAudioCapture(recordingId);
+          if (audioResult && audioResult.success) {
+            console.log('[ScreenRecording] ✅ Captura de audio del sistema iniciada:', audioResult);
+            this.systemAudioRecordingId = recordingId;
+          } else {
+            console.error('[ScreenRecording] ❌ No se pudo iniciar captura de audio del sistema:', audioResult?.error);
+            console.error('[ScreenRecording] Asegúrate de que FFmpeg esté instalado y en el PATH');
+          }
+        } catch (audioError) {
+          console.error('[ScreenRecording] ❌ Error iniciando captura de audio del sistema:', audioError);
+          console.error('[ScreenRecording] Stack:', audioError.stack);
+          // Continuar sin audio del sistema
+        }
+      } else {
+        console.warn('[ScreenRecording] ⚠️ startSystemAudioCapture no disponible');
+      }
 
       return {
         success: true,
@@ -943,6 +1044,18 @@ class ScreenRecordingService {
       }
       
       this.isRecording = false;
+      
+      // Detener captura de audio del sistema
+      if (window.electronAPI && window.electronAPI.stopSystemAudioCapture) {
+        try {
+          const audioResult = await window.electronAPI.stopSystemAudioCapture();
+          if (audioResult && audioResult.success) {
+            console.log('[ScreenRecording] ✅ Captura de audio del sistema detenida');
+          }
+        } catch (audioError) {
+          console.warn('[ScreenRecording] ⚠️ Error deteniendo captura de audio del sistema:', audioError);
+        }
+      }
 
       // Esperar un momento adicional para que se procesen todos los datos
       await new Promise(resolve => setTimeout(resolve, 300));
@@ -1100,19 +1213,57 @@ class ScreenRecordingService {
   }
 
   /**
-   * Crear indicador visual de grabación
+   * Crear indicador visual de grabación con borde rojo alrededor de toda la pantalla
    */
   createRecordingIndicator() {
     // Remover indicador anterior si existe
     this.removeRecordingIndicator();
     
+    // Crear borde rojo con rayitas alrededor de toda la pantalla
+    const borderIndicator = document.createElement('div');
+    borderIndicator.id = 'screen-recording-border-indicator';
+    borderIndicator.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 999998;
+      box-sizing: border-box;
+      border: 4px dashed rgba(220, 38, 38, 0.8);
+      animation: recording-border-pulse 1.5s infinite;
+    `;
+    
+    // Agregar animación de pulso para el borde
+    const borderStyle = document.createElement('style');
+    borderStyle.textContent = `
+      @keyframes recording-border-pulse {
+        0%, 100% { 
+          border-color: rgba(220, 38, 38, 0.8);
+          box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4);
+        }
+        50% { 
+          border-color: rgba(220, 38, 38, 1);
+          box-shadow: 0 0 20px 5px rgba(220, 38, 38, 0.6);
+        }
+      }
+    `;
+    if (!document.getElementById('recording-border-style')) {
+      borderStyle.id = 'recording-border-style';
+      document.head.appendChild(borderStyle);
+    }
+    
+    document.body.appendChild(borderIndicator);
+    
+    // También crear el indicador de texto en la esquina
     const indicator = document.createElement('div');
     indicator.id = 'screen-recording-indicator';
     indicator.style.cssText = `
       position: fixed;
       top: 20px;
       right: 20px;
-      background: rgba(220, 38, 38, 0.9);
+      background: rgba(220, 38, 38, 0.95);
       color: white;
       padding: 12px 20px;
       border-radius: 8px;
@@ -1176,12 +1327,24 @@ class ScreenRecordingService {
     if (indicator) {
       indicator.remove();
     }
+    const borderIndicator = document.getElementById('screen-recording-border-indicator');
+    if (borderIndicator) {
+      borderIndicator.remove();
+    }
   }
 
   /**
    * Limpiar recursos
    */
   cleanup() {
+    // NO limpiar elementos activos durante la grabación
+    if (this.isRecording) {
+      console.warn('[ScreenRecording] ⚠️ cleanup() llamado durante grabación, omitiendo limpieza de elementos activos');
+      // Solo limpiar el indicador visual
+      this.removeRecordingIndicator();
+      return;
+    }
+    
     // Remover indicador visual
     this.removeRecordingIndicator();
     

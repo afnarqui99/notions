@@ -802,6 +802,31 @@ export function getSlashCommandItems() {
       },
     },
     {
+      icon: '🔐',
+      label: 'SFTP',
+      description: 'Conectar y gestionar archivos mediante SFTP (SSH File Transfer Protocol) - Conexión segura',
+      keywords: ['sftp', 'ssh', 'secure', 'ftp', 'archivos', 'servidor', 'transfer', 'file', 'seguro', 'conexion'],
+      command: ({ editor, range }) => {
+        editor.chain().focus().deleteRange(range).run();
+        editor.chain().focus().insertContent({
+          type: 'sftpBlock',
+          attrs: {
+            host: '',
+            port: 22,
+            username: '',
+            password: '',
+            privateKey: '',
+            passphrase: '',
+            connectionId: null,
+            connectionName: '',
+            isConnected: false,
+            currentPath: '/',
+            usePrivateKey: false,
+          },
+        }).run();
+      },
+    },
+    {
       icon: '🖼️',
       label: 'Insertar imagen',
       description: 'Sube una imagen con título, descripción y fecha',
