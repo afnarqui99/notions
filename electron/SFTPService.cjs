@@ -7,6 +7,9 @@ const Client = require('ssh2-sftp-client');
 const fs = require('fs');
 const path = require('path');
 const { app } = require('electron');
+const { exec } = require('child_process');
+const { promisify } = require('util');
+const execAsync = promisify(exec);
 
 class SFTPService {
   constructor() {
@@ -71,19 +74,68 @@ class SFTPService {
 
       // Agregar autenticación: contraseña o clave privada
       if (config.privateKey) {
+        let privateKeyContent = '';
+        let isTemporaryFile = false;
+        let tempKeyPath = null;
+        
         // Verificar si es una ruta de archivo o el contenido de la clave privada
         if (config.privateKey.includes('-----BEGIN') || config.privateKey.includes('-----BEGIN OPENSSH')) {
           // Es el contenido de la clave privada directamente
-          connectionConfig.privateKey = config.privateKey;
+          privateKeyContent = config.privateKey;
+          
+          // Si es formato OpenSSH, guardar temporalmente en un archivo
+          // porque ssh2-sftp-client puede tener problemas con el formato OpenSSH como string
+          if (privateKeyContent.includes('-----BEGIN OPENSSH PRIVATE KEY-----')) {
+            // Crear archivo temporal para la clave privada
+            const tempDir = app.getPath('temp');
+            tempKeyPath = path.join(tempDir, `sftp_key_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
+            
+            // Normalizar saltos de línea
+            privateKeyContent = privateKeyContent.trim();
+            privateKeyContent = privateKeyContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+            
+            // Guardar en archivo temporal
+            fs.writeFileSync(tempKeyPath, privateKeyContent, { mode: 0o600 }); // Permisos restrictivos
+            isTemporaryFile = true;
+            
+            // ssh2 puede tener problemas con formato OpenSSH como string
+            // Intentar usar Buffer o la ruta del archivo
+            // Primero intentar con Buffer
+            try {
+              connectionConfig.privateKey = Buffer.from(privateKeyContent);
+            } catch (bufferError) {
+              // Si falla, usar la ruta del archivo
+              connectionConfig.privateKey = tempKeyPath;
+            }
+          } else {
+            // Formato PEM tradicional, usar directamente
+            privateKeyContent = privateKeyContent.trim();
+            privateKeyContent = privateKeyContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+            connectionConfig.privateKey = privateKeyContent;
+          }
         } else if (fs.existsSync(config.privateKey)) {
           // Es una ruta de archivo, leer el contenido
-          connectionConfig.privateKey = fs.readFileSync(config.privateKey, 'utf8');
+          privateKeyContent = fs.readFileSync(config.privateKey, 'utf8');
+          connectionConfig.privateKey = privateKeyContent;
         } else {
           throw new Error('El archivo de clave privada no existe o el formato de la clave es inválido');
         }
         
+        // Configurar algoritmos permitidos para mejor compatibilidad
+        connectionConfig.algorithms = {
+          serverHostKey: ['ssh-rsa', 'ssh-dss', 'ecdsa-sha2-nistp256', 'ecdsa-sha2-nistp384', 'ecdsa-sha2-nistp521', 'ssh-ed25519', 'rsa-sha2-256', 'rsa-sha2-512']
+        };
+        
+        // Intentar con tryAgent: false para evitar problemas con agent
+        connectionConfig.tryAgent = false;
+        
         if (config.passphrase) {
           connectionConfig.passphrase = config.passphrase;
+        }
+        
+        // Guardar referencia al archivo temporal para limpiarlo después
+        if (isTemporaryFile && tempKeyPath) {
+          connectionConfig._tempKeyPath = tempKeyPath;
         }
       } else if (config.password) {
         connectionConfig.password = config.password;
@@ -121,8 +173,22 @@ class SFTPService {
           password: undefined, // No guardar contraseña en memoria
           privateKey: undefined // No guardar clave privada en memoria
         },
-        currentPath
+        currentPath,
+        tempKeyPath: connectionConfig._tempKeyPath || null // Guardar ruta temporal para limpiar después
       });
+      
+      // Limpiar archivo temporal si existe (después de un breve delay para asegurar que se usó)
+      if (connectionConfig._tempKeyPath) {
+        setTimeout(() => {
+          try {
+            if (fs.existsSync(connectionConfig._tempKeyPath)) {
+              fs.unlinkSync(connectionConfig._tempKeyPath);
+            }
+          } catch (cleanupError) {
+            console.warn('No se pudo eliminar archivo temporal de clave:', cleanupError);
+          }
+        }, 5000); // Limpiar después de 5 segundos
+      }
 
       return {
         success: true,
@@ -131,9 +197,29 @@ class SFTPService {
       };
     } catch (error) {
       console.error('Error al conectar SFTP:', error);
+      
+      // Limpiar archivo temporal si existe y hubo error
+      if (connectionConfig && connectionConfig._tempKeyPath) {
+        try {
+          if (fs.existsSync(connectionConfig._tempKeyPath)) {
+            fs.unlinkSync(connectionConfig._tempKeyPath);
+          }
+        } catch (cleanupError) {
+          console.warn('No se pudo eliminar archivo temporal de clave:', cleanupError);
+        }
+      }
+      
+      // Mensaje de error más descriptivo para problemas de formato de clave
+      let errorMessage = error.message || 'Error desconocido al conectar';
+      if (errorMessage.includes('Unsupported key format') || errorMessage.includes('cannot parse privateKey')) {
+        errorMessage = 'Formato de clave privada no compatible. ' +
+          'Si estás usando formato OpenSSH, intenta convertirla a formato PEM usando: ' +
+          'ssh-keygen -p -N "" -m pem -f ruta_a_tu_clave';
+      }
+      
       return {
         success: false,
-        error: error.message || 'Error desconocido al conectar'
+        error: errorMessage
       };
     }
   }
@@ -147,6 +233,16 @@ class SFTPService {
       const connection = this.connections.get(connectionId);
       if (connection && connection.client) {
         await connection.client.end();
+        
+        // Limpiar archivo temporal de clave privada si existe
+        if (connection.tempKeyPath && fs.existsSync(connection.tempKeyPath)) {
+          try {
+            fs.unlinkSync(connection.tempKeyPath);
+          } catch (cleanupError) {
+            console.warn('No se pudo eliminar archivo temporal de clave:', cleanupError);
+          }
+        }
+        
         this.connections.delete(connectionId);
       }
     } catch (error) {
