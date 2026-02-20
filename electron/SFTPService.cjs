@@ -19,6 +19,57 @@ class SFTPService {
   }
 
   /**
+   * Convierte una clave OpenSSH a formato PEM usando ssh-keygen
+   * @param {string} openSshKeyContent - Contenido de la clave OpenSSH
+   * @param {string} passphrase - Frase de contraseña (opcional)
+   * @returns {Promise<string>} - Ruta al archivo PEM temporal
+   */
+  async convertOpenSSHToPEM(openSshKeyContent, passphrase = '') {
+    const tempDir = app.getPath('temp');
+    const tempOpenSSHPath = path.join(tempDir, `sftp_key_openssh_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
+
+    try {
+      // Guardar clave OpenSSH temporalmente
+      fs.writeFileSync(tempOpenSSHPath, openSshKeyContent, { mode: 0o600 });
+      
+      // Intentar convertir usando ssh-keygen
+      // ssh-keygen -p -N "" -m pem -f ruta_a_clave
+      const passphraseArg = passphrase ? `-P "${passphrase.replace(/"/g, '\\"')}"` : '-N ""';
+      const command = `ssh-keygen -p ${passphraseArg} -m pem -f "${tempOpenSSHPath.replace(/"/g, '\\"')}"`;
+      
+      try {
+        await execAsync(command);
+        
+        // Leer el archivo PEM convertido (el mismo archivo ahora está en formato PEM)
+        const pemContent = fs.readFileSync(tempOpenSSHPath, 'utf8');
+        
+        // Renombrar el archivo para indicar que es PEM
+        const tempPEMPath = tempOpenSSHPath.replace('openssh', 'pem');
+        fs.writeFileSync(tempPEMPath, pemContent, { mode: 0o600 });
+        
+        // Limpiar archivo OpenSSH temporal
+        if (fs.existsSync(tempOpenSSHPath)) {
+          fs.unlinkSync(tempOpenSSHPath);
+        }
+        
+        return tempPEMPath;
+      } catch (convertError) {
+        // Si la conversión falla, limpiar y lanzar error
+        if (fs.existsSync(tempOpenSSHPath)) {
+          fs.unlinkSync(tempOpenSSHPath);
+        }
+        throw new Error(`No se pudo convertir la clave OpenSSH a PEM. Asegúrate de que ssh-keygen esté instalado. Error: ${convertError.message}`);
+      }
+    } catch (error) {
+      // Limpiar archivos temporales en caso de error
+      if (fs.existsSync(tempOpenSSHPath)) {
+        try { fs.unlinkSync(tempOpenSSHPath); } catch {}
+      }
+      throw error;
+    }
+  }
+
+  /**
    * Cargar conexiones guardadas desde el archivo
    */
   loadSavedConnections() {
@@ -85,25 +136,36 @@ class SFTPService {
           // Es el contenido de la clave privada directamente
           privateKeyContent = config.privateKey;
           
-          // Si es formato OpenSSH, guardar temporalmente en un archivo
-          // porque ssh2-sftp-client puede tener problemas con el formato OpenSSH como string
+          // Si es formato OpenSSH, intentar convertir a PEM automáticamente
+          // porque ssh2-sftp-client tiene problemas con el formato OpenSSH
           if (privateKeyContent.includes('-----BEGIN OPENSSH PRIVATE KEY-----')) {
-            // Crear archivo temporal para la clave privada
-            const tempDir = app.getPath('temp');
-            tempKeyPath = path.join(tempDir, `sftp_key_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
-            
             // Normalizar saltos de línea
             privateKeyContent = privateKeyContent.trim();
             privateKeyContent = privateKeyContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
             
-            // Guardar en archivo temporal con permisos restrictivos
-            fs.writeFileSync(tempKeyPath, privateKeyContent, { mode: 0o600 });
-            isTemporaryFile = true;
-            
-            // Para formato OpenSSH, ssh2 funciona mejor con la ruta del archivo
-            // Algunas versiones de ssh2 no soportan OpenSSH como Buffer o string
-            // Usar la ruta del archivo directamente
-            connectionConfig.privateKey = tempKeyPath;
+            try {
+              // Intentar convertir OpenSSH a PEM automáticamente
+              const pemPath = await this.convertOpenSSHToPEM(privateKeyContent, config.passphrase);
+              tempKeyPath = pemPath;
+              isTemporaryFile = true;
+              
+              // Usar el archivo PEM convertido
+              connectionConfig.privateKey = pemPath;
+            } catch (convertError) {
+              // Si la conversión falla, intentar usar OpenSSH directamente como último recurso
+              console.warn('No se pudo convertir OpenSSH a PEM, intentando usar OpenSSH directamente:', convertError.message);
+              
+              // Crear archivo temporal para la clave OpenSSH
+              const tempDir = app.getPath('temp');
+              tempKeyPath = path.join(tempDir, `sftp_key_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
+              
+              // Guardar en archivo temporal con permisos restrictivos
+              fs.writeFileSync(tempKeyPath, privateKeyContent, { mode: 0o600 });
+              isTemporaryFile = true;
+              
+              // Intentar usar la ruta del archivo (último recurso)
+              connectionConfig.privateKey = tempKeyPath;
+            }
           } else {
             // Formato PEM tradicional, usar directamente
             privateKeyContent = privateKeyContent.trim();
@@ -116,9 +178,19 @@ class SFTPService {
           
           // Verificar si es formato OpenSSH
           if (privateKeyContent.includes('-----BEGIN OPENSSH PRIVATE KEY-----')) {
-            // Para OpenSSH desde archivo, usar la ruta directamente
-            // ssh2 puede tener problemas con OpenSSH como Buffer o string
-            connectionConfig.privateKey = config.privateKey; // Usar la ruta del archivo
+            try {
+              // Intentar convertir OpenSSH a PEM automáticamente
+              const pemPath = await this.convertOpenSSHToPEM(privateKeyContent, config.passphrase);
+              tempKeyPath = pemPath;
+              isTemporaryFile = true;
+              
+              // Usar el archivo PEM convertido
+              connectionConfig.privateKey = pemPath;
+            } catch (convertError) {
+              // Si la conversión falla, intentar usar el archivo OpenSSH directamente
+              console.warn('No se pudo convertir OpenSSH a PEM, intentando usar archivo OpenSSH directamente:', convertError.message);
+              connectionConfig.privateKey = config.privateKey; // Usar la ruta del archivo original
+            }
           } else {
             // Para formato PEM tradicional, usar string
             connectionConfig.privateKey = privateKeyContent;
