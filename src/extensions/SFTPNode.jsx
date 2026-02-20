@@ -537,13 +537,23 @@ export default function SFTPNode({ node, updateAttributes, editor, getPos }) {
                         <textarea
                           value={privateKey}
                           onChange={(e) => setPrivateKey(e.target.value)}
-                          placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;...&#10;-----END OPENSSH PRIVATE KEY-----&#10;&#10;O ruta: /ruta/a/clave_privada"
-                          rows={6}
+                          placeholder="OPCIÓN 1: Pegar contenido completo (PEM recomendado):&#10;-----BEGIN RSA PRIVATE KEY-----&#10;...&#10;-----END RSA PRIVATE KEY-----&#10;&#10;OPCIÓN 2: Ruta de archivo (Windows):&#10;C:\\Users\\TuUsuario\\.ssh\\mi_clave.txt"
+                          rows={8}
                           className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-gray-100 font-mono text-sm"
                         />
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                          Puedes pegar el contenido completo de la clave privada (incluyendo BEGIN/END) o la ruta al archivo
-                        </p>
+                        <div className="mt-2 space-y-1">
+                          <p className="text-xs text-gray-600 dark:text-gray-400 font-medium">
+                            ✅ Formatos soportados:
+                          </p>
+                          <ul className="text-xs text-gray-500 dark:text-gray-400 ml-4 list-disc space-y-0.5">
+                            <li><strong>PEM (recomendado):</strong> -----BEGIN RSA PRIVATE KEY----- o -----BEGIN PRIVATE KEY-----</li>
+                            <li><strong>OpenSSH:</strong> Se convertirá automáticamente a PEM (requiere ssh-keygen instalado)</li>
+                            <li><strong>Ruta de archivo:</strong> Ruta completa a tu archivo de clave (ej: C:\Users\Juan\.ssh\mi_clave.txt)</li>
+                          </ul>
+                          <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
+                            💡 <strong>Tip:</strong> Si generaste una clave PEM con ssh-keygen, pega todo el contenido del archivo aquí.
+                          </p>
+                        </div>
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">

@@ -311,8 +311,18 @@ class SFTPService {
               throw new Error(errorMsg);
             }
           } else {
-            // Para formato PEM tradicional, usar string
-            connectionConfig.privateKey = privateKeyContent;
+            // Formato PEM tradicional (RSA, DSA, ECDSA, etc.)
+            // Normalizar saltos de línea
+            privateKeyContent = privateKeyContent.trim();
+            privateKeyContent = privateKeyContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+            
+            // Verificar que sea un formato PEM válido
+            if (privateKeyContent.includes('-----BEGIN') && privateKeyContent.includes('-----END')) {
+              console.log('[SFTP] Clave PEM detectada, usando directamente');
+              connectionConfig.privateKey = privateKeyContent;
+            } else {
+              throw new Error('Formato de clave no reconocido. Debe ser formato PEM (BEGIN/END) o OpenSSH.');
+            }
           }
         } else {
           throw new Error('El archivo de clave privada no existe o el formato de la clave es inválido');
@@ -342,18 +352,42 @@ class SFTPService {
 
       // Conectar al servidor
       console.log('[SFTP] Intentando conectar a', config.host, 'puerto', config.port || 22);
+      console.log('[SFTP] Usuario:', config.username);
       console.log('[SFTP] Usando autenticación:', config.privateKey ? 'Clave privada' : 'Contraseña');
+      if (config.privateKey) {
+        const keyType = typeof connectionConfig.privateKey === 'string' && connectionConfig.privateKey.includes('BEGIN') 
+          ? 'Contenido directo' 
+          : 'Archivo';
+        console.log('[SFTP] Tipo de clave:', keyType);
+      }
       
       try {
         await client.connect(connectionConfig);
-        console.log('[SFTP] Conexión establecida exitosamente');
+        console.log('[SFTP] ✅ Conexión establecida exitosamente');
       } catch (connectError) {
-        console.error('[SFTP] Error al conectar:', connectError);
+        console.error('[SFTP] ❌ Error al conectar:', connectError);
         console.error('[SFTP] Detalles del error:', {
           message: connectError.message,
           code: connectError.code,
+          level: connectError.level,
           stack: connectError.stack
         });
+        
+        // Log adicional para errores de autenticación
+        if (connectError.message && (
+          connectError.message.toLowerCase().includes('authentication') || 
+          connectError.message.toLowerCase().includes('auth') ||
+          connectError.message.toLowerCase().includes('failed') ||
+          connectError.message.toLowerCase().includes('all configured')
+        )) {
+          console.error('[SFTP] ⚠️ Error de autenticación detectado');
+          console.error('[SFTP] Verifica:');
+          console.error('[SFTP]   - Usuario correcto:', config.username);
+          console.error('[SFTP]   - Clave pública agregada al servidor (authorized_keys)');
+          console.error('[SFTP]   - Clave privada corresponde a la clave pública');
+          console.error('[SFTP]   - Host y puerto correctos');
+        }
+        
         throw connectError;
       }
 
@@ -426,7 +460,7 @@ class SFTPService {
         }
       }
       
-      // Mensaje de error más descriptivo para problemas de formato de clave
+      // Mensaje de error más descriptivo
       let errorMessage = error.message || 'Error desconocido al conectar';
       
       // Si el error ya tiene un mensaje detallado (de nuestra conversión), usarlo
@@ -446,6 +480,35 @@ class SFTPService {
           `   https://git-scm.com/download/win\n\n` +
           `3. O usa una clave en formato PEM tradicional (RSA, DSA, ECDSA)\n\n` +
           `NOTA: Revisa la consola para más detalles del error.`;
+      } else if (errorMessage.includes('all configured authentication methods failed') ||
+                 (errorMessage.toLowerCase().includes('authentication') && errorMessage.toLowerCase().includes('failed')) ||
+                 errorMessage.includes('Authentication failed')) {
+        // Error de autenticación - la clave se lee bien pero no autentica
+        errorMessage = `❌ ERROR: Autenticación fallida.\n\n` +
+          `La clave privada se leyó correctamente, pero el servidor rechazó la autenticación.\n\n` +
+          `ERROR ORIGINAL: ${error.message}\n\n` +
+          `🔍 DIAGNÓSTICO:\n` +
+          `• Usuario: ${config.username || 'NO ESPECIFICADO'}\n` +
+          `• Host: ${config.host || 'NO ESPECIFICADO'}\n` +
+          `• Puerto: ${config.port || 22}\n` +
+          `• Tipo de clave: ${config.privateKey ? 'Clave privada' : 'Contraseña'}\n\n` +
+          `💡 SOLUCIÓN PRINCIPAL:\n\n` +
+          `Si generaste una NUEVA clave PEM, esa clave NO está autorizada en el servidor.\n\n` +
+          `OPCIÓN 1: Usar la MISMA clave que funciona con Python (Recomendado)\n` +
+          `1. Toma la clave OpenSSH que usas con Python (paramiko)\n` +
+          `2. Conviértela a PEM: ssh-keygen -p -N "" -m pem -f ruta_a_tu_clave_original\n` +
+          `3. Usa esa clave convertida en esta aplicación\n` +
+          `4. Esta clave YA está autorizada en el servidor\n\n` +
+          `OPCIÓN 2: Agregar la nueva clave pública al servidor\n` +
+          `1. Abre tu archivo .pub (ej: mi_clave.txt.pub)\n` +
+          `2. Copia todo su contenido\n` +
+          `3. Conéctate al servidor (puedes usar tu script de Python)\n` +
+          `4. Agrega el contenido al archivo ~/.ssh/authorized_keys\n` +
+          `5. Guarda y prueba la conexión nuevamente\n\n` +
+          `OPCIÓN 3: Usar contraseña temporalmente\n` +
+          `• Si tienes acceso con contraseña, úsala para verificar que la conexión funciona\n` +
+          `• Luego agrega la clave pública al servidor\n\n` +
+          `NOTA: Revisa la consola (F12) para más detalles del error.`;
       }
       
       return {
