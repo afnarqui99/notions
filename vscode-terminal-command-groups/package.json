@@ -2,7 +2,7 @@
   "name": "terminal-command-groups",
   "displayName": "afnarqui Terminal Command Groups",
   "description": "Organiza y gestiona comandos de terminal agrupados por categorías",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "publisher": "afnarqui",
   "engines": {
     "vscode": ">=1.74.0"
@@ -29,67 +29,67 @@
     "commands": [
       {
         "command": "terminalCommandGroups.manageGroups",
-        "title": "Manage Command Groups",
+        "title": "AFN: Manage Command Groups",
         "category": "Terminal Command Groups"
       },
       {
         "command": "terminalCommandGroups.showCommands",
-        "title": "Show Saved Commands",
+        "title": "AFN: Show Saved Commands",
         "category": "Terminal Command Groups"
       },
       {
         "command": "terminalCommandGroups.selectWorkspace",
-        "title": "Select Workspace for Commands",
+        "title": "AFN: Select Workspace for Commands",
         "category": "Terminal Command Groups"
       },
       {
         "command": "terminalCommandGroups.addCommand",
-        "title": "Add Current Command to Group",
+        "title": "AFN: Add Current Command to Group",
         "category": "Terminal Command Groups"
       },
       {
         "command": "terminalCommandGroups.executeCommand",
-        "title": "Execute Command",
+        "title": "AFN: Execute Command",
         "category": "Terminal Command Groups"
       },
       {
         "command": "terminalCommandGroups.copyCommand",
-        "title": "Copy Command",
+        "title": "AFN: Copy Command",
         "category": "Terminal Command Groups"
       },
       {
         "command": "terminalCommandGroups.copyTerminalContent",
-        "title": "Copy Terminal Content",
+        "title": "AFN: Copy Terminal Content",
         "category": "Terminal Command Groups"
       },
       {
         "command": "terminalCommandGroups.copyTerminalSelection",
-        "title": "Copy Terminal Selection",
+        "title": "AFN: Copy Terminal Selection",
         "category": "Terminal Command Groups"
       },
       {
         "command": "terminalCommandGroups.deleteCommand",
-        "title": "Delete Command",
+        "title": "AFN: Delete Command",
         "category": "Terminal Command Groups"
       },
       {
         "command": "terminalCommandGroups.refresh",
-        "title": "Refresh",
+        "title": "AFN: Refresh",
         "category": "Terminal Command Groups"
       },
       {
         "command": "terminalCommandGroups.showStats",
-        "title": "Show Statistics",
+        "title": "AFN: Show Statistics",
         "category": "Terminal Command Groups"
       },
       {
         "command": "terminalCommandGroups.exportGroups",
-        "title": "Export Groups",
+        "title": "AFN: Export Groups",
         "category": "Terminal Command Groups"
       },
       {
         "command": "terminalCommandGroups.importGroups",
-        "title": "Import Groups",
+        "title": "AFN: Import Groups",
         "category": "Terminal Command Groups"
       }
     ],

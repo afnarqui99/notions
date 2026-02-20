@@ -59,10 +59,13 @@ class SFTPService {
    * @returns {Promise<Object>} - { success: boolean, connectionId?: string, error?: string }
    */
   async connect(config) {
+    let tempKeyPath = null; // Variable para limpiar archivo temporal en caso de error
+    let connectionConfig = null; // Variable para acceso en catch
+    
     try {
       const client = new Client();
       
-      const connectionConfig = {
+      connectionConfig = {
         host: config.host,
         port: config.port || 22,
         username: config.username,
@@ -76,7 +79,6 @@ class SFTPService {
       if (config.privateKey) {
         let privateKeyContent = '';
         let isTemporaryFile = false;
-        let tempKeyPath = null;
         
         // Verificar si es una ruta de archivo o el contenido de la clave privada
         if (config.privateKey.includes('-----BEGIN') || config.privateKey.includes('-----BEGIN OPENSSH')) {
@@ -199,10 +201,11 @@ class SFTPService {
       console.error('Error al conectar SFTP:', error);
       
       // Limpiar archivo temporal si existe y hubo error
-      if (connectionConfig && connectionConfig._tempKeyPath) {
+      const keyPathToClean = tempKeyPath || (connectionConfig && connectionConfig._tempKeyPath);
+      if (keyPathToClean) {
         try {
-          if (fs.existsSync(connectionConfig._tempKeyPath)) {
-            fs.unlinkSync(connectionConfig._tempKeyPath);
+          if (fs.existsSync(keyPathToClean)) {
+            fs.unlinkSync(keyPathToClean);
           }
         } catch (cleanupError) {
           console.warn('No se pudo eliminar archivo temporal de clave:', cleanupError);
