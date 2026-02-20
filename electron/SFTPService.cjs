@@ -20,15 +20,38 @@ class SFTPService {
 
   /**
    * Verifica si ssh-keygen está disponible en el sistema
-   * @returns {Promise<boolean>} - true si está disponible
+   * @returns {Promise<{available: boolean, path?: string, error?: string}>}
    */
   async isSSHKeygenAvailable() {
     try {
       // Intentar ejecutar ssh-keygen --version
-      await execAsync('ssh-keygen -V 2>&1 || ssh-keygen --version 2>&1');
-      return true;
+      await execAsync('ssh-keygen -V 2>&1 || ssh-keygen --version 2>&1', { timeout: 5000 });
+      return { available: true, path: 'ssh-keygen' };
     } catch (error) {
-      return false;
+      // En Windows, buscar en rutas comunes de Git Bash
+      if (process.platform === 'win32') {
+        const gitBashPaths = [
+          'C:\\Program Files\\Git\\usr\\bin\\ssh-keygen.exe',
+          'C:\\Program Files (x86)\\Git\\usr\\bin\\ssh-keygen.exe',
+          process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Programs\\Git\\usr\\bin\\ssh-keygen.exe') : null
+        ].filter(Boolean);
+
+        for (const gitBashPath of gitBashPaths) {
+          if (fs.existsSync(gitBashPath)) {
+            try {
+              await execAsync(`"${gitBashPath}" -V 2>&1`, { timeout: 5000 });
+              return { available: true, path: gitBashPath };
+            } catch (e) {
+              continue;
+            }
+          }
+        }
+      }
+      
+      return { 
+        available: false, 
+        error: 'ssh-keygen no está disponible. Instala Git para Windows o OpenSSH.' 
+      };
     }
   }
 
@@ -40,10 +63,23 @@ class SFTPService {
    */
   async convertOpenSSHToPEM(openSshKeyContent, passphrase = '') {
     // Verificar si ssh-keygen está disponible
-    const isAvailable = await this.isSSHKeygenAvailable();
-    if (!isAvailable) {
-      throw new Error('ssh-keygen no está disponible en tu sistema. Por favor, instálalo o convierte la clave manualmente a formato PEM.');
+    const sshKeygenInfo = await this.isSSHKeygenAvailable();
+    if (!sshKeygenInfo.available) {
+      const errorMsg = `❌ ssh-keygen NO está disponible en tu sistema.\n\n` +
+        `Para convertir claves OpenSSH a PEM, necesitas ssh-keygen.\n\n` +
+        `OPCIONES:\n` +
+        `1. Instala Git para Windows (recomendado):\n` +
+        `   https://git-scm.com/download/win\n` +
+        `   (Incluye ssh-keygen automáticamente)\n\n` +
+        `2. O instala OpenSSH desde Windows:\n` +
+        `   Configuración > Aplicaciones > Características opcionales > OpenSSH Client\n\n` +
+        `3. O convierte la clave manualmente una vez:\n` +
+        `   ssh-keygen -p -N "" -m pem -f ruta_a_tu_clave\n\n` +
+        `Después de instalar, reinicia la aplicación.`;
+      throw new Error(errorMsg);
     }
+    
+    const sshKeygenPath = sshKeygenInfo.path;
 
     const tempDir = app.getPath('temp');
     const tempOpenSSHPath = path.join(tempDir, `sftp_key_openssh_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
@@ -56,43 +92,25 @@ class SFTPService {
       // ssh-keygen -p -N "" -m pem -f ruta_a_clave
       const passphraseArg = passphrase ? `-P "${passphrase.replace(/"/g, '\\"')}"` : '-N ""';
       
-      // En Windows, puede estar en diferentes ubicaciones
-      let command = `ssh-keygen -p ${passphraseArg} -m pem -f "${tempOpenSSHPath.replace(/"/g, '\\"')}"`;
+      // Usar la ruta de ssh-keygen que encontramos
+      const command = sshKeygenPath.includes(' ') || sshKeygenPath.includes('.exe')
+        ? `"${sshKeygenPath}" -p ${passphraseArg} -m pem -f "${tempOpenSSHPath.replace(/"/g, '\\"')}"`
+        : `${sshKeygenPath} -p ${passphraseArg} -m pem -f "${tempOpenSSHPath.replace(/"/g, '\\"')}"`;
       
-      // Si estamos en Windows, intentar también con la ruta completa de Git Bash
-      if (process.platform === 'win32') {
-        // Intentar primero con ssh-keygen del PATH
-        try {
-          await execAsync(command, { timeout: 10000 });
-        } catch (error) {
-          // Si falla, intentar con Git Bash
-          const gitBashPaths = [
-            'C:\\Program Files\\Git\\usr\\bin\\ssh-keygen.exe',
-            'C:\\Program Files (x86)\\Git\\usr\\bin\\ssh-keygen.exe',
-            process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Programs\\Git\\usr\\bin\\ssh-keygen.exe') : null
-          ].filter(Boolean);
-
-          let converted = false;
-          for (const gitBashPath of gitBashPaths) {
-            if (fs.existsSync(gitBashPath)) {
-              command = `"${gitBashPath}" -p ${passphraseArg} -m pem -f "${tempOpenSSHPath.replace(/"/g, '\\"')}"`;
-              try {
-                await execAsync(command, { timeout: 10000 });
-                converted = true;
-                break;
-              } catch (e) {
-                continue;
-              }
-            }
-          }
-
-          if (!converted) {
-            throw error;
-          }
+      console.log('[SFTP] Ejecutando conversión con:', sshKeygenPath);
+      console.log('[SFTP] Comando:', command);
+      
+      try {
+        const { stdout, stderr } = await execAsync(command, { timeout: 15000 });
+        if (stderr && !stderr.includes('Your identification has been saved')) {
+          console.warn('[SFTP] Advertencia de ssh-keygen:', stderr);
         }
-      } else {
-        // En Linux/Mac, usar directamente
-        await execAsync(command, { timeout: 10000 });
+        console.log('[SFTP] Conversión completada exitosamente');
+      } catch (convertExecError) {
+        console.error('[SFTP] Error al ejecutar ssh-keygen:', convertExecError);
+        console.error('[SFTP] stdout:', convertExecError.stdout);
+        console.error('[SFTP] stderr:', convertExecError.stderr);
+        throw new Error(`Error al ejecutar ssh-keygen: ${convertExecError.message}\n\nAsegúrate de que ssh-keygen esté correctamente instalado y funcional.`);
       }
       
       // Leer el archivo PEM convertido (el mismo archivo ahora está en formato PEM)
@@ -205,30 +223,52 @@ class SFTPService {
             
             // Para OpenSSH, ssh2-sftp-client NO lo soporta directamente
             // Intentar convertir a PEM, pero si falla, mostrar error claro
+            // Verificar primero si ssh-keygen está disponible ANTES de intentar convertir
+            console.log('[SFTP] Detectada clave OpenSSH, verificando disponibilidad de ssh-keygen...');
+            const sshKeygenInfo = await this.isSSHKeygenAvailable();
+            
+            if (!sshKeygenInfo.available) {
+              // ssh-keygen NO está disponible, mostrar error claro inmediatamente
+              const errorMsg = `❌ ERROR: Formato de clave OpenSSH detectado, pero ssh-keygen NO está disponible.\n\n` +
+                `La librería ssh2-sftp-client NO soporta claves OpenSSH directamente.\n\n` +
+                `SOLUCIONES (elige una):\n\n` +
+                `1. INSTALA GIT PARA WINDOWS (recomendado - más fácil):\n` +
+                `   • Descarga: https://git-scm.com/download/win\n` +
+                `   • Instala Git (incluye ssh-keygen automáticamente)\n` +
+                `   • Reinicia esta aplicación\n` +
+                `   • La conversión será automática la próxima vez\n\n` +
+                `2. O CONVIERTE LA CLAVE MANUALMENTE (una sola vez):\n` +
+                `   • Abre PowerShell o CMD\n` +
+                `   • Ejecuta: ssh-keygen -p -N "" -m pem -f ruta_completa_a_tu_clave\n` +
+                `   • Usa la clave convertida en esta aplicación\n\n` +
+                `3. O USA UNA CLAVE EN FORMATO PEM (RSA, DSA, ECDSA)\n` +
+                `   • Genera una nueva clave: ssh-keygen -t rsa -b 4096 -m pem\n\n` +
+                `NOTA: Si ya tienes Git instalado, asegúrate de reiniciar la aplicación.`;
+              
+              throw new Error(errorMsg);
+            }
+            
+            // ssh-keygen está disponible, intentar convertir
             try {
-              console.log('[SFTP] Detectada clave OpenSSH, intentando convertir a PEM...');
+              console.log('[SFTP] ssh-keygen disponible, iniciando conversión a PEM...');
               const pemPath = await this.convertOpenSSHToPEM(privateKeyContent, config.passphrase);
               tempKeyPath = pemPath;
               isTemporaryFile = true;
               
-              console.log('[SFTP] Clave convertida exitosamente a PEM');
+              console.log('[SFTP] ✅ Clave convertida exitosamente a PEM');
               // Usar el archivo PEM convertido
               connectionConfig.privateKey = pemPath;
             } catch (convertError) {
               // Si la conversión falla, mostrar error claro y detallado
-              console.error('[SFTP] Error al convertir OpenSSH a PEM:', convertError);
+              console.error('[SFTP] ❌ Error al convertir OpenSSH a PEM:', convertError);
               
-              // NO intentar usar OpenSSH directamente porque sabemos que fallará
-              // Mejor mostrar un error claro con instrucciones
-              const errorMsg = `❌ ERROR: Formato de clave OpenSSH no compatible.\n\n` +
-                `La librería ssh2-sftp-client NO soporta claves OpenSSH directamente.\n\n` +
+              const errorMsg = `❌ ERROR: No se pudo convertir la clave OpenSSH a PEM.\n\n` +
+                `Error técnico: ${convertError.message}\n\n` +
                 `SOLUCIONES:\n` +
-                `1. Convierte tu clave a formato PEM manualmente:\n` +
-                `   ssh-keygen -p -N "" -m pem -f ruta_a_tu_clave\n\n` +
-                `2. O instala Git para Windows (incluye ssh-keygen):\n` +
-                `   https://git-scm.com/download/win\n\n` +
-                `3. O usa una clave en formato PEM tradicional (RSA, DSA, ECDSA)\n\n` +
-                `Error técnico: ${convertError.message}`;
+                `1. Verifica que ssh-keygen funcione correctamente\n` +
+                `2. O convierte la clave manualmente:\n` +
+                `   ssh-keygen -p -N "" -m pem -f ruta_a_tu_clave\n` +
+                `3. O usa una clave en formato PEM tradicional`;
               
               throw new Error(errorMsg);
             }
