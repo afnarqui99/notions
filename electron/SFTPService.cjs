@@ -96,19 +96,14 @@ class SFTPService {
             privateKeyContent = privateKeyContent.trim();
             privateKeyContent = privateKeyContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
             
-            // Guardar en archivo temporal
-            fs.writeFileSync(tempKeyPath, privateKeyContent, { mode: 0o600 }); // Permisos restrictivos
+            // Guardar en archivo temporal con permisos restrictivos
+            fs.writeFileSync(tempKeyPath, privateKeyContent, { mode: 0o600 });
             isTemporaryFile = true;
             
-            // ssh2 puede tener problemas con formato OpenSSH como string
-            // Intentar usar Buffer o la ruta del archivo
-            // Primero intentar con Buffer
-            try {
-              connectionConfig.privateKey = Buffer.from(privateKeyContent);
-            } catch (bufferError) {
-              // Si falla, usar la ruta del archivo
-              connectionConfig.privateKey = tempKeyPath;
-            }
+            // Para formato OpenSSH, ssh2 funciona mejor con la ruta del archivo
+            // Algunas versiones de ssh2 no soportan OpenSSH como Buffer o string
+            // Usar la ruta del archivo directamente
+            connectionConfig.privateKey = tempKeyPath;
           } else {
             // Formato PEM tradicional, usar directamente
             privateKeyContent = privateKeyContent.trim();
@@ -118,7 +113,16 @@ class SFTPService {
         } else if (fs.existsSync(config.privateKey)) {
           // Es una ruta de archivo, leer el contenido
           privateKeyContent = fs.readFileSync(config.privateKey, 'utf8');
-          connectionConfig.privateKey = privateKeyContent;
+          
+          // Verificar si es formato OpenSSH
+          if (privateKeyContent.includes('-----BEGIN OPENSSH PRIVATE KEY-----')) {
+            // Para OpenSSH desde archivo, usar la ruta directamente
+            // ssh2 puede tener problemas con OpenSSH como Buffer o string
+            connectionConfig.privateKey = config.privateKey; // Usar la ruta del archivo
+          } else {
+            // Para formato PEM tradicional, usar string
+            connectionConfig.privateKey = privateKeyContent;
+          }
         } else {
           throw new Error('El archivo de clave privada no existe o el formato de la clave es inválido');
         }
