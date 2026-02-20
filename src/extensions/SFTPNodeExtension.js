@@ -44,6 +44,9 @@ export const SFTPNodeExtension = Node.create({
       currentPath: {
         default: '/',
       },
+      remoteDirectory: {
+        default: '',
+      },
     };
   },
 

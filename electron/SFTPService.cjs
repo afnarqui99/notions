@@ -71,14 +71,19 @@ class SFTPService {
 
       // Agregar autenticación: contraseña o clave privada
       if (config.privateKey) {
-        // Leer la clave privada desde el archivo
-        if (fs.existsSync(config.privateKey)) {
+        // Verificar si es una ruta de archivo o el contenido de la clave privada
+        if (config.privateKey.includes('-----BEGIN') || config.privateKey.includes('-----BEGIN OPENSSH')) {
+          // Es el contenido de la clave privada directamente
+          connectionConfig.privateKey = config.privateKey;
+        } else if (fs.existsSync(config.privateKey)) {
+          // Es una ruta de archivo, leer el contenido
           connectionConfig.privateKey = fs.readFileSync(config.privateKey, 'utf8');
-          if (config.passphrase) {
-            connectionConfig.passphrase = config.passphrase;
-          }
         } else {
-          throw new Error('El archivo de clave privada no existe');
+          throw new Error('El archivo de clave privada no existe o el formato de la clave es inválido');
+        }
+        
+        if (config.passphrase) {
+          connectionConfig.passphrase = config.passphrase;
         }
       } else if (config.password) {
         connectionConfig.password = config.password;
@@ -89,8 +94,21 @@ class SFTPService {
       // Conectar al servidor
       await client.connect(connectionConfig);
 
-      // Obtener el directorio actual
-      const currentPath = await client.cwd();
+      // Si se proporciona un directorio remoto inicial, cambiar a ese directorio
+      let currentPath;
+      if (config.remoteDirectory) {
+        try {
+          await client.cwd(config.remoteDirectory);
+          currentPath = await client.cwd();
+        } catch (dirError) {
+          console.warn('No se pudo cambiar al directorio remoto inicial:', dirError);
+          // Si falla, usar el directorio actual
+          currentPath = await client.cwd();
+        }
+      } else {
+        // Obtener el directorio actual
+        currentPath = await client.cwd();
+      }
 
       // Generar ID único para la conexión
       const connectionId = `sftp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;

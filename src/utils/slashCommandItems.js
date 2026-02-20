@@ -791,6 +791,7 @@ export function getSlashCommandItems() {
             password: '',
             privateKey: '',
             passphrase: '',
+            remoteDirectory: '',
             connectionId: null,
             connectionName: '',
             isConnected: false,

@@ -16,6 +16,7 @@ export default function SFTPNode({ node, updateAttributes, editor, getPos }) {
   const [privateKey, setPrivateKey] = useState(node.attrs.privateKey || '');
   const [passphrase, setPassphrase] = useState(node.attrs.passphrase || '');
   const [usePrivateKey, setUsePrivateKey] = useState(node.attrs.usePrivateKey || false);
+  const [remoteDirectory, setRemoteDirectory] = useState(node.attrs.remoteDirectory || '');
   const [connectionId, setConnectionId] = useState(node.attrs.connectionId || null);
   const [connectionName, setConnectionName] = useState(node.attrs.connectionName || '');
   const [isConnected, setIsConnected] = useState(node.attrs.isConnected || false);
@@ -50,12 +51,13 @@ export default function SFTPNode({ node, updateAttributes, editor, getPos }) {
       privateKey,
       passphrase,
       usePrivateKey,
+      remoteDirectory,
       connectionId,
       connectionName,
       isConnected,
       currentPath,
     });
-  }, [host, port, username, password, privateKey, passphrase, usePrivateKey, connectionId, connectionName, isConnected, currentPath]);
+  }, [host, port, username, password, privateKey, passphrase, usePrivateKey, remoteDirectory, connectionId, connectionName, isConnected, currentPath]);
 
   // Cargar archivos cuando se conecta o cambia el directorio
   useEffect(() => {
@@ -102,7 +104,7 @@ export default function SFTPNode({ node, updateAttributes, editor, getPos }) {
       }
 
       if (usePrivateKey && !privateKey) {
-        throw new Error('Debe proporcionar la ruta a la clave privada');
+        throw new Error('Debe proporcionar la clave privada (texto completo o ruta de archivo)');
       }
 
       const config = {
@@ -112,6 +114,7 @@ export default function SFTPNode({ node, updateAttributes, editor, getPos }) {
         password: usePrivateKey ? undefined : password,
         privateKey: usePrivateKey ? privateKey : undefined,
         passphrase: usePrivateKey ? passphrase : undefined,
+        remoteDirectory: remoteDirectory || undefined,
         name: connectionName || `${host}:${port}`,
       };
 
@@ -529,15 +532,18 @@ export default function SFTPNode({ node, updateAttributes, editor, getPos }) {
                     <>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Ruta a clave privada *
+                          Clave privada SSH * (pegar contenido completo o ruta de archivo)
                         </label>
-                        <input
-                          type="text"
+                        <textarea
                           value={privateKey}
                           onChange={(e) => setPrivateKey(e.target.value)}
-                          placeholder="/ruta/a/clave_privada"
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-gray-100"
+                          placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;...&#10;-----END OPENSSH PRIVATE KEY-----&#10;&#10;O ruta: /ruta/a/clave_privada"
+                          rows={6}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-gray-100 font-mono text-sm"
                         />
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          Puedes pegar el contenido completo de la clave privada (incluyendo BEGIN/END) o la ruta al archivo
+                        </p>
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -562,6 +568,22 @@ export default function SFTPNode({ node, updateAttributes, editor, getPos }) {
                       </div>
                     </>
                   )}
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Directorio remoto inicial (opcional)
+                    </label>
+                    <input
+                      type="text"
+                      value={remoteDirectory}
+                      onChange={(e) => setRemoteDirectory(e.target.value)}
+                      placeholder="/ruta/remota/inicial"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-gray-100"
+                    />
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      Directorio al que conectarse automáticamente después de la autenticación
+                    </p>
+                  </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
