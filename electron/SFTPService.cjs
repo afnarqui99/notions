@@ -19,12 +19,32 @@ class SFTPService {
   }
 
   /**
+   * Verifica si ssh-keygen está disponible en el sistema
+   * @returns {Promise<boolean>} - true si está disponible
+   */
+  async isSSHKeygenAvailable() {
+    try {
+      // Intentar ejecutar ssh-keygen --version
+      await execAsync('ssh-keygen -V 2>&1 || ssh-keygen --version 2>&1');
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /**
    * Convierte una clave OpenSSH a formato PEM usando ssh-keygen
    * @param {string} openSshKeyContent - Contenido de la clave OpenSSH
    * @param {string} passphrase - Frase de contraseña (opcional)
    * @returns {Promise<string>} - Ruta al archivo PEM temporal
    */
   async convertOpenSSHToPEM(openSshKeyContent, passphrase = '') {
+    // Verificar si ssh-keygen está disponible
+    const isAvailable = await this.isSSHKeygenAvailable();
+    if (!isAvailable) {
+      throw new Error('ssh-keygen no está disponible en tu sistema. Por favor, instálalo o convierte la clave manualmente a formato PEM.');
+    }
+
     const tempDir = app.getPath('temp');
     const tempOpenSSHPath = path.join(tempDir, `sftp_key_openssh_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
 
@@ -35,37 +55,77 @@ class SFTPService {
       // Intentar convertir usando ssh-keygen
       // ssh-keygen -p -N "" -m pem -f ruta_a_clave
       const passphraseArg = passphrase ? `-P "${passphrase.replace(/"/g, '\\"')}"` : '-N ""';
-      const command = `ssh-keygen -p ${passphraseArg} -m pem -f "${tempOpenSSHPath.replace(/"/g, '\\"')}"`;
       
-      try {
-        await execAsync(command);
-        
-        // Leer el archivo PEM convertido (el mismo archivo ahora está en formato PEM)
-        const pemContent = fs.readFileSync(tempOpenSSHPath, 'utf8');
-        
-        // Renombrar el archivo para indicar que es PEM
-        const tempPEMPath = tempOpenSSHPath.replace('openssh', 'pem');
-        fs.writeFileSync(tempPEMPath, pemContent, { mode: 0o600 });
-        
-        // Limpiar archivo OpenSSH temporal
-        if (fs.existsSync(tempOpenSSHPath)) {
-          fs.unlinkSync(tempOpenSSHPath);
+      // En Windows, puede estar en diferentes ubicaciones
+      let command = `ssh-keygen -p ${passphraseArg} -m pem -f "${tempOpenSSHPath.replace(/"/g, '\\"')}"`;
+      
+      // Si estamos en Windows, intentar también con la ruta completa de Git Bash
+      if (process.platform === 'win32') {
+        // Intentar primero con ssh-keygen del PATH
+        try {
+          await execAsync(command, { timeout: 10000 });
+        } catch (error) {
+          // Si falla, intentar con Git Bash
+          const gitBashPaths = [
+            'C:\\Program Files\\Git\\usr\\bin\\ssh-keygen.exe',
+            'C:\\Program Files (x86)\\Git\\usr\\bin\\ssh-keygen.exe',
+            process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Programs\\Git\\usr\\bin\\ssh-keygen.exe') : null
+          ].filter(Boolean);
+
+          let converted = false;
+          for (const gitBashPath of gitBashPaths) {
+            if (fs.existsSync(gitBashPath)) {
+              command = `"${gitBashPath}" -p ${passphraseArg} -m pem -f "${tempOpenSSHPath.replace(/"/g, '\\"')}"`;
+              try {
+                await execAsync(command, { timeout: 10000 });
+                converted = true;
+                break;
+              } catch (e) {
+                continue;
+              }
+            }
+          }
+
+          if (!converted) {
+            throw error;
+          }
         }
-        
-        return tempPEMPath;
-      } catch (convertError) {
-        // Si la conversión falla, limpiar y lanzar error
-        if (fs.existsSync(tempOpenSSHPath)) {
-          fs.unlinkSync(tempOpenSSHPath);
-        }
-        throw new Error(`No se pudo convertir la clave OpenSSH a PEM. Asegúrate de que ssh-keygen esté instalado. Error: ${convertError.message}`);
+      } else {
+        // En Linux/Mac, usar directamente
+        await execAsync(command, { timeout: 10000 });
       }
-    } catch (error) {
-      // Limpiar archivos temporales en caso de error
+      
+      // Leer el archivo PEM convertido (el mismo archivo ahora está en formato PEM)
+      const pemContent = fs.readFileSync(tempOpenSSHPath, 'utf8');
+      
+      // Renombrar el archivo para indicar que es PEM
+      const tempPEMPath = tempOpenSSHPath.replace('openssh', 'pem');
+      fs.writeFileSync(tempPEMPath, pemContent, { mode: 0o600 });
+      
+      // Limpiar archivo OpenSSH temporal
       if (fs.existsSync(tempOpenSSHPath)) {
-        try { fs.unlinkSync(tempOpenSSHPath); } catch {}
+        fs.unlinkSync(tempOpenSSHPath);
       }
-      throw error;
+      
+      return tempPEMPath;
+    } catch (convertError) {
+      // Si la conversión falla, limpiar y lanzar error con instrucciones
+      if (fs.existsSync(tempOpenSSHPath)) {
+        fs.unlinkSync(tempOpenSSHPath);
+      }
+      
+      let errorMessage = 'No se pudo convertir la clave OpenSSH a PEM. ';
+      if (process.platform === 'win32') {
+        errorMessage += 'Para instalar ssh-keygen en Windows:\n';
+        errorMessage += '1. Instala Git para Windows (incluye ssh-keygen): https://git-scm.com/download/win\n';
+        errorMessage += '2. O instala OpenSSH desde "Configuración > Aplicaciones > Características opcionales"\n';
+        errorMessage += '3. O convierte la clave manualmente usando: ssh-keygen -p -N "" -m pem -f ruta_a_tu_clave';
+      } else {
+        errorMessage += 'Asegúrate de que ssh-keygen esté instalado. ';
+        errorMessage += 'O convierte la clave manualmente usando: ssh-keygen -p -N "" -m pem -f ruta_a_tu_clave';
+      }
+      
+      throw new Error(errorMessage);
     }
   }
 
@@ -143,28 +203,34 @@ class SFTPService {
             privateKeyContent = privateKeyContent.trim();
             privateKeyContent = privateKeyContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
             
+            // Para OpenSSH, ssh2-sftp-client NO lo soporta directamente
+            // Intentar convertir a PEM, pero si falla, mostrar error claro
             try {
-              // Intentar convertir OpenSSH a PEM automáticamente
+              console.log('[SFTP] Detectada clave OpenSSH, intentando convertir a PEM...');
               const pemPath = await this.convertOpenSSHToPEM(privateKeyContent, config.passphrase);
               tempKeyPath = pemPath;
               isTemporaryFile = true;
               
+              console.log('[SFTP] Clave convertida exitosamente a PEM');
               // Usar el archivo PEM convertido
               connectionConfig.privateKey = pemPath;
             } catch (convertError) {
-              // Si la conversión falla, intentar usar OpenSSH directamente como último recurso
-              console.warn('No se pudo convertir OpenSSH a PEM, intentando usar OpenSSH directamente:', convertError.message);
+              // Si la conversión falla, mostrar error claro y detallado
+              console.error('[SFTP] Error al convertir OpenSSH a PEM:', convertError);
               
-              // Crear archivo temporal para la clave OpenSSH
-              const tempDir = app.getPath('temp');
-              tempKeyPath = path.join(tempDir, `sftp_key_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
+              // NO intentar usar OpenSSH directamente porque sabemos que fallará
+              // Mejor mostrar un error claro con instrucciones
+              const errorMsg = `❌ ERROR: Formato de clave OpenSSH no compatible.\n\n` +
+                `La librería ssh2-sftp-client NO soporta claves OpenSSH directamente.\n\n` +
+                `SOLUCIONES:\n` +
+                `1. Convierte tu clave a formato PEM manualmente:\n` +
+                `   ssh-keygen -p -N "" -m pem -f ruta_a_tu_clave\n\n` +
+                `2. O instala Git para Windows (incluye ssh-keygen):\n` +
+                `   https://git-scm.com/download/win\n\n` +
+                `3. O usa una clave en formato PEM tradicional (RSA, DSA, ECDSA)\n\n` +
+                `Error técnico: ${convertError.message}`;
               
-              // Guardar en archivo temporal con permisos restrictivos
-              fs.writeFileSync(tempKeyPath, privateKeyContent, { mode: 0o600 });
-              isTemporaryFile = true;
-              
-              // Intentar usar la ruta del archivo (último recurso)
-              connectionConfig.privateKey = tempKeyPath;
+              throw new Error(errorMsg);
             }
           } else {
             // Formato PEM tradicional, usar directamente
@@ -179,17 +245,30 @@ class SFTPService {
           // Verificar si es formato OpenSSH
           if (privateKeyContent.includes('-----BEGIN OPENSSH PRIVATE KEY-----')) {
             try {
+              console.log('[SFTP] Detectada clave OpenSSH desde archivo, intentando convertir a PEM...');
               // Intentar convertir OpenSSH a PEM automáticamente
               const pemPath = await this.convertOpenSSHToPEM(privateKeyContent, config.passphrase);
               tempKeyPath = pemPath;
               isTemporaryFile = true;
               
+              console.log('[SFTP] Clave convertida exitosamente a PEM');
               // Usar el archivo PEM convertido
               connectionConfig.privateKey = pemPath;
             } catch (convertError) {
-              // Si la conversión falla, intentar usar el archivo OpenSSH directamente
-              console.warn('No se pudo convertir OpenSSH a PEM, intentando usar archivo OpenSSH directamente:', convertError.message);
-              connectionConfig.privateKey = config.privateKey; // Usar la ruta del archivo original
+              // Si la conversión falla, mostrar error claro
+              console.error('[SFTP] Error al convertir OpenSSH a PEM:', convertError);
+              
+              const errorMsg = `❌ ERROR: Formato de clave OpenSSH no compatible.\n\n` +
+                `La librería ssh2-sftp-client NO soporta claves OpenSSH directamente.\n\n` +
+                `SOLUCIONES:\n` +
+                `1. Convierte tu clave a formato PEM manualmente:\n` +
+                `   ssh-keygen -p -N "" -m pem -f ${config.privateKey}\n\n` +
+                `2. O instala Git para Windows (incluye ssh-keygen):\n` +
+                `   https://git-scm.com/download/win\n\n` +
+                `3. O usa una clave en formato PEM tradicional (RSA, DSA, ECDSA)\n\n` +
+                `Error técnico: ${convertError.message}`;
+              
+              throw new Error(errorMsg);
             }
           } else {
             // Para formato PEM tradicional, usar string
@@ -222,7 +301,21 @@ class SFTPService {
       }
 
       // Conectar al servidor
-      await client.connect(connectionConfig);
+      console.log('[SFTP] Intentando conectar a', config.host, 'puerto', config.port || 22);
+      console.log('[SFTP] Usando autenticación:', config.privateKey ? 'Clave privada' : 'Contraseña');
+      
+      try {
+        await client.connect(connectionConfig);
+        console.log('[SFTP] Conexión establecida exitosamente');
+      } catch (connectError) {
+        console.error('[SFTP] Error al conectar:', connectError);
+        console.error('[SFTP] Detalles del error:', {
+          message: connectError.message,
+          code: connectError.code,
+          stack: connectError.stack
+        });
+        throw connectError;
+      }
 
       // Si se proporciona un directorio remoto inicial, cambiar a ese directorio
       let currentPath;
@@ -274,7 +367,11 @@ class SFTPService {
         currentPath
       };
     } catch (error) {
-      console.error('Error al conectar SFTP:', error);
+      console.error('[SFTP] ========== ERROR AL CONECTAR ==========');
+      console.error('[SFTP] Mensaje:', error.message);
+      console.error('[SFTP] Código:', error.code);
+      console.error('[SFTP] Stack completo:', error.stack);
+      console.error('[SFTP] =======================================');
       
       // Limpiar archivo temporal si existe y hubo error
       const keyPathToClean = tempKeyPath || (connectionConfig && connectionConfig._tempKeyPath);
@@ -282,18 +379,33 @@ class SFTPService {
         try {
           if (fs.existsSync(keyPathToClean)) {
             fs.unlinkSync(keyPathToClean);
+            console.log('[SFTP] Archivo temporal limpiado:', keyPathToClean);
           }
         } catch (cleanupError) {
-          console.warn('No se pudo eliminar archivo temporal de clave:', cleanupError);
+          console.warn('[SFTP] No se pudo eliminar archivo temporal de clave:', cleanupError);
         }
       }
       
       // Mensaje de error más descriptivo para problemas de formato de clave
       let errorMessage = error.message || 'Error desconocido al conectar';
-      if (errorMessage.includes('Unsupported key format') || errorMessage.includes('cannot parse privateKey')) {
-        errorMessage = 'Formato de clave privada no compatible. ' +
-          'Si estás usando formato OpenSSH, intenta convertirla a formato PEM usando: ' +
-          'ssh-keygen -p -N "" -m pem -f ruta_a_tu_clave';
+      
+      // Si el error ya tiene un mensaje detallado (de nuestra conversión), usarlo
+      if (errorMessage.includes('❌ ERROR:')) {
+        // Ya tiene mensaje detallado, mantenerlo
+      } else if (errorMessage.includes('Unsupported key format') || 
+                 errorMessage.includes('cannot parse privateKey') ||
+                 errorMessage.includes('parse privateKey') ||
+                 errorMessage.toLowerCase().includes('unsupported key')) {
+        errorMessage = `❌ ERROR: Formato de clave privada no compatible.\n\n` +
+          `La librería ssh2-sftp-client NO soporta claves OpenSSH directamente.\n\n` +
+          `ERROR ORIGINAL: ${error.message}\n\n` +
+          `SOLUCIONES:\n` +
+          `1. Convierte tu clave a formato PEM manualmente:\n` +
+          `   ssh-keygen -p -N "" -m pem -f ruta_a_tu_clave\n\n` +
+          `2. O instala Git para Windows (incluye ssh-keygen):\n` +
+          `   https://git-scm.com/download/win\n\n` +
+          `3. O usa una clave en formato PEM tradicional (RSA, DSA, ECDSA)\n\n` +
+          `NOTA: Revisa la consola para más detalles del error.`;
       }
       
       return {
